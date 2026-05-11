@@ -21,7 +21,7 @@ fn lef_extrudes_outward_on_empty_lattice() {
         respawn_default: 1e-9,
         respawn_captured: 1e-9,
     });
-    engine.prime(&world, &mut rng);
+    engine.initialize(&world, &mut rng);
 
     let mut touched = Touched::default();
     let mut leftmost = world.legs[l_left].pos;
@@ -58,7 +58,7 @@ fn right_facing_leg_captured_at_compatible_ctcf() {
         respawn_default: 1e-12,
         respawn_captured: 1e-12,
     });
-    engine.prime(&world, &mut rng);
+    engine.initialize(&world, &mut rng);
 
     let mut touched = Touched::default();
     for _ in 0..2000 {
@@ -90,7 +90,7 @@ fn eviction_triggers_immediate_respawn() {
         respawn_default: 1e-12,
         respawn_captured: 1e-12,
     });
-    engine.prime(&world, &mut rng);
+    engine.initialize(&world, &mut rng);
 
     let mut touched = Touched::default();
     for _ in 0..2000 {

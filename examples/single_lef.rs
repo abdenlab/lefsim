@@ -22,7 +22,7 @@ fn main() {
     let (_lef, [l_left, l_right]) = world.spawn_lef(50, &mut rng);
 
     let mut engine = Engine::new(Rates::default());
-    engine.prime(&world, &mut rng);
+    engine.initialize(&world, &mut rng);
 
     let mut touched = Touched::default();
     println!(

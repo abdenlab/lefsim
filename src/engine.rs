@@ -89,9 +89,9 @@ impl Engine {
         }
     }
 
-    /// Prime the queue by scheduling every leg's `Step` and every LEF's
+    /// Initialize the queue by scheduling every leg's `Step` and every LEF's
     /// `Respawn`. Call once after constructing the world and engine.
-    pub fn prime(&mut self, world: &World, rng: &mut SimRng) {
+    pub fn initialize(&mut self, world: &World, rng: &mut SimRng) {
         let leg_keys: Vec<_> = world.legs.keys().collect();
         for k in leg_keys {
             self.reschedule(Action::Step { leg: k }, world, rng);
