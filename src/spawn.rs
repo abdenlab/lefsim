@@ -1,0 +1,30 @@
+//! Spawn-site selection rules used by [`crate::Action::Respawn`].
+
+use rand::Rng;
+
+use crate::engine::SimRng;
+use crate::lattice::{SiteIdx, SiteKind};
+use crate::world::World;
+
+/// Strategy for picking the new spawn site when a LEF respawns.
+pub trait SpawnRule {
+    fn sample(&self, world: &World, rng: &mut SimRng) -> SiteIdx;
+}
+
+/// Uniformly samples among `Plain`, currently-unoccupied sites by rejection.
+/// Fine when occupancy << lattice length; precompute a free-site list otherwise.
+#[derive(Default, Copy, Clone, Debug)]
+pub struct UniformNonCtcfSpawn;
+
+impl SpawnRule for UniformNonCtcfSpawn {
+    fn sample(&self, world: &World, rng: &mut SimRng) -> SiteIdx {
+        let n = world.lattice.len() as u32;
+        loop {
+            let i = rng.gen_range(0..n);
+            let kind = world.lattice.sites[i as usize].kind;
+            if matches!(kind, SiteKind::Plain) && !world.occupied(i) {
+                return i;
+            }
+        }
+    }
+}
