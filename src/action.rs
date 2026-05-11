@@ -19,10 +19,10 @@ pub struct Rates {
     // Eviction is treated as an immediate respawn (dt = 0); no rate field.
 }
 
-impl Rates {
+impl Default for Rates {
     /// Reasonable demo rates: stepping is the fast process; respawns take
     /// thousands of steps; captured LEFs hang around an order of magnitude longer.
-    pub fn default() -> Self {
+    fn default() -> Self {
         Rates {
             step: 1.0,
             respawn_default: 1e-3,
