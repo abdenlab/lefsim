@@ -3,8 +3,7 @@
 use rand::Rng;
 
 use crate::engine::SimRng;
-use crate::lattice::{SiteIdx, SiteKind};
-use crate::world::World;
+use crate::world::{SiteIdx, SiteKind, World};
 
 /// Strategy for picking the new spawn site when a LEF respawns.
 pub trait SpawnRule {

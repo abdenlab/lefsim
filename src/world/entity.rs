@@ -6,7 +6,7 @@
 
 use slotmap::new_key_type;
 
-use crate::lattice::{Dir, SiteIdx};
+use super::lattice::{Dir, SiteIdx};
 
 new_key_type! {
     /// Typed handle into [`crate::World::legs`].

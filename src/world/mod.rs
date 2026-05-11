@@ -1,11 +1,19 @@
 //! Mutable world state: entity arenas plus the per-site occupancy index.
+//!
+//! The two submodules — [`entity`] and [`lattice`] — describe, respectively,
+//! the dynamic units (legs/LEFs) and the immutable substrate they walk on.
+//! Their contents are re-exported at this module level for convenience.
+
+pub mod entity;
+pub mod lattice;
+
+pub use entity::{Leg, Lef, LefKey, LegKey, Mobility};
+pub use lattice::{Dir, Lattice, Site, SiteIdx, SiteKind};
 
 use slotmap::SlotMap;
 use smallvec::SmallVec;
 
 use crate::action::derive_mobility;
-use crate::entity::{Leg, LefKey, LegKey, Lef, Mobility};
-use crate::lattice::{Dir, Lattice, SiteIdx};
 
 /// Per-site occupancy bucket. Multi-occupancy occurs transiently right after
 /// a respawn (paired legs sharing the spawn site). Inline capacity 2 covers

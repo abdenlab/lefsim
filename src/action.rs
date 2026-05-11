@@ -5,10 +5,8 @@ use rand::distributions::OpenClosed01;
 use smallvec::SmallVec;
 
 use crate::engine::SimRng;
-use crate::entity::{LefKey, LegKey, Mobility};
-use crate::lattice::{Dir, SiteKind};
 use crate::spawn::SpawnRule;
-use crate::world::World;
+use crate::world::{Dir, LefKey, LegKey, Mobility, SiteKind, World};
 
 pub type Time = f64;
 
@@ -258,7 +256,7 @@ pub fn derive_mobility(site: SiteKind, facing: Dir) -> Mobility {
     match site {
         SiteKind::Plain => Mobility::Moving,
         SiteKind::Ctcf { stops } => {
-            if facing == stops {
+            if facing == stops {  // TODO: gate by capture probability
                 Mobility::Captured
             } else {
                 Mobility::Evicted

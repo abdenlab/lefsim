@@ -17,23 +17,22 @@
 //!
 //! ## Module layout
 //!
-//! - [`lattice`]: immutable substrate (sites, directions, CTCFs).
-//! - [`entity`]: typed keys plus the [`entity::Leg`] and [`entity::Lef`] structs.
-//! - [`world`]: mutable world state — entity arenas plus the occupancy index.
+//! - [`world`]: mutable world state and the static substrate it sits on.
+//!   - [`world::lattice`]: immutable lattice (sites, directions, CTCFs).
+//!   - [`world::entity`]: typed keys plus the [`world::Leg`] and
+//!     [`world::Lef`] structs.
 //! - [`action`]: action enum, scheduling, and firing logic.
 //! - [`spawn`]: spawn-site selection rules used by `Action::Respawn`.
 //! - [`engine`]: priority-queue-driven simulation loop.
 
 pub mod action;
 pub mod engine;
-pub mod entity;
-pub mod lattice;
 pub mod spawn;
 pub mod world;
 
 pub use action::{Action, Rates, Schedule, Time, Touched};
 pub use engine::{Engine, SimRng};
-pub use entity::{Leg, LefKey, LegKey, Lef, Mobility};
-pub use lattice::{Dir, Lattice, Site, SiteIdx, SiteKind};
 pub use spawn::{SpawnRule, UniformNonCtcfSpawn};
-pub use world::World;
+pub use world::{
+    Dir, Lattice, Leg, Lef, LefKey, LegKey, Mobility, Site, SiteIdx, SiteKind, World,
+};
