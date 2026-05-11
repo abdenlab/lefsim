@@ -44,12 +44,12 @@ fn lef_extrudes_outward_on_empty_lattice() {
     );
 }
 
-/// A right-facing leg approaching a `Ctcf { stops: Right }` site should
-/// arrive captured.
+/// A right-facing leg approaching a CTCF whose capture side faces left
+/// (i.e. captures legs arriving from the left) should arrive captured.
 #[test]
-fn right_facing_leg_captured_by_right_stopping_ctcf() {
+fn right_facing_leg_captured_at_compatible_ctcf() {
     let mut sites = vec![Site::plain(); 50];
-    sites[20] = Site::ctcf(Direction::Right, 1.0);
+    sites[20] = Site::ctcf(Direction::Left, 1.0);
     let mut world = World::new(Lattice::new(sites));
     let mut rng = SimRng::seed_from_u64(11);
     let (_lef, [_l_left, l_right]) = world.spawn_lef(10, &mut rng);
@@ -73,14 +73,15 @@ fn right_facing_leg_captured_by_right_stopping_ctcf() {
     assert_eq!(world.legs[l_right].mobility, Mobility::Captured);
 }
 
-/// Eviction (a leg arriving at a CTCF whose `stops` is *opposite* to the
-/// leg's facing) should trigger an immediate respawn (dt = 0).
+/// Eviction (a leg arriving at the *non-capture* side of a CTCF) should
+/// trigger an immediate respawn (dt = 0).
 #[test]
 fn eviction_triggers_immediate_respawn() {
-    // CTCF at site 20 stopping `Left`. The right-facing leg arriving from the
-    // left is moving against `stops`, so it gets evicted on contact.
+    // CTCF at site 20 with its capture side on the right. The right-facing
+    // leg approaches from the left (the eviction side), so it gets evicted
+    // on contact.
     let mut sites = vec![Site::plain(); 50];
-    sites[20] = Site::ctcf(Direction::Left, 1.0);
+    sites[20] = Site::ctcf(Direction::Right, 1.0);
     let mut world = World::new(Lattice::new(sites));
     let mut rng = SimRng::seed_from_u64(13);
     let (lef_k, [_l_left, l_right]) = world.spawn_lef(10, &mut rng);

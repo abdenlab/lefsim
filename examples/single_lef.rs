@@ -6,8 +6,12 @@ use lefs::*;
 use rand::SeedableRng;
 
 fn main() {
-    // 100-site lattice with right-stopping CTCF at site 30 and left-stopping
-    // CTCF at site 70 (i.e. a "TAD" between them in the convergent convention).
+    // 100-site lattice with a convergent CTCF pair bounding a "TAD"
+    // between sites 30 and 70:
+    //  - site 30's capture side is its right side (captures left-walking
+    //    legs arriving from inside the TAD);
+    //  - site 70's capture side is its left side (captures right-walking
+    //    legs arriving from inside the TAD).
     let mut sites = vec![Site::plain(); 100];
     sites[30] = Site::ctcf(Direction::Right, 1.0);
     sites[70] = Site::ctcf(Direction::Left, 1.0);
