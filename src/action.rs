@@ -31,10 +31,10 @@ impl Rates {
     }
 }
 
-/// Set of entities mutated by a fired action. The engine consults this to
-/// decide which actions need rescheduling. The model author is responsible
-/// for pushing every leg/LEF whose state changed (or whose neighborhood
-/// changed in a way that affects scheduling).
+/// Set of entities mutated by a fired action. The model author pushes
+/// every leg/LEF whose state changed (or whose neighborhood changed in a
+/// way that affects scheduling) into this buffer. The engine then asks
+/// it which actions need rescheduling via [`Touched::dependent_actions`].
 #[derive(Default, Debug)]
 pub struct Touched {
     pub legs: SmallVec<[LegKey; 8]>,
@@ -45,6 +45,33 @@ impl Touched {
     pub fn clear(&mut self) {
         self.legs.clear();
         self.lefs.clear();
+    }
+
+    /// Iterator over actions whose schedules may have been invalidated
+    /// because some entity in this set was mutated.
+    ///
+    /// This is *the* entity → action dependency map for the model. The
+    /// engine consumes it without needing to know how legs map to step
+    /// or respawn actions, or how legs relate to LEFs. New action types
+    /// added in the future are wired up by extending this method, not by
+    /// changing engine code.
+    ///
+    /// May yield the same action more than once (e.g. when both a leg
+    /// and its LEF are in the set); the caller is responsible for dedup.
+    pub fn dependent_actions<'a>(
+        &'a self,
+        world: &'a World,
+    ) -> impl Iterator<Item = Action> + 'a {
+        let from_legs = self.legs.iter().copied().flat_map(move |leg_k| {
+            let lef_k = world.legs[leg_k].lef;
+            [Action::Step { leg: leg_k }, Action::Respawn { lef: lef_k }]
+        });
+        let from_lefs = self
+            .lefs
+            .iter()
+            .copied()
+            .map(|lef_k| Action::Respawn { lef: lef_k });
+        from_legs.chain(from_lefs)
     }
 }
 

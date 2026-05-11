@@ -125,28 +125,18 @@ impl Engine {
         touched.clear();
         action.fire(world, spawn, time, rng, touched);
 
-        // Reactive rescheduling, deduped against a small in-step set.
-        // Constant fan-out per touched entity:
-        //   touched leg  -> Step{leg}, Respawn{leg.lef}
-        //   touched lef  -> Respawn{lef}
-        //   plus the fired action itself.
+        // Reactive rescheduling. The fired action is always re-evaluated;
+        // beyond that, `touched.dependent_actions` names every action that
+        // may have been invalidated by this step (the model's entity →
+        // action dependency map). Dedup against a small in-step set.
         let mut seen: SmallVec<[Action; 16]> = SmallVec::new();
-        let visit = |eng: &mut Engine, w: &World, r: &mut SimRng, a: Action,
-                     seen: &mut SmallVec<[Action; 16]>| {
-            if !seen.contains(&a) {
-                seen.push(a);
-                eng.reschedule(a, w, r);
+        self.reschedule(action, world, rng);
+        seen.push(action);
+        for dep in touched.dependent_actions(world) {
+            if !seen.contains(&dep) {
+                seen.push(dep);
+                self.reschedule(dep, world, rng);
             }
-        };
-
-        visit(self, world, rng, action, &mut seen);
-        for &leg_k in &touched.legs {
-            let lef_k = world.legs[leg_k].lef;
-            visit(self, world, rng, Action::Step { leg: leg_k }, &mut seen);
-            visit(self, world, rng, Action::Respawn { lef: lef_k }, &mut seen);
-        }
-        for &lef_k in &touched.lefs {
-            visit(self, world, rng, Action::Respawn { lef: lef_k }, &mut seen);
         }
 
         Some((time, action))
