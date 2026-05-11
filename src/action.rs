@@ -8,18 +8,6 @@ use crate::engine::{Schedule, SimRng, Time};
 use crate::spawn::SpawnRule;
 use crate::world::{Direction, LefKey, LegKey, Mobility, World, landing_mobility};
 
-/// A schedulable event.
-///
-/// `Action` is both the action *value* and the priority-queue *key*. Two
-/// actions are equal iff they refer to the same entity-specific event.
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub enum Action {
-    /// A leg attempts to step one cell in its `facing` direction.
-    Step { leg: LegKey },
-    /// A LEF unbinds and respawns at a new site sampled from the [`SpawnRule`].
-    Respawn { lef: LefKey },
-}
-
 #[derive(Copy, Clone, Debug)]
 pub struct Rates {
     /// Step rate of a moving, unblocked leg.
@@ -60,7 +48,17 @@ impl Touched {
     }
 }
 
-// ----- scheduling (pure) and firing (mutating) dispatch -----
+/// A schedulable event.
+///
+/// `Action` is both the action *value* and the priority-queue *key*. Two
+/// actions are equal iff they refer to the same entity-specific event.
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub enum Action {
+    /// A leg attempts to step one cell in its `facing` direction.
+    Step { leg: LegKey },
+    /// A LEF unbinds and respawns at a new site sampled from the [`SpawnRule`].
+    Respawn { lef: LefKey },
+}
 
 impl Action {
     /// Pure: compute when this action would next fire given the current world
