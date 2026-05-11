@@ -87,18 +87,24 @@ impl World {
         });
         let lef_k = self.lefs.insert(Lef { legs: [l1, l2] });
 
-        // Patch the placeholder cross-references and roll for landing mobility.
+        // Patch the placeholder cross-references and roll for landing
+        // mobility. Initial placement isn't a "step" in the usual sense;
+        // we treat it as if each leg arrived from the side opposite its
+        // facing, matching the convention used by fire_step under
+        // forward-only motion. See landing_mobility for why this matters.
         let kind = self.lattice.sites[pos as usize].kind;
         {
+            let facing = Direction::Left;
             let leg = &mut self.legs[l1];
             leg.lef = lef_k;
             leg.partner = l2;
-            leg.mobility = landing_mobility(kind, Direction::Left, rng);
+            leg.mobility = landing_mobility(kind, facing.opposite(), rng);
         }
         {
+            let facing = Direction::Right;
             let leg = &mut self.legs[l2];
             leg.lef = lef_k;
-            leg.mobility = landing_mobility(kind, Direction::Right, rng);
+            leg.mobility = landing_mobility(kind, facing.opposite(), rng);
         }
 
         self.insert_leg(l1, pos);
@@ -108,6 +114,12 @@ impl World {
 }
 
 /// Stochastic resolution of a leg's mobility *at the moment it lands at a site*.
+///
+/// Takes `arrived_from` — the side of the destination cell from which the
+/// leg arrived — rather than the leg's facing. The caller decides how to
+/// derive that from its step model; in the current forward-only stepping
+/// model, `arrived_from == leg.facing.opposite()`, but a model with
+/// back-stepping or independent step direction would derive it differently.
 ///
 /// # Invariant (load-bearing!)
 ///
@@ -130,15 +142,12 @@ impl World {
 ///
 /// - `Plain` sites: always returns `Moving`.
 /// - `Ctcf { captures_from, strength }`:
-///   - With probability `strength`: capture if the leg arrived from the
-///     `captures_from` side, otherwise evict.
+///   - With probability `strength`: capture if `arrived_from == captures_from`,
+///     otherwise evict.
 ///   - With probability `1 - strength`: pass through (`Moving`).
-///
-/// A leg with `facing == F` arrives at the new cell from the
-/// `F.opposite()` side (a right-mover came from the left).
 pub(crate) fn landing_mobility(
     site: SiteKind,
-    facing: Direction,
+    arrived_from: Direction,
     rng: &mut SimRng,
 ) -> Mobility {
     match site {
@@ -146,13 +155,10 @@ pub(crate) fn landing_mobility(
         SiteKind::Ctcf { captures_from, strength } => {
             if !rng.gen_bool(strength) {
                 Mobility::Moving
+            } else if arrived_from == captures_from {
+                Mobility::Captured
             } else {
-                let arrival_side = facing.opposite();
-                if arrival_side == captures_from {
-                    Mobility::Captured
-                } else {
-                    Mobility::Evicted
-                }
+                Mobility::Evicted
             }
         }
     }
@@ -179,19 +185,24 @@ mod tests {
     #[test]
     fn strength_1_captures_leg_arriving_on_capture_side() {
         let mut rng = SimRng::seed_from_u64(0);
-        // CTCF's capture side is its right side. A left-facing leg arrives
-        // from the right, so it should be captured.
+        // CTCF's capture side is its right side. A leg that arrived from
+        // the right should be captured.
         let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: 1.0 };
-        assert_eq!(landing_mobility(site, Direction::Left, &mut rng), Mobility::Captured);
+        assert_eq!(
+            landing_mobility(site, Direction::Right, &mut rng),
+            Mobility::Captured
+        );
     }
 
     #[test]
     fn strength_1_evicts_leg_arriving_on_other_side() {
         let mut rng = SimRng::seed_from_u64(0);
-        // CTCF's capture side is its right side; left side evicts.
-        // A right-facing leg arrives from the left, so it is evicted.
+        // CTCF's capture side is its right side; the left side evicts.
         let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: 1.0 };
-        assert_eq!(landing_mobility(site, Direction::Right, &mut rng), Mobility::Evicted);
+        assert_eq!(
+            landing_mobility(site, Direction::Left, &mut rng),
+            Mobility::Evicted
+        );
     }
 
     #[test]
@@ -209,11 +220,11 @@ mod tests {
         let mut rng = SimRng::seed_from_u64(42);
         let p = 0.3;
         let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: p };
-        // Use a left-facing leg so the outcome on success is Captured.
+        // Arrive from the capture side so the outcome on success is Captured.
         let n = 50_000;
         let mut captured = 0usize;
         for _ in 0..n {
-            if landing_mobility(site, Direction::Left, &mut rng) == Mobility::Captured {
+            if landing_mobility(site, Direction::Right, &mut rng) == Mobility::Captured {
                 captured += 1;
             }
         }

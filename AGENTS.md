@@ -100,3 +100,11 @@ Steps:
 Respawns:
 * The scheduling depends on the mobility status of both legs taken together -- different rules may be considered. If either leg gets "evicted", that should lead to an immediate respawn event (dt=0). If either is captured a longer lifetime is applied.
 * The firing will depend on a custom rule about how a new spawn site is selected or sampled. The event will influence any neighbors of either leg before the action and any neighbors of the spawn site.
+
+A CTCF has an intrinsic polarity, expressed by which side is its capture side:
+* `captures_from: Right` → the CTCF's right side is its capture side; its left side evicts.
+* `captures_from: Left` → the CTCF's left side is its capture side; its right side evicts.
+* When a leg lands at the CTCF, the side it arrived from decides the outcome:
+    * Arrival side matches `captures_from` → Captured (with probability p).
+    * Arrival side is the opposite → Evicted (with probability p).
+    * Otherwise → passes through (Moving) with probability 1 - p.

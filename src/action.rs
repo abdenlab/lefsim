@@ -178,12 +178,18 @@ fn fire_step(
 
     // Mutate occupancy and the leg. The landing_mobility roll happens here,
     // exactly once per actual move — never in scheduling.
+    //
+    // Under the current forward-only step model, the step direction equals
+    // `facing`, so the leg arrived from the side opposite its facing. A
+    // future model with back-stepping or independent step direction would
+    // derive `arrived_from` from the actual step direction instead.
     world.remove_leg(leg_k, old_pos);
     world.insert_leg(leg_k, new_pos);
     let kind = world.lattice.sites[new_pos as usize].kind;
+    let arrived_from = facing.opposite();
     let leg = &mut world.legs[leg_k];
     leg.pos = new_pos;
-    leg.mobility = landing_mobility(kind, facing, rng);
+    leg.mobility = landing_mobility(kind, arrived_from, rng);
 
     // Tell the engine what to reschedule.
     touched.legs.push(leg_k);
@@ -242,13 +248,19 @@ fn fire_respawn<S: SpawnRule>(
     }
 
     // Place both legs at the spawn site. This is a landing for each leg, so
-    // each rolls landing_mobility against the new site.
+    // each rolls landing_mobility against the new site. Respawn isn't a
+    // step, so we adopt the same convention as spawn_lef: treat each leg
+    // as if it arrived from the side opposite its facing. (Open modeling
+    // question: respawn could equally well init both legs as Moving on
+    // the grounds that "binding != stepping". See AGENTS.md for the
+    // expected semantics.)
     let kind = world.lattice.sites[new_pos as usize].kind;
     for &l in &[l1, l2] {
         let facing = world.legs[l].facing;
+        let arrived_from = facing.opposite();
         let leg = &mut world.legs[l];
         leg.pos = new_pos;
-        leg.mobility = landing_mobility(kind, facing, rng);
+        leg.mobility = landing_mobility(kind, arrived_from, rng);
     }
     world.insert_leg(l1, new_pos);
     world.insert_leg(l2, new_pos);
