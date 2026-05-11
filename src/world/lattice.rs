@@ -36,10 +36,15 @@ impl Direction {
 pub enum SiteKind {
     /// Plain lattice cell — leg passes through unchanged.
     Plain,
-    /// CTCF that *captures* legs whose `facing == stops` (they were on the
-    /// CTCF's "back" side and stepped onto its "front") and *evicts* legs
-    /// moving in the opposite direction.
-    Ctcf { stops: Direction },
+    /// CTCF site. When a leg lands here, the CTCF "acts" on it with
+    /// probability `strength`:
+    /// - a leg whose `facing == stops` is **captured** (it was on the
+    ///   CTCF's "back" side and arrived at its "front");
+    /// - a leg whose `facing == stops.opposite()` is **evicted**.
+    ///
+    /// With probability `1 - strength`, the leg passes through unchanged
+    /// (`Mobility::Moving`). `strength` must lie in `[0, 1]`.
+    Ctcf { stops: Direction, strength: f64 },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -51,8 +56,16 @@ impl Site {
     pub const fn plain() -> Self {
         Site { kind: SiteKind::Plain }
     }
-    pub const fn ctcf(stops: Direction) -> Self {
-        Site { kind: SiteKind::Ctcf { stops } }
+    /// Construct a CTCF site. `strength` is the per-landing probability
+    /// that the CTCF acts on a leg (captures it or evicts it, depending
+    /// on the leg's facing); the complement is the per-landing
+    /// pass-through probability. Must lie in `[0, 1]`.
+    pub fn ctcf(stops: Direction, strength: f64) -> Self {
+        debug_assert!(
+            (0.0..=1.0).contains(&strength),
+            "CTCF strength must be in [0, 1], got {strength}"
+        );
+        Site { kind: SiteKind::Ctcf { stops, strength } }
     }
     pub fn is_ctcf(&self) -> bool {
         matches!(self.kind, SiteKind::Ctcf { .. })

@@ -9,14 +9,14 @@ fn main() {
     // 100-site lattice with right-stopping CTCF at site 30 and left-stopping
     // CTCF at site 70 (i.e. a "TAD" between them in the convergent convention).
     let mut sites = vec![Site::plain(); 100];
-    sites[30] = Site::ctcf(Direction::Right);
-    sites[70] = Site::ctcf(Direction::Left);
+    sites[30] = Site::ctcf(Direction::Right, 1.0);
+    sites[70] = Site::ctcf(Direction::Left, 1.0);
     let lattice = Lattice::new(sites);
 
-    let mut world = World::new(lattice);
-    let (_lef, [l_left, l_right]) = world.spawn_lef(50);
-
     let mut rng = SimRng::seed_from_u64(42);
+    let mut world = World::new(lattice);
+    let (_lef, [l_left, l_right]) = world.spawn_lef(50, &mut rng);
+
     let mut engine = Engine::new(Rates::default_demo());
     engine.prime(&world, &mut rng);
 

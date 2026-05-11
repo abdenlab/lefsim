@@ -6,7 +6,7 @@ use smallvec::SmallVec;
 
 use crate::engine::SimRng;
 use crate::spawn::SpawnRule;
-use crate::world::{Direction, LefKey, LegKey, Mobility, SiteKind, World};
+use crate::world::{Direction, LefKey, LegKey, Mobility, World, landing_mobility};
 
 pub type Time = f64;
 
@@ -99,7 +99,7 @@ impl Action {
         touched: &mut Touched,
     ) {
         match *self {
-            Action::Step { leg } => fire_step(leg, world, touched),
+            Action::Step { leg } => fire_step(leg, world, rng, touched),
             Action::Respawn { lef } => fire_respawn(lef, world, spawn, rng, touched),
         }
     }
@@ -151,7 +151,12 @@ fn schedule_respawn(
 
 // ----- per-variant fire implementations -----
 
-fn fire_step(leg_k: LegKey, world: &mut World, touched: &mut Touched) {
+fn fire_step(
+    leg_k: LegKey,
+    world: &mut World,
+    rng: &mut SimRng,
+    touched: &mut Touched,
+) {
     let (old_pos, lef_k, facing) = {
         let leg = &world.legs[leg_k];
         (leg.pos, leg.lef, leg.facing)
@@ -171,13 +176,14 @@ fn fire_step(leg_k: LegKey, world: &mut World, touched: &mut Touched) {
         .filter(|p| (*p as usize) < world.lattice.len())
         .and_then(|p| world.legs_at(p).first().copied());
 
-    // Mutate occupancy and the leg.
+    // Mutate occupancy and the leg. The landing_mobility roll happens here,
+    // exactly once per actual move — never in scheduling.
     world.remove_leg(leg_k, old_pos);
     world.insert_leg(leg_k, new_pos);
     let kind = world.lattice.sites[new_pos as usize].kind;
     let leg = &mut world.legs[leg_k];
     leg.pos = new_pos;
-    leg.mobility = derive_mobility(kind, facing);
+    leg.mobility = landing_mobility(kind, facing, rng);
 
     // Tell the engine what to reschedule.
     touched.legs.push(leg_k);
@@ -235,13 +241,14 @@ fn fire_respawn<S: SpawnRule>(
         }
     }
 
-    // Place both legs at the spawn site, deriving mobility from it.
+    // Place both legs at the spawn site. This is a landing for each leg, so
+    // each rolls landing_mobility against the new site.
     let kind = world.lattice.sites[new_pos as usize].kind;
     for &l in &[l1, l2] {
         let facing = world.legs[l].facing;
         let leg = &mut world.legs[l];
         leg.pos = new_pos;
-        leg.mobility = derive_mobility(kind, facing);
+        leg.mobility = landing_mobility(kind, facing, rng);
     }
     world.insert_leg(l1, new_pos);
     world.insert_leg(l2, new_pos);
@@ -250,64 +257,9 @@ fn fire_respawn<S: SpawnRule>(
     touched.lefs.push(lef_k);
 }
 
-/// Map (site kind, leg facing) -> mobility after stepping onto the site.
-///
-/// Conventions:
-/// - `Plain` sites leave the leg `Moving`.
-/// - `Ctcf { stops }` captures legs whose `facing == stops` (the leg was
-///   on the CTCF's "back" side and arrived at its "front"), and evicts
-///   legs whose `facing == stops.opposite()`.
-pub fn derive_mobility(site: SiteKind, facing: Direction) -> Mobility {
-    match site {
-        SiteKind::Plain => Mobility::Moving,
-        SiteKind::Ctcf { stops } => {
-            if facing == stops {  // TODO: gate by capture probability
-                Mobility::Captured
-            } else {
-                Mobility::Evicted
-            }
-        }
-    }
-}
-
 /// Sample an exponential dt with the given rate (events per unit time).
 fn sample_exponential(rng: &mut SimRng, rate: f64) -> Time {
     // u ~ (0, 1] avoids ln(0).
     let u: f64 = rng.sample(OpenClosed01);
     -u.ln() / rate
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn capture_when_facing_matches_stops() {
-        assert_eq!(
-            derive_mobility(SiteKind::Ctcf { stops: Direction::Right }, Direction::Right),
-            Mobility::Captured
-        );
-        assert_eq!(
-            derive_mobility(SiteKind::Ctcf { stops: Direction::Left }, Direction::Left),
-            Mobility::Captured
-        );
-    }
-
-    #[test]
-    fn evict_when_facing_opposes_stops() {
-        assert_eq!(
-            derive_mobility(SiteKind::Ctcf { stops: Direction::Right }, Direction::Left),
-            Mobility::Evicted
-        );
-        assert_eq!(
-            derive_mobility(SiteKind::Ctcf { stops: Direction::Left }, Direction::Right),
-            Mobility::Evicted
-        );
-    }
-
-    #[test]
-    fn plain_keeps_moving() {
-        assert_eq!(derive_mobility(SiteKind::Plain, Direction::Right), Mobility::Moving);
-        assert_eq!(derive_mobility(SiteKind::Plain, Direction::Left), Mobility::Moving);
-    }
 }

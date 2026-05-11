@@ -11,9 +11,8 @@ use rand::SeedableRng;
 #[test]
 fn lef_extrudes_outward_on_empty_lattice() {
     let mut world = World::new(Lattice::new_plain(200));
-    let (_lef, [l_left, l_right]) = world.spawn_lef(100);
-
     let mut rng = SimRng::seed_from_u64(7);
+    let (_lef, [l_left, l_right]) = world.spawn_lef(100, &mut rng);
     let mut engine = Engine::new(Rates {
         step: 1.0,
         // Effectively never within the test horizon (~1e9 expected wait),
@@ -50,11 +49,10 @@ fn lef_extrudes_outward_on_empty_lattice() {
 #[test]
 fn right_facing_leg_captured_by_right_stopping_ctcf() {
     let mut sites = vec![Site::plain(); 50];
-    sites[20] = Site::ctcf(Direction::Right);
+    sites[20] = Site::ctcf(Direction::Right, 1.0);
     let mut world = World::new(Lattice::new(sites));
-    let (_lef, [_l_left, l_right]) = world.spawn_lef(10);
-
     let mut rng = SimRng::seed_from_u64(11);
+    let (_lef, [_l_left, l_right]) = world.spawn_lef(10, &mut rng);
     let mut engine = Engine::new(Rates {
         step: 1.0,
         respawn_default: 1e-12,
@@ -82,11 +80,10 @@ fn eviction_triggers_immediate_respawn() {
     // CTCF at site 20 stopping `Left`. The right-facing leg arriving from the
     // left is moving against `stops`, so it gets evicted on contact.
     let mut sites = vec![Site::plain(); 50];
-    sites[20] = Site::ctcf(Direction::Left);
+    sites[20] = Site::ctcf(Direction::Left, 1.0);
     let mut world = World::new(Lattice::new(sites));
-    let (lef_k, [_l_left, l_right]) = world.spawn_lef(10);
-
     let mut rng = SimRng::seed_from_u64(13);
+    let (lef_k, [_l_left, l_right]) = world.spawn_lef(10, &mut rng);
     let mut engine = Engine::new(Rates {
         step: 1.0,
         respawn_default: 1e-12,
