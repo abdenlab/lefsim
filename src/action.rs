@@ -6,7 +6,7 @@ use smallvec::SmallVec;
 
 use crate::engine::SimRng;
 use crate::spawn::SpawnRule;
-use crate::world::{Dir, LefKey, LegKey, Mobility, SiteKind, World};
+use crate::world::{Direction, LefKey, LegKey, Mobility, SiteKind, World};
 
 pub type Time = f64;
 
@@ -69,9 +69,11 @@ impl Touched {
     }
 }
 
-// ----- scheduling (pure, no mutation) -----
+// ----- scheduling (pure) and firing (mutating) dispatch -----
 
 impl Action {
+    /// Pure: compute when this action would next fire given the current world
+    /// state and clock. Does not mutate.
     pub fn schedule(
         &self,
         world: &World,
@@ -82,6 +84,23 @@ impl Action {
         match *self {
             Action::Step { leg } => schedule_step(leg, world, rates, now, rng),
             Action::Respawn { lef } => schedule_respawn(lef, world, rates, now, rng),
+        }
+    }
+
+    /// Mutating: apply this action's effects to the world. The action pushes
+    /// every affected leg/LEF key into `touched` so the engine can reschedule
+    /// dependents.
+    pub fn fire<S: SpawnRule>(
+        &self,
+        world: &mut World,
+        spawn: &S,
+        _now: Time,
+        rng: &mut SimRng,
+        touched: &mut Touched,
+    ) {
+        match *self {
+            Action::Step { leg } => fire_step(leg, world, touched),
+            Action::Respawn { lef } => fire_respawn(lef, world, spawn, rng, touched),
         }
     }
 }
@@ -130,21 +149,7 @@ fn schedule_respawn(
     Schedule::At(now + sample_exponential(rng, rate))
 }
 
-// ----- firing (mutating) -----
-
-pub fn fire<S: SpawnRule>(
-    action: Action,
-    world: &mut World,
-    spawn: &S,
-    _now: Time,
-    rng: &mut SimRng,
-    touched: &mut Touched,
-) {
-    match action {
-        Action::Step { leg } => fire_step(leg, world, touched),
-        Action::Respawn { lef } => fire_respawn(lef, world, spawn, rng, touched),
-    }
-}
+// ----- per-variant fire implementations -----
 
 fn fire_step(leg_k: LegKey, world: &mut World, touched: &mut Touched) {
     let (old_pos, lef_k, facing) = {
@@ -167,8 +172,8 @@ fn fire_step(leg_k: LegKey, world: &mut World, touched: &mut Touched) {
         .and_then(|p| world.legs_at(p).first().copied());
 
     // Mutate occupancy and the leg.
-    world.unplace(leg_k, old_pos);
-    world.place(leg_k, new_pos);
+    world.remove_leg(leg_k, old_pos);
+    world.insert_leg(leg_k, new_pos);
     let kind = world.lattice.sites[new_pos as usize].kind;
     let leg = &mut world.legs[leg_k];
     leg.pos = new_pos;
@@ -202,7 +207,7 @@ fn fire_respawn<S: SpawnRule>(
 
     // Touch neighbors of both old positions; then vacate.
     for p in [p1, p2] {
-        for d in [Dir::Left, Dir::Right] {
+        for d in [Direction::Left, Direction::Right] {
             if let Some(np) = d.shift(p)
                 && (np as usize) < world.lattice.len()
             {
@@ -214,13 +219,13 @@ fn fire_respawn<S: SpawnRule>(
             }
         }
     }
-    world.unplace(l1, p1);
-    world.unplace(l2, p2);
+    world.remove_leg(l1, p1);
+    world.remove_leg(l2, p2);
 
     let new_pos = spawn.sample(world, rng);
 
     // Touch neighbors of the new spawn site.
-    for d in [Dir::Left, Dir::Right] {
+    for d in [Direction::Left, Direction::Right] {
         if let Some(np) = d.shift(new_pos)
             && (np as usize) < world.lattice.len()
         {
@@ -238,8 +243,8 @@ fn fire_respawn<S: SpawnRule>(
         leg.pos = new_pos;
         leg.mobility = derive_mobility(kind, facing);
     }
-    world.place(l1, new_pos);
-    world.place(l2, new_pos);
+    world.insert_leg(l1, new_pos);
+    world.insert_leg(l2, new_pos);
 
     touched.legs.extend([l1, l2]);
     touched.lefs.push(lef_k);
@@ -252,7 +257,7 @@ fn fire_respawn<S: SpawnRule>(
 /// - `Ctcf { stops }` captures legs whose `facing == stops` (the leg was
 ///   on the CTCF's "back" side and arrived at its "front"), and evicts
 ///   legs whose `facing == stops.opposite()`.
-pub fn derive_mobility(site: SiteKind, facing: Dir) -> Mobility {
+pub fn derive_mobility(site: SiteKind, facing: Direction) -> Mobility {
     match site {
         SiteKind::Plain => Mobility::Moving,
         SiteKind::Ctcf { stops } => {
@@ -279,11 +284,11 @@ mod tests {
     #[test]
     fn capture_when_facing_matches_stops() {
         assert_eq!(
-            derive_mobility(SiteKind::Ctcf { stops: Dir::Right }, Dir::Right),
+            derive_mobility(SiteKind::Ctcf { stops: Direction::Right }, Direction::Right),
             Mobility::Captured
         );
         assert_eq!(
-            derive_mobility(SiteKind::Ctcf { stops: Dir::Left }, Dir::Left),
+            derive_mobility(SiteKind::Ctcf { stops: Direction::Left }, Direction::Left),
             Mobility::Captured
         );
     }
@@ -291,18 +296,18 @@ mod tests {
     #[test]
     fn evict_when_facing_opposes_stops() {
         assert_eq!(
-            derive_mobility(SiteKind::Ctcf { stops: Dir::Right }, Dir::Left),
+            derive_mobility(SiteKind::Ctcf { stops: Direction::Right }, Direction::Left),
             Mobility::Evicted
         );
         assert_eq!(
-            derive_mobility(SiteKind::Ctcf { stops: Dir::Left }, Dir::Right),
+            derive_mobility(SiteKind::Ctcf { stops: Direction::Left }, Direction::Right),
             Mobility::Evicted
         );
     }
 
     #[test]
     fn plain_keeps_moving() {
-        assert_eq!(derive_mobility(SiteKind::Plain, Dir::Right), Mobility::Moving);
-        assert_eq!(derive_mobility(SiteKind::Plain, Dir::Left), Mobility::Moving);
+        assert_eq!(derive_mobility(SiteKind::Plain, Direction::Right), Mobility::Moving);
+        assert_eq!(derive_mobility(SiteKind::Plain, Direction::Left), Mobility::Moving);
     }
 }

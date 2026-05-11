@@ -6,7 +6,7 @@
 
 use slotmap::new_key_type;
 
-use super::lattice::{Dir, SiteIdx};
+use super::lattice::{Direction, Position};
 
 new_key_type! {
     /// Typed handle into [`crate::World::legs`].
@@ -30,13 +30,13 @@ pub enum Mobility {
 #[derive(Copy, Clone, Debug)]
 pub struct Leg {
     /// Current site on the lattice.
-    pub pos: SiteIdx,
+    pub pos: Position,
     /// LEF this leg belongs to.
     pub lef: LefKey,
     /// The other leg of the same LEF.
     pub partner: LegKey,
     /// Direction this leg extrudes (fixed for the leg's lifetime).
-    pub facing: Dir,
+    pub facing: Direction,
     pub mobility: Mobility,
 }
 

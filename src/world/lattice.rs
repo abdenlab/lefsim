@@ -2,20 +2,20 @@
 
 /// Index into a [`Lattice`]'s site array. `u32` is plenty for any plausible
 /// chromatin model and keeps `Action` keys compact.
-pub type SiteIdx = u32;
+pub type Position = u32;
 
 /// One of the two travel/orientation directions on the 1D lattice.
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
-pub enum Dir {
+pub enum Direction {
     Left,
     Right,
 }
 
-impl Dir {
+impl Direction {
     pub fn opposite(self) -> Self {
         match self {
-            Dir::Left => Dir::Right,
-            Dir::Right => Dir::Left,
+            Direction::Left => Direction::Right,
+            Direction::Right => Direction::Left,
         }
     }
 
@@ -23,10 +23,10 @@ impl Dir {
     ///
     /// Returns `None` on underflow (stepping `Left` from site 0). Callers
     /// must additionally bounds-check the result against the lattice length.
-    pub fn shift(self, p: SiteIdx) -> Option<SiteIdx> {
+    pub fn shift(self, p: Position) -> Option<Position> {
         match self {
-            Dir::Left => p.checked_sub(1),
-            Dir::Right => p.checked_add(1),
+            Direction::Left => p.checked_sub(1),
+            Direction::Right => p.checked_add(1),
         }
     }
 }
@@ -39,7 +39,7 @@ pub enum SiteKind {
     /// CTCF that *captures* legs whose `facing == stops` (they were on the
     /// CTCF's "back" side and stepped onto its "front") and *evicts* legs
     /// moving in the opposite direction.
-    Ctcf { stops: Dir },
+    Ctcf { stops: Direction },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -51,7 +51,7 @@ impl Site {
     pub const fn plain() -> Self {
         Site { kind: SiteKind::Plain }
     }
-    pub const fn ctcf(stops: Dir) -> Self {
+    pub const fn ctcf(stops: Direction) -> Self {
         Site { kind: SiteKind::Ctcf { stops } }
     }
     pub fn is_ctcf(&self) -> bool {
@@ -70,7 +70,7 @@ impl Lattice {
         Lattice { sites }
     }
     /// All-plain lattice of length `n`.
-    pub fn plain(n: usize) -> Self {
+    pub fn new_plain(n: usize) -> Self {
         Lattice { sites: vec![Site::plain(); n] }
     }
     pub fn len(&self) -> usize {

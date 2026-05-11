@@ -3,11 +3,11 @@
 use rand::Rng;
 
 use crate::engine::SimRng;
-use crate::world::{SiteIdx, SiteKind, World};
+use crate::world::{Position, SiteKind, World};
 
 /// Strategy for picking the new spawn site when a LEF respawns.
 pub trait SpawnRule {
-    fn sample(&self, world: &World, rng: &mut SimRng) -> SiteIdx;
+    fn sample(&self, world: &World, rng: &mut SimRng) -> Position;
 }
 
 /// Uniformly samples among `Plain`, currently-unoccupied sites by rejection.
@@ -16,7 +16,7 @@ pub trait SpawnRule {
 pub struct UniformNonCtcfSpawn;
 
 impl SpawnRule for UniformNonCtcfSpawn {
-    fn sample(&self, world: &World, rng: &mut SimRng) -> SiteIdx {
+    fn sample(&self, world: &World, rng: &mut SimRng) -> Position {
         let n = world.lattice.len() as u32;
         loop {
             let i = rng.gen_range(0..n);

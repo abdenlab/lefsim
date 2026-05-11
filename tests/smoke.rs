@@ -10,7 +10,7 @@ use rand::SeedableRng;
 /// boundary, after which positions reset.
 #[test]
 fn lef_extrudes_outward_on_empty_lattice() {
-    let mut world = World::new(Lattice::plain(200));
+    let mut world = World::new(Lattice::new_plain(200));
     let (_lef, [l_left, l_right]) = world.spawn_lef(100);
 
     let mut rng = SimRng::seed_from_u64(7);
@@ -50,7 +50,7 @@ fn lef_extrudes_outward_on_empty_lattice() {
 #[test]
 fn right_facing_leg_captured_by_right_stopping_ctcf() {
     let mut sites = vec![Site::plain(); 50];
-    sites[20] = Site::ctcf(Dir::Right);
+    sites[20] = Site::ctcf(Direction::Right);
     let mut world = World::new(Lattice::new(sites));
     let (_lef, [_l_left, l_right]) = world.spawn_lef(10);
 
@@ -82,7 +82,7 @@ fn eviction_triggers_immediate_respawn() {
     // CTCF at site 20 stopping `Left`. The right-facing leg arriving from the
     // left is moving against `stops`, so it gets evicted on contact.
     let mut sites = vec![Site::plain(); 50];
-    sites[20] = Site::ctcf(Dir::Left);
+    sites[20] = Site::ctcf(Direction::Left);
     let mut world = World::new(Lattice::new(sites));
     let (lef_k, [_l_left, l_right]) = world.spawn_lef(10);
 

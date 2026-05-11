@@ -9,8 +9,8 @@ fn main() {
     // 100-site lattice with right-stopping CTCF at site 30 and left-stopping
     // CTCF at site 70 (i.e. a "TAD" between them in the convergent convention).
     let mut sites = vec![Site::plain(); 100];
-    sites[30] = Site::ctcf(Dir::Right);
-    sites[70] = Site::ctcf(Dir::Left);
+    sites[30] = Site::ctcf(Direction::Right);
+    sites[70] = Site::ctcf(Direction::Left);
     let lattice = Lattice::new(sites);
 
     let mut world = World::new(lattice);

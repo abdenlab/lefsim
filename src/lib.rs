@@ -34,5 +34,5 @@ pub use action::{Action, Rates, Schedule, Time, Touched};
 pub use engine::{Engine, SimRng};
 pub use spawn::{SpawnRule, UniformNonCtcfSpawn};
 pub use world::{
-    Dir, Lattice, Leg, Lef, LefKey, LegKey, Mobility, Site, SiteIdx, SiteKind, World,
+    Direction, Lattice, Leg, Lef, LefKey, LegKey, Mobility, Site, Position, SiteKind, World,
 };

@@ -11,7 +11,7 @@ use std::collections::{BinaryHeap, HashMap};
 use rand_pcg::Pcg64;
 use smallvec::SmallVec;
 
-use crate::action::{Action, Rates, Schedule, Time, Touched, fire};
+use crate::action::{Action, Rates, Schedule, Time, Touched};
 use crate::spawn::SpawnRule;
 use crate::world::World;
 
@@ -111,7 +111,7 @@ impl Engine {
         self.clock = time;
 
         touched.clear();
-        fire(action, world, spawn, time, rng, touched);
+        action.fire(world, spawn, time, rng, touched);
 
         // Reactive rescheduling, deduped against a small in-step set.
         // Constant fan-out per touched entity:
