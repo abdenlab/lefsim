@@ -30,8 +30,8 @@ pub mod engine;
 pub mod spawn;
 pub mod world;
 
-pub use action::{Action, Rates, Schedule, Time, Touched};
-pub use engine::{Engine, SimRng};
+pub use action::{Action, Rates, Touched};
+pub use engine::{Engine, Schedule, SimRng, Time};
 pub use spawn::{SpawnRule, UniformNonCtcfSpawn};
 pub use world::{
     Direction, Lattice, Leg, Lef, LefKey, LegKey, Mobility, Site, Position, SiteKind, World,

@@ -11,9 +11,21 @@ use std::collections::{BinaryHeap, HashMap};
 use rand_pcg::Pcg64;
 use smallvec::SmallVec;
 
-use crate::action::{Action, Rates, Schedule, Time, Touched};
+use crate::action::{Action, Rates, Touched};
 use crate::spawn::SpawnRule;
 use crate::world::World;
+
+/// Continuous simulation clock. `f64` is plenty of precision for the
+/// time scales we care about.
+pub type Time = f64;
+
+/// Result returned by [`Action::schedule`]. Tells the engine either when
+/// to enqueue the action next, or that it shouldn't be enqueued at all.
+#[derive(Copy, Clone, Debug)]
+pub enum Schedule {
+    At(Time),
+    Never,
+}
 
 /// Concrete RNG type used throughout the simulation. Locked in so that
 /// signatures stay simple and seeded runs are reproducible. Trade off:

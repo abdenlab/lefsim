@@ -4,11 +4,9 @@ use rand::Rng;
 use rand::distributions::OpenClosed01;
 use smallvec::SmallVec;
 
-use crate::engine::SimRng;
+use crate::engine::{Schedule, SimRng, Time};
 use crate::spawn::SpawnRule;
 use crate::world::{Direction, LefKey, LegKey, Mobility, World, landing_mobility};
-
-pub type Time = f64;
 
 /// A schedulable event.
 ///
@@ -20,13 +18,6 @@ pub enum Action {
     Step { leg: LegKey },
     /// A LEF unbinds and respawns at a new site sampled from the [`SpawnRule`].
     Respawn { lef: LefKey },
-}
-
-/// Result of scheduling: either the next event time, or "never" (do not enqueue).
-#[derive(Copy, Clone, Debug)]
-pub enum Schedule {
-    At(Time),
-    Never,
 }
 
 #[derive(Copy, Clone, Debug)]
