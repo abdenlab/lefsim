@@ -1,6 +1,6 @@
 //! Integration tests against the public API.
 
-use lefs::*;
+use lefsim::*;
 use rand::SeedableRng;
 
 /// On an empty lattice with a single LEF spawning at the midpoint, the legs

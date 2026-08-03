@@ -2,7 +2,7 @@
 //! single LEF spawning at the midpoint. Runs for a small number of events
 //! and prints the trajectory.
 
-use lefs::*;
+use lefsim::*;
 use rand::SeedableRng;
 
 fn main() {
