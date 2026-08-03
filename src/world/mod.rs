@@ -63,7 +63,7 @@ impl World {
     /// Construct a new LEF with both legs sitting at `pos` and facing outward.
     /// Returns the new `LefKey` and the two `LegKey`s in `[Left, Right]` order.
     ///
-    /// Counts as a *landing* for both legs (each rolls `landing_mobility`
+    /// Counts as a *landing* for both legs (each rolls `resolve_mobility`
     /// against the site they're placed on), so callers must thread an RNG.
     pub fn spawn_lef(
         &mut self,
@@ -91,20 +91,20 @@ impl World {
         // mobility. Initial placement isn't a "step" in the usual sense;
         // we treat it as if each leg arrived from the side opposite its
         // facing, matching the convention used by fire_step under
-        // forward-only motion. See landing_mobility for why this matters.
+        // forward-only motion. See resolve_mobility for why this matters.
         let kind = self.lattice.sites[pos as usize].kind;
         {
             let facing = Direction::Left;
             let leg = &mut self.legs[l1];
             leg.lef = lef_k;
             leg.partner = l2;
-            leg.mobility = landing_mobility(kind, facing.opposite(), rng);
+            leg.mobility = resolve_mobility(kind, facing.opposite(), rng);
         }
         {
             let facing = Direction::Right;
             let leg = &mut self.legs[l2];
             leg.lef = lef_k;
-            leg.mobility = landing_mobility(kind, facing.opposite(), rng);
+            leg.mobility = resolve_mobility(kind, facing.opposite(), rng);
         }
 
         self.insert_leg(l1, pos);
@@ -121,7 +121,7 @@ impl World {
 /// model, `arrived_from == leg.facing.opposite()`, but a model with
 /// back-stepping or independent step direction would derive it differently.
 ///
-/// # Invariant (load-bearing!)
+/// # Invariant
 ///
 /// **Only call this once per actual landing.** Capture and eviction are
 /// modeled as events that fire *on the act of stepping onto a site* — not
@@ -145,7 +145,7 @@ impl World {
 ///   - With probability `strength`: capture if `arrived_from == captures_from`,
 ///     otherwise evict.
 ///   - With probability `1 - strength`: pass through (`Moving`).
-pub(crate) fn landing_mobility(
+pub(crate) fn resolve_mobility(
     site: SiteKind,
     arrived_from: Direction,
     rng: &mut SimRng,
@@ -173,11 +173,11 @@ mod tests {
     fn plain_site_always_moving() {
         let mut rng = SimRng::seed_from_u64(0);
         assert_eq!(
-            landing_mobility(SiteKind::Plain, Direction::Right, &mut rng),
+            resolve_mobility(SiteKind::Plain, Direction::Right, &mut rng),
             Mobility::Moving
         );
         assert_eq!(
-            landing_mobility(SiteKind::Plain, Direction::Left, &mut rng),
+            resolve_mobility(SiteKind::Plain, Direction::Left, &mut rng),
             Mobility::Moving
         );
     }
@@ -189,7 +189,7 @@ mod tests {
         // the right should be captured.
         let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: 1.0 };
         assert_eq!(
-            landing_mobility(site, Direction::Right, &mut rng),
+            resolve_mobility(site, Direction::Right, &mut rng),
             Mobility::Captured
         );
     }
@@ -200,7 +200,7 @@ mod tests {
         // CTCF's capture side is its right side; the left side evicts.
         let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: 1.0 };
         assert_eq!(
-            landing_mobility(site, Direction::Left, &mut rng),
+            resolve_mobility(site, Direction::Left, &mut rng),
             Mobility::Evicted
         );
     }
@@ -210,8 +210,8 @@ mod tests {
         let mut rng = SimRng::seed_from_u64(0);
         let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: 0.0 };
         for _ in 0..50 {
-            assert_eq!(landing_mobility(site, Direction::Right, &mut rng), Mobility::Moving);
-            assert_eq!(landing_mobility(site, Direction::Left, &mut rng), Mobility::Moving);
+            assert_eq!(resolve_mobility(site, Direction::Right, &mut rng), Mobility::Moving);
+            assert_eq!(resolve_mobility(site, Direction::Left, &mut rng), Mobility::Moving);
         }
     }
 
@@ -224,7 +224,7 @@ mod tests {
         let n = 50_000;
         let mut captured = 0usize;
         for _ in 0..n {
-            if landing_mobility(site, Direction::Right, &mut rng) == Mobility::Captured {
+            if resolve_mobility(site, Direction::Right, &mut rng) == Mobility::Captured {
                 captured += 1;
             }
         }

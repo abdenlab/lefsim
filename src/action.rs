@@ -6,7 +6,7 @@ use smallvec::SmallVec;
 
 use crate::engine::{Schedule, SimRng, Time};
 use crate::spawn::SpawnRule;
-use crate::world::{Direction, LefKey, LegKey, Mobility, World, landing_mobility};
+use crate::world::{Direction, LefKey, LegKey, Mobility, World, resolve_mobility};
 
 #[derive(Copy, Clone, Debug)]
 pub struct Rates {
@@ -201,7 +201,7 @@ fn fire_step(
     let arrived_from = facing.opposite();
     let leg = &mut world.legs[leg_k];
     leg.pos = new_pos;
-    leg.mobility = landing_mobility(kind, arrived_from, rng);
+    leg.mobility = resolve_mobility(kind, arrived_from, rng);
 
     // Tell the engine what to reschedule.
     touched.legs.push(leg_k);
@@ -272,7 +272,7 @@ fn fire_respawn<S: SpawnRule>(
         let arrived_from = facing.opposite();
         let leg = &mut world.legs[l];
         leg.pos = new_pos;
-        leg.mobility = landing_mobility(kind, arrived_from, rng);
+        leg.mobility = resolve_mobility(kind, arrived_from, rng);
     }
     world.insert_leg(l1, new_pos);
     world.insert_leg(l2, new_pos);
