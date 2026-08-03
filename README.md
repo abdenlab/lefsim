@@ -113,40 +113,41 @@ Arenas:
 
 ### Actions
 
-- `Step { leg }` schedules to `Never` if the leg isn't `Moving`, would step off
-  the lattice, or is blocked by another leg on the target site. Otherwise it
-  draws an exponential wait with rate `rates.step`.
+#### Scheduling rules
+
+- `Step { leg }`
+  - schedules to `Never` if the leg isn't `Moving`, would step off the lattice,
+    or is blocked by another leg on the target site.
+  - otherwise it draws an exponential wait with rate `rates.step`.
 - `Respawn { lef }` looks at the mobility of _both_ legs together:
   - either leg `Evicted` → `At(now)` (immediate).
   - either leg `Captured` → exponential wait at `rates.respawn_captured` (longer
     lifetime while paused at a boundary).
   - otherwise → `rates.respawn_default`.
 
-When fired, the LEF's legs are lifted off their current sites, a new spawn site
-is chosen by the `SpawnRule`, and both legs are placed there facing outward —
-with each leg rolling `landing_mobility` against the new site.
+#### Firing rules
 
-`SpawnRule` is a small trait; the crate ships `UniformNonCtcfSpawn`, which
-rejection-samples until it lands on an unoccupied `Plain` site. Models that need
-a nonuniform or precomputed-free-list rule implement the trait.
+When `Respawn` is fired, the LEF's legs are lifted off their current sites, a
+new spawn site is chosen by the `SpawnRule`, and both legs are placed there
+facing outward. `SpawnRule` is a small trait. The crate ships
+`UniformNonCtcfSpawn`, which rejection-samples until it lands on an unoccupied
+`Plain` site. Models that need a nonuniform or precomputed-free-list rule
+implement the trait.
 
-### CTCFs
+On each `Step` or `Respawn` fire, the mobility of the leg(s) is reassessed using
+a `resolve_mobility(site, arrived_from, rng)` function. `arrived_from` is the
+side of the landing site the leg came from. This is the single place where a
+CTCF can act on a leg. Its `captures_from` determines its capture side (the
+opposite side evicts). If the site is a CTCF:
 
-`landing_mobility(site, arrived_from, rng)` is the single place where a CTCF
-acts on a leg. `arrived_from` is the side of the CTCF the leg stepped _from_
-(its facing's opposite, under forward-only motion). The CTCF's `captures_from`
-field names its capture side — its opposite side evicts:
+- if `arrived_from == captures_from` → with probability `strength` return
+  `Captured` else `Moving` (pass-through).
+- if `arrived_from != captures_from` → return `Evicted`.
 
-- with probability `strength`, `arrived_from == captures_from` → `Captured`;
-  otherwise → `Evicted`.
-- with probability `1 - strength` → `Moving` (pass-through).
-
-This is called _only_ at actual landings (`fire_step`, `fire_respawn`,
-`spawn_lef`) — never during scheduling. Otherwise a leg standing still on a CTCF
-that already failed to capture it would get fresh rolls every time the scheduler
-revisited it, which is physically wrong: capture and eviction are events that
-happen on the act of stepping onto a site, not facts derivable from position
-alone.
+This is called _only_ once at actual landings, never during scheduling.
+Otherwise a leg standing still on a CTCF that already failed to capture it would
+get fresh rolls every time the scheduler revisited it, which is physically
+wrong.
 
 ## Quick example
 
