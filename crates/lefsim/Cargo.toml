@@ -8,3 +8,4 @@ slotmap.workspace = true
 smallvec.workspace = true
 rand.workspace = true
 rand_pcg.workspace = true
+libm.workspace = true

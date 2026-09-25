@@ -296,5 +296,11 @@ fn fire_respawn(
 fn sample_exponential(rng: &mut SimRng, rate: f64) -> Time {
     // u ~ (0, 1] avoids ln(0).
     let u: f64 = rng.sample(OpenClosed01);
-    -u.ln() / rate
+    // `libm::log` rather than `f64::ln`: `ln` calls the platform's libm,
+    // which can differ in the last ulp between targets (e.g. macOS vs
+    // wasm32). Event times feed heap ordering, so that would let the same
+    // seed produce different trajectories on different targets. This is
+    // the only transcendental in the simulation; everything else is exact
+    // IEEE arithmetic or integer bit manipulation.
+    -libm::log(u) / rate
 }
