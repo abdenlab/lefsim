@@ -1,7 +1,7 @@
 //! Priority-queue-driven simulation loop.
 //!
 //! Built around an indexed binary min-heap of actions keyed by event time
-//! ([`heap::IndexedHeap`], a textbook Gibson-Bruck "next reaction method"
+//! (`heap::IndexedHeap`, a textbook Gibson-Bruck "next reaction method"
 //! structure). Rescheduling an action mutates its priority in place via a
 //! slotmap-keyed position lookup; every action stays in the heap for the
 //! simulation's lifetime. A `Schedule::Never` schedule is represented by
@@ -36,14 +36,15 @@ pub enum Schedule {
 /// callers wanting a different RNG must change this alias.
 pub type SimRng = Pcg64;
 
-pub struct Engine {
-    pub clock: Time,
-    pub rates: Rates,
+/// The event loop. Crate-internal: [`crate::Sim`] is the public driver.
+pub(crate) struct Engine {
+    clock: Time,
+    pub(crate) rates: Rates,
     heap: IndexedHeap,
 }
 
 impl Engine {
-    pub fn new(rates: Rates) -> Self {
+    pub(crate) fn new(rates: Rates) -> Self {
         Engine {
             clock: 0.0,
             rates,
@@ -54,7 +55,7 @@ impl Engine {
     /// Populate the heap with one entry per action in `world`. Call
     /// once after constructing the engine. Subsequent rescheduling
     /// updates entries in place.
-    pub fn initialize(&mut self, world: &World, rng: &mut SimRng) {
+    pub(crate) fn initialize(&mut self, world: &World, rng: &mut SimRng) {
         let total = world.legs.len() + world.lefs.len();
         self.heap = IndexedHeap::with_capacity(total);
         for k in world.legs.keys().collect::<Vec<_>>() {
@@ -76,7 +77,7 @@ impl Engine {
     }
 
     /// Current simulation time.
-    pub fn clock(&self) -> Time {
+    pub(crate) fn clock(&self) -> Time {
         self.clock
     }
 
@@ -86,7 +87,7 @@ impl Engine {
     /// Together with `Engine::advance_clock_to`, this is what makes exact
     /// time-grid sampling possible: state is piecewise-constant between
     /// events, so the state at any `t < next_event_time()` is the current one.
-    pub fn next_event_time(&self) -> Option<Time> {
+    pub(crate) fn next_event_time(&self) -> Option<Time> {
         self.heap
             .peek()
             .filter(|(p, _)| p.is_finite())
@@ -110,7 +111,7 @@ impl Engine {
     /// heap in O(log n). The action must already be in the heap (added
     /// during [`Engine::initialize`]); for the fixed-cardinality LEF
     /// model that's every leg's `Step` and every LEF's `Respawn`.
-    pub fn reschedule(&mut self, action: Action, world: &World, rng: &mut SimRng) {
+    pub(crate) fn reschedule(&mut self, action: Action, world: &World, rng: &mut SimRng) {
         let priority = match action.schedule(world, &self.rates, self.clock, rng) {
             Schedule::At(t) => Priority(t),
             Schedule::Never => Priority::NEVER,
@@ -121,7 +122,7 @@ impl Engine {
     /// Fire the next event, advance the clock, and reschedule whatever
     /// the action's mutations invalidated. Returns the time and action
     /// that fired, or `None` if no finite events remain.
-    pub fn step(
+    pub(crate) fn step(
         &mut self,
         world: &mut World,
         spawn: &dyn SpawnRule,

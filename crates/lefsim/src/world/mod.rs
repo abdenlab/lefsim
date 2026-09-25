@@ -21,12 +21,14 @@ use crate::engine::SimRng;
 /// that case without paying for a heap allocation.
 pub type OccupancyBucket = SmallVec<[LegKey; 2]>;
 
+/// Fields are crate-private so that the derived occupancy index can't drift
+/// out of sync with leg positions; read through the accessors.
 pub struct World {
-    pub lattice: Lattice,
-    pub legs: SlotMap<LegKey, Leg>,
-    pub lefs: SlotMap<LefKey, Lef>,
+    pub(crate) lattice: Lattice,
+    pub(crate) legs: SlotMap<LegKey, Leg>,
+    pub(crate) lefs: SlotMap<LefKey, Lef>,
     /// `occupancy[i]` lists the leg(s) currently sitting at site `i`.
-    pub occupancy: Vec<OccupancyBucket>,
+    pub(crate) occupancy: Vec<OccupancyBucket>,
 }
 
 impl World {
@@ -51,6 +53,18 @@ impl World {
         self.occupancy[p as usize].retain(|x| *x != k);
     }
 
+    pub fn lattice(&self) -> &Lattice {
+        &self.lattice
+    }
+
+    pub fn legs(&self) -> &SlotMap<LegKey, Leg> {
+        &self.legs
+    }
+
+    pub fn lefs(&self) -> &SlotMap<LefKey, Lef> {
+        &self.lefs
+    }
+
     /// `true` iff some leg currently sits at `p`.
     pub fn occupied(&self, p: Position) -> bool {
         !self.occupancy[p as usize].is_empty()
@@ -65,7 +79,10 @@ impl World {
     ///
     /// Counts as a *landing* for both legs (each rolls `resolve_mobility`
     /// against the site they're placed on), so callers must thread an RNG.
-    pub fn spawn_lef(
+    ///
+    /// Crate-private: a LEF added after the engine is initialized would have
+    /// no actions in the heap. [`crate::SimBuilder`] is the public way in.
+    pub(crate) fn spawn_lef(
         &mut self,
         pos: Position,
         rng: &mut SimRng,

@@ -73,7 +73,7 @@ impl Action {
     /// Mutating: apply this action's effects to the world. The action pushes
     /// every affected leg/LEF key into `touched` so the engine can reschedule
     /// dependents.
-    pub fn fire(
+    pub(crate) fn fire(
         &self,
         world: &mut World,
         spawn: &dyn SpawnRule,
@@ -93,13 +93,13 @@ impl Action {
 /// way that affects scheduling) into this buffer. The engine then asks
 /// it which actions need rescheduling via [`Touched::dependent_actions`].
 #[derive(Default, Debug)]
-pub struct Touched {
-    pub legs: SmallVec<[LegKey; 8]>,
-    pub lefs: SmallVec<[LefKey; 4]>,
+pub(crate) struct Touched {
+    pub(crate) legs: SmallVec<[LegKey; 8]>,
+    pub(crate) lefs: SmallVec<[LefKey; 4]>,
 }
 
 impl Touched {
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.legs.clear();
         self.lefs.clear();
     }
@@ -109,7 +109,7 @@ impl Touched {
     /// 
     /// May yield the same action more than once (e.g. when both a leg
     /// and its LEF are in the set); the caller is responsible for dedup.
-    pub fn dependent_actions<'a>(
+    pub(crate) fn dependent_actions<'a>(
         &'a self,
         world: &'a World,
     ) -> impl Iterator<Item = Action> + 'a {

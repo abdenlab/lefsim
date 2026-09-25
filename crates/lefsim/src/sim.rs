@@ -1,7 +1,7 @@
 //! The [`Sim`] facade: one object that owns a whole run.
 //!
-//! A run needs a [`World`], an [`Engine`], an RNG, a [`SpawnRule`], and a
-//! [`Touched`] buffer, all threaded through every step in the right order.
+//! A run needs a [`World`], an engine, an RNG, a [`SpawnRule`], and a
+//! touched-entity buffer, all threaded through every step in the right order.
 //! `Sim` owns them together so callers (and FFI bindings) wrap a single,
 //! concrete, `Send` type.
 //!
