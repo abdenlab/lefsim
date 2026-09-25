@@ -27,11 +27,13 @@
 
 pub mod action;
 pub mod engine;
+pub mod sim;
 pub mod spawn;
 pub mod world;
 
 pub use action::{Action, Rates, Touched};
 pub use engine::{Engine, Schedule, SimRng, Time};
+pub use sim::{BuildError, RunReport, Sim, SimBuilder, StopReason};
 pub use spawn::{SpawnRule, UniformNonCtcfSpawn};
 pub use world::{
     Direction, Lattice, Leg, Lef, LefKey, LegKey, Mobility, Site, Position, SiteKind, World,

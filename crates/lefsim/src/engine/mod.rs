@@ -75,6 +75,37 @@ impl Engine {
         }
     }
 
+    /// Current simulation time.
+    pub fn clock(&self) -> Time {
+        self.clock
+    }
+
+    /// Time of the soonest scheduled event, or `None` if every action is
+    /// scheduled `Never`. Does not mutate.
+    ///
+    /// Together with [`Engine::advance_clock_to`], this is what makes exact
+    /// time-grid sampling possible: state is piecewise-constant between
+    /// events, so the state at any `t < next_event_time()` is the current one.
+    pub fn next_event_time(&self) -> Option<Time> {
+        self.heap
+            .peek()
+            .filter(|(p, _)| p.is_finite())
+            .map(|(p, _)| p.0)
+    }
+
+    /// Advance the clock to `t` without firing anything.
+    ///
+    /// Sound only because state is piecewise-constant between events: `t`
+    /// must not move backwards and must not pass a pending event.
+    pub(crate) fn advance_clock_to(&mut self, t: Time) {
+        debug_assert!(t >= self.clock, "clock must be monotone");
+        debug_assert!(
+            self.next_event_time().is_none_or(|next| t <= next),
+            "cannot advance past a pending event"
+        );
+        self.clock = t;
+    }
+
     /// Recompute an action's priority and update its position in the
     /// heap in O(log n). The action must already be in the heap (added
     /// during [`Engine::initialize`]); for the fixed-cardinality LEF
@@ -122,5 +153,50 @@ impl Engine {
         }
 
         Some((time, action))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::spawn::UniformNonCtcfSpawn;
+    use crate::world::{Direction, Lattice, Site};
+    use rand::SeedableRng;
+
+    #[test]
+    fn next_event_time_predicts_next_step() {
+        let mut sites = vec![Site::plain(); 100];
+        sites[30] = Site::ctcf(Direction::Right, 0.5);
+        sites[70] = Site::ctcf(Direction::Left, 0.5);
+        let mut world = World::new(Lattice::new(sites));
+        let mut rng = SimRng::seed_from_u64(3);
+        world.spawn_lef(40, &mut rng);
+        world.spawn_lef(60, &mut rng);
+        let mut engine = Engine::new(Rates::default());
+        engine.initialize(&world, &mut rng);
+
+        let mut touched = Touched::default();
+        for _ in 0..2000 {
+            let predicted = engine.next_event_time();
+            let fired = engine
+                .step(&mut world, &UniformNonCtcfSpawn, &mut rng, &mut touched)
+                .map(|(t, _)| t);
+            assert_eq!(predicted, fired);
+            assert_eq!(engine.clock(), fired.unwrap());
+        }
+    }
+
+    #[test]
+    fn advance_clock_to_leaves_next_event_untouched() {
+        let mut world = World::new(Lattice::new_plain(50));
+        let mut rng = SimRng::seed_from_u64(5);
+        world.spawn_lef(25, &mut rng);
+        let mut engine = Engine::new(Rates::default());
+        engine.initialize(&world, &mut rng);
+
+        let next = engine.next_event_time().unwrap();
+        engine.advance_clock_to(next / 2.0);
+        assert_eq!(engine.clock(), next / 2.0);
+        assert_eq!(engine.next_event_time(), Some(next));
     }
 }
