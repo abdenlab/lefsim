@@ -151,33 +151,110 @@ wrong.
 
 ## Quick example
 
+`Sim` is the entry point. It owns the world, the event engine, the RNG, and the
+spawn rule for one run, and `SimBuilder` is the only place LEFs are created.
+
 ```rust
-use lefs::*;
-use rand::SeedableRng;
+use lefsim::*;
 
 // 100-site lattice with a convergent CTCF pair at 30 and 70.
 let mut sites = vec![Site::plain(); 100];
 sites[30] = Site::ctcf(Direction::Right, 1.0);
 sites[70] = Site::ctcf(Direction::Left, 1.0);
 
-let mut rng = SimRng::seed_from_u64(42);
-let mut world = World::new(Lattice::new(sites));
-world.spawn_lef(50, &mut rng);
+let mut sim = Sim::builder(Lattice::new(sites))
+    .seed(42)
+    .lef_at(50) // one LEF at site 50...
+    .lefs(3) // ...and three more at sites drawn from the spawn rule
+    .build()?;
 
-let mut engine = Engine::new(Rates::default());
-engine.initialize(&world, &mut rng);
-
-let mut touched = Touched::default();
-while let Some((t, action)) =
-    engine.step(&mut world, &UniformNonCtcfSpawn, &mut rng, &mut touched)
-{
-    // record trajectory, break on some condition, etc.
-    # let _ = (t, action); break;
+// Event by event:
+while let Some((t, action)) = sim.step() {
+    let (left, right) = sim.lef_positions(0);
+    // ...
 }
+
+// Or in batches:
+sim.run_until(1000.0);
+sim.run_events(10_000);
 ```
+
+Externally, LEFs and legs are identified by dense ids assigned in builder order:
+`lef_id` runs over `0..n_lefs`, and `leg_id = 2 * lef_id + side`, where side 0
+is the left-facing leg and side 1 the right-facing one.
 
 Run the bundled trajectory printer with:
 
 ```
 cargo run --example single_lef
+```
+
+## Observing a run
+
+Only leg positions and mobilities change during a run, and they change only at
+events. State is piecewise-constant in between, so it can be sampled exactly at
+any time without interpolation. Two recorders are fed by the `*_with` drivers:
+
+- `Recorder` takes **snapshots** of every LEF on a regular time grid
+  (`SampleMode::every_dt(dt)`). Frames are stored wide (left and right leg
+  together per LEF, since the loop is the observable) and rectangular: `time`
+  has one entry per snapshot, and each other column has `n_lefs` entries per
+  snapshot, so it reshapes to an `(n_snapshots, n_lefs)` array.
+- `EventRecorder` logs **deltas**: one row `(time, leg_id, pos, mob, kind)` per
+  leg changed by each event. Lossless and compact; replay it over a base
+  snapshot to reconstruct any state.
+
+```rust
+let mut rec = sim.recorder(SampleMode::every_dt(1.0));
+let mut events = EventRecorder::new();
+sim.run_until_with(500.0, &mut (&mut rec, &mut events));
+
+let frames = rec.frames(); // LefFrames: time, left_pos, right_pos, left_mob, right_mob
+let deltas = events.frames(); // EventFrames: time, leg_id, pos, mob, kind
+let meta = sim.meta(); // static tables: lattice, CTCFs, LEF/leg id mappings
+```
+
+A grid point `g` records the state after _every_ event at or before `g`. So a
+zero-delay chain (an eviction and its immediate respawn) is fully applied before
+a coincident grid point is recorded, and snapshots never show the transient
+`Evicted` state. Recording never touches the RNG, so a run fires the same
+events whether or not it is observed, and split runs (`run_until(a)` then
+`run_until(b)`) record exactly what one `run_until(b)` would.
+
+**Streaming.** Bound a recorder with `with_max_snapshots(n)` (or
+`EventRecorder::with_max_rows(n)`). When it fills, the driver returns
+`StopReason::RecorderFull` _before_ firing another event, so nothing is lost:
+drain it and call again.
+
+```rust
+let mut rec = sim.recorder(SampleMode::every_dt(1.0)).with_max_snapshots(10_000);
+let mut chunk = LefFrames::default();
+loop {
+    let report = sim.run_until_with(1e6, &mut rec);
+    rec.drain_into(&mut chunk); // hand `chunk` off, e.g. as an Arrow batch
+    if report.stopped != StopReason::RecorderFull {
+        break;
+    }
+}
+```
+
+Frames are plain `Vec`s with no Arrow dependency; binding crates wrap them
+without copying.
+
+**Reproducibility.** A seed fixes the whole run, bit for bit, across platforms,
+including wasm32. `tests/determinism.rs` pins a golden hash of a long run.
+
+## Layout
+
+```
+Cargo.toml              workspace
+crates/lefsim/          core crate
+  src/sim.rs            Sim, SimBuilder, batch drivers
+  src/record.rs         Recorder, EventRecorder, frames, SimMeta
+  src/action.rs         Action, Rates, scheduling and firing rules
+  src/engine/           event loop and indexed heap (internal)
+  src/world/            World, lattice, legs and LEFs
+  src/spawn.rs          SpawnRule, UniformNonCtcfSpawn
+  examples/single_lef.rs
+  tests/
 ```
