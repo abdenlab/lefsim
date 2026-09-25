@@ -1,9 +1,16 @@
-[package]
-name = "lefsim"
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+# Keep bare `cargo build` / `cargo test` on the core crate. Binding crates
+# (cdylibs) may need toolchains that aren't installed.
+default-members = ["crates/lefsim"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[workspace.dependencies]
+lefsim = { path = "crates/lefsim" }
 slotmap = "1"
 smallvec = "1"
 rand = "0.8"

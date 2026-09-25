@@ -1,0 +1,10 @@
+[package]
+name = "lefsim"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+slotmap.workspace = true
+smallvec.workspace = true
+rand.workspace = true
+rand_pcg.workspace = true
