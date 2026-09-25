@@ -244,6 +244,53 @@ without copying.
 **Reproducibility.** A seed fixes the whole run, bit for bit, across platforms,
 including wasm32. `tests/determinism.rs` pins a golden hash of a long run.
 
+## Python
+
+`crates/lefsim-py` wraps `Sim` as a Python extension (pyo3 + maturin, one abi3
+wheel for Python >= 3.9). Results come back as Arrow data through the
+[Arrow PyCapsule Interface](https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html),
+so pyarrow, polars and duckdb read them directly, without copying, and the
+package itself has no Python dependencies.
+
+```python
+import lefsim
+import polars as pl
+
+sim = lefsim.Sim(
+    1000,
+    ctcf_sites=[300, 700],
+    ctcf_captures_from=["right", "left"],
+    ctcf_strength=0.9,
+    n_lefs=10,
+    seed=42,
+)
+rec = sim.run_until(500.0, dt=1.0, events=True)
+
+snaps = pl.DataFrame(rec.snapshots)  # time, lef_id, left_pos, right_pos, left/right_mobility
+deltas = pl.DataFrame(rec.events)  # time, leg_id, lef_id, pos, mobility, action
+meta = sim.meta()  # lattice, ctcfs, lefs, legs tables + rates
+```
+
+Pass `layout="long"` for one row per leg instead of per LEF. Runs release the
+GIL and respond to Ctrl-C. For runs too large to hold in memory,
+`sim.stream(t_end, dt=...)` turns the simulation into a lazy Arrow stream that
+runs as it is read, in bounded memory:
+
+```python
+import duckdb
+stream = sim.stream(1e7, dt=1.0)  # consumes `sim`
+duckdb.sql("copy (select * from stream) to 'snapshots.parquet'")
+```
+
+Develop with:
+
+```
+cd crates/lefsim-py
+uv venv && uv pip install maturin pytest pyarrow polars duckdb pandas numpy
+maturin develop --uv --release
+pytest tests
+```
+
 ## Layout
 
 ```
@@ -257,4 +304,8 @@ crates/lefsim/          core crate
   src/spawn.rs          SpawnRule, UniformNonCtcfSpawn
   examples/single_lef.rs
   tests/
+crates/lefsim-py/       Python bindings
+  src/                  Sim, Batch, Stream (pyo3); Arrow conversion
+  python/lefsim/        package, type stubs
+  tests/                pytest suite
 ```
