@@ -142,7 +142,7 @@ opposite side evicts). If the site is a CTCF:
 
 - if `arrived_from == captures_from` → with probability `strength` return
   `Captured` else `Moving` (pass-through).
-- if `arrived_from != captures_from` → return `Evicted`.
+- if `arrived_from != captures_from` → with probability `strength` return `Evicted`.
 
 This is called _only_ once at actual landings, never during scheduling.
 Otherwise a leg standing still on a CTCF that already failed to capture it would
