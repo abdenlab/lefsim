@@ -373,3 +373,19 @@ fn event_capped_chunks_record_the_same_as_one_run() {
     assert_eq!(rec.frames(), whole_rec.frames());
     assert_eq!(ev.frames(), whole_ev.frames());
 }
+
+#[test]
+fn optional_observers_behave_like_present_or_absent_ones() {
+    let t_end = 100.0;
+    let mut direct = build(17);
+    let mut rec = direct.recorder(SampleMode::every_dt(0.5));
+    direct.run_until_with(t_end, &mut rec);
+
+    let mut via_option = build(17);
+    let mut grid = Some(via_option.recorder(SampleMode::every_dt(0.5)));
+    let mut events: Option<EventRecorder> = None;
+    via_option.run_until_with(t_end, &mut (&mut grid, &mut events));
+
+    assert_eq!(grid.unwrap().frames(), rec.frames());
+    assert_eq!(state(&via_option), state(&direct));
+}

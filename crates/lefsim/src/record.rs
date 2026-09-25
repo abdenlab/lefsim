@@ -420,7 +420,8 @@ impl EventRecorder {
 
 /// Something the [`Sim`] drivers can feed: a [`Recorder`], an
 /// [`EventRecorder`], `()` for nothing, a pair of observers such as
-/// `(&mut recorder, &mut events)`, or a `&mut` to any of these.
+/// `(&mut recorder, &mut events)`, an `Option` of an observer (`None`
+/// observes nothing), or a `&mut` to any of these.
 ///
 /// This trait is sealed; it can't be implemented outside this crate.
 pub trait Observer: sealed::Observe {}
@@ -511,6 +512,20 @@ pub(crate) mod sealed {
         fn on_event(&mut self, time: Time, action: Action, sim: &Sim) {
             self.0.on_event(time, action, sim);
             self.1.on_event(time, action, sim);
+        }
+    }
+
+    impl<T: Observe> Observe for Option<T> {
+        fn sample(&mut self, bound: Time, inclusive: bool, sim: &Sim) -> bool {
+            self.as_mut().is_none_or(|o| o.sample(bound, inclusive, sim))
+        }
+        fn has_room_for_event(&self) -> bool {
+            self.as_ref().is_none_or(|o| o.has_room_for_event())
+        }
+        fn on_event(&mut self, time: Time, action: Action, sim: &Sim) {
+            if let Some(o) = self {
+                o.on_event(time, action, sim);
+            }
         }
     }
 
