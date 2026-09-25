@@ -90,10 +90,10 @@ impl Engine {
     /// Fire the next event, advance the clock, and reschedule whatever
     /// the action's mutations invalidated. Returns the time and action
     /// that fired, or `None` if no finite events remain.
-    pub fn step<S: SpawnRule>(
+    pub fn step(
         &mut self,
         world: &mut World,
-        spawn: &S,
+        spawn: &dyn SpawnRule,
         rng: &mut SimRng,
         touched: &mut Touched,
     ) -> Option<(Time, Action)> {

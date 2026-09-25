@@ -62,10 +62,10 @@ impl Action {
     /// Mutating: apply this action's effects to the world. The action pushes
     /// every affected leg/LEF key into `touched` so the engine can reschedule
     /// dependents.
-    pub fn fire<S: SpawnRule>(
+    pub fn fire(
         &self,
         world: &mut World,
-        spawn: &S,
+        spawn: &dyn SpawnRule,
         _now: Time,
         rng: &mut SimRng,
         touched: &mut Touched,
@@ -218,10 +218,10 @@ fn fire_step(
     }
 }
 
-fn fire_respawn<S: SpawnRule>(
+fn fire_respawn(
     lef_k: LefKey,
     world: &mut World,
-    spawn: &S,
+    spawn: &dyn SpawnRule,
     rng: &mut SimRng,
     touched: &mut Touched,
 ) {

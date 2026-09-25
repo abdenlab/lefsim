@@ -6,6 +6,10 @@ use crate::engine::SimRng;
 use crate::world::{Position, SiteKind, World};
 
 /// Strategy for picking the new spawn site when a LEF respawns.
+///
+/// Must stay object-safe (dyn-compatible): the engine takes
+/// `&dyn SpawnRule` so that FFI wrappers can hold a concrete, non-generic
+/// simulation type. Don't add generic methods or `Self`-returning methods.
 pub trait SpawnRule {
     fn sample(&self, world: &World, rng: &mut SimRng) -> Position;
 }
