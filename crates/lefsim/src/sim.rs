@@ -40,7 +40,7 @@ pub struct SimBuilder {
     lattice: Lattice,
     rates: Rates,
     seed: u64,
-    spawn: Box<dyn SpawnRule + Send>,
+    spawn: Box<dyn SpawnRule + Send + Sync>,
     initial: Vec<InitialLef>,
 }
 
@@ -67,7 +67,11 @@ impl SimBuilder {
     }
 
     /// Rule used to pick respawn sites, and initial sites for [`Self::lefs`].
-    pub fn spawn_rule<S: SpawnRule + Send + 'static>(mut self, rule: S) -> Self {
+    ///
+    /// `Send + Sync` keeps [`Sim`] `Send + Sync`, which FFI wrappers need
+    /// (e.g. a pyo3 `#[pyclass]`). Spawn rules take `&self`, so stateless or
+    /// immutable rules satisfy this for free.
+    pub fn spawn_rule<S: SpawnRule + Send + Sync + 'static>(mut self, rule: S) -> Self {
         self.spawn = Box::new(rule);
         self
     }
@@ -168,7 +172,7 @@ pub struct Sim {
     world: World,
     engine: Engine,
     rng: SimRng,
-    spawn: Box<dyn SpawnRule + Send>,
+    spawn: Box<dyn SpawnRule + Send + Sync>,
     touched: Touched,
     lef_order: Vec<LefKey>,
     leg_order: Vec<LegKey>,
@@ -345,6 +349,22 @@ impl Sim {
         self.drive(t_end, u64::MAX, obs)
     }
 
+    /// [`Sim::run_until_with`], but firing at most `max_events` events.
+    ///
+    /// Returns [`StopReason::ReachedEventCount`] if the cap is hit before
+    /// `t_end`; call again to continue. Recording is seamless across calls.
+    /// Lets a caller bound the work done per call, e.g. to check for
+    /// interrupts between chunks of a long run.
+    pub fn run_until_with_limit<O: Observer + ?Sized>(
+        &mut self,
+        t_end: Time,
+        max_events: u64,
+        obs: &mut O,
+    ) -> RunReport {
+        assert!(!t_end.is_nan(), "run_until: t_end is NaN");
+        self.drive(t_end, max_events, obs)
+    }
+
     /// Run to `t_end` and return every snapshot taken under `mode`.
     pub fn collect_until(&mut self, t_end: Time, mode: SampleMode) -> (LefFrames, RunReport) {
         let mut rec = self.recorder(mode);
@@ -423,9 +443,9 @@ mod tests {
     }
 
     #[test]
-    fn sim_is_send() {
-        fn assert_send<T: Send>() {}
-        assert_send::<Sim>();
+    fn sim_is_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Sim>();
     }
 
     #[test]

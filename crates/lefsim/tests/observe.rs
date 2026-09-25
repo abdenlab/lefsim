@@ -345,3 +345,31 @@ fn meta_describes_the_run() {
         assert_eq!(meta.legs.facing[r as usize], right);
     }
 }
+
+#[test]
+fn event_capped_chunks_record_the_same_as_one_run() {
+    let (t_end, dt) = (200.0, 0.3);
+    let mut whole = build(16);
+    let mut whole_rec = whole.recorder(SampleMode::every_dt(dt));
+    let mut whole_ev = EventRecorder::new();
+    whole.run_until_with(t_end, &mut (&mut whole_rec, &mut whole_ev));
+
+    let mut sim = build(16);
+    let mut rec = sim.recorder(SampleMode::every_dt(dt));
+    let mut ev = EventRecorder::new();
+    let mut chunks = 0;
+    loop {
+        let report = sim.run_until_with_limit(t_end, 37, &mut (&mut rec, &mut ev));
+        chunks += 1;
+        assert!(report.events <= 37);
+        match report.stopped {
+            StopReason::ReachedEventCount => continue,
+            StopReason::ReachedTime => break,
+            other => panic!("unexpected stop: {other:?}"),
+        }
+    }
+    assert!(chunks > 10, "expected many chunks, got {chunks}");
+    assert_eq!(sim.time(), t_end);
+    assert_eq!(rec.frames(), whole_rec.frames());
+    assert_eq!(ev.frames(), whole_ev.frames());
+}
