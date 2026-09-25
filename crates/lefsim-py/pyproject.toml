@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "lefsim"
+description = "Stochastic simulation of loop-extrusion factors on a 1D lattice"
+requires-python = ">=3.9"
+dynamic = ["version"]
+# No runtime dependencies: output is Arrow data exposed through the Arrow
+# PyCapsule Interface, readable by pyarrow, polars, duckdb, etc.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest", "pyarrow>=15", "polars>=1.3", "duckdb>=1.1", "pandas", "numpy"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "lefsim._lefsim"
+features = ["pyo3/extension-module"]

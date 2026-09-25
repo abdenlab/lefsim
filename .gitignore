@@ -1,2 +1,8 @@
 /target
 Cargo.lock
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.so
