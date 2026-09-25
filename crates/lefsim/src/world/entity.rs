@@ -26,6 +26,20 @@ pub enum Mobility {
     Evicted,
 }
 
+impl Mobility {
+    /// Names indexed by [`Mobility::code`].
+    pub const NAMES: [&str; 3] = ["Moving", "Captured", "Evicted"];
+
+    /// Stable `u8` encoding used in recorded frames.
+    pub fn code(self) -> u8 {
+        match self {
+            Mobility::Moving => 0,
+            Mobility::Captured => 1,
+            Mobility::Evicted => 2,
+        }
+    }
+}
+
 /// A single LEF leg. Two legs make a LEF.
 #[derive(Copy, Clone, Debug)]
 pub struct Leg {

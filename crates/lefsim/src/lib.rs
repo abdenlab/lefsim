@@ -27,12 +27,17 @@
 
 pub mod action;
 pub mod engine;
+pub mod record;
 pub mod sim;
 pub mod spawn;
 pub mod world;
 
 pub use action::{Action, Rates, Touched};
 pub use engine::{Engine, Schedule, SimRng, Time};
+pub use record::{
+    EventColumns, EventFrames, EventRecorder, LefColumns, LefFrames, LefSnapshot, Observer,
+    Recorder, SampleMode, SimMeta,
+};
 pub use sim::{BuildError, RunReport, Sim, SimBuilder, StopReason};
 pub use spawn::{SpawnRule, UniformNonCtcfSpawn};
 pub use world::{

@@ -23,6 +23,8 @@ use slotmap::SecondaryMap;
 
 use crate::action::{Action, Rates, Touched};
 use crate::engine::{Engine, SimRng, Time};
+use crate::record::sealed::Observe;
+use crate::record::{LefFrames, Observer, Recorder, SampleMode, SimMeta};
 use crate::spawn::{SpawnRule, UniformNonCtcfSpawn};
 use crate::world::{Lattice, LefKey, LegKey, Mobility, Position, World};
 
@@ -184,6 +186,9 @@ pub enum StopReason {
     ReachedEventCount,
     /// No finite events remain. Terminal: later calls fire nothing.
     Exhausted,
+    /// An observer's buffer is full. Drain it and call the driver again to
+    /// continue; no event has been lost.
+    RecorderFull,
 }
 
 /// Summary of one batch-driver call.
@@ -265,6 +270,34 @@ impl Sim {
         self.world.lefs[self.lef_order[lef_id as usize]].legs
     }
 
+    /// `[(pos, mobility); 2]` for the left and right legs of a LEF.
+    pub(crate) fn lef_state(&self, lef_id: u32) -> [(Position, Mobility); 2] {
+        self.lef_legs(lef_id).map(|leg| {
+            let leg = &self.world.legs[leg];
+            (leg.pos, leg.mobility)
+        })
+    }
+
+    /// LEF keys indexed by `lef_id`.
+    pub(crate) fn lef_keys(&self) -> &[LefKey] {
+        &self.lef_order
+    }
+
+    /// Leg keys indexed by `leg_id`.
+    pub(crate) fn leg_keys(&self) -> &[LegKey] {
+        &self.leg_order
+    }
+
+    /// Static tables describing this run (lattice, CTCFs, id mappings).
+    pub fn meta(&self) -> SimMeta {
+        SimMeta::from_sim(self)
+    }
+
+    /// A [`Recorder`] sized for this sim.
+    pub fn recorder(&self, mode: SampleMode) -> Recorder {
+        Recorder::new(mode, self.n_lefs())
+    }
+
     // ----- drivers -----
 
     /// Fire exactly one event. Returns its time and action, or `None` if no
@@ -284,15 +317,7 @@ impl Sim {
 
     /// Fire up to `n` events.
     pub fn run_events(&mut self, n: u64) -> RunReport {
-        let start = self.events;
-        let mut stopped = StopReason::ReachedEventCount;
-        for _ in 0..n {
-            if self.step().is_none() {
-                stopped = StopReason::Exhausted;
-                break;
-            }
-        }
-        self.report(start, stopped)
+        self.run_events_with(n, &mut ())
     }
 
     /// Fire every event with time `<= t_end`, then advance the clock to
@@ -300,27 +325,80 @@ impl Sim {
     ///
     /// Advancing the clock makes calls compose: `run_until(a)` followed by
     /// `run_until(b)` leaves the sim in the same state as `run_until(b)`.
-    /// A `t_end` at or before the current time does nothing.
+    /// A `t_end` at or before the current time fires nothing.
     pub fn run_until(&mut self, t_end: Time) -> RunReport {
+        self.run_until_with(t_end, &mut ())
+    }
+
+    /// [`Sim::run_events`], feeding `obs`.
+    pub fn run_events_with<O: Observer + ?Sized>(&mut self, n: u64, obs: &mut O) -> RunReport {
+        self.drive(Time::INFINITY, n, obs)
+    }
+
+    /// [`Sim::run_until`], feeding `obs`. Grid snapshots up to and including
+    /// `t_end` are recorded.
+    ///
+    /// Returns early with [`StopReason::RecorderFull`] if an observer fills
+    /// up; drain it and call again with the same `t_end` to continue.
+    pub fn run_until_with<O: Observer + ?Sized>(&mut self, t_end: Time, obs: &mut O) -> RunReport {
         assert!(!t_end.is_nan(), "run_until: t_end is NaN");
+        self.drive(t_end, u64::MAX, obs)
+    }
+
+    /// Run to `t_end` and return every snapshot taken under `mode`.
+    pub fn collect_until(&mut self, t_end: Time, mode: SampleMode) -> (LefFrames, RunReport) {
+        let mut rec = self.recorder(mode);
+        let report = self.run_until_with(t_end, &mut rec);
+        (rec.take_frames(), report)
+    }
+
+    /// The one driver loop behind every `run_*` method.
+    ///
+    /// Invariant: no event fires while the observer still owes samples for
+    /// times before it. So stopping on a full observer never loses anything:
+    /// the next call picks up exactly where this one left off.
+    fn drive<O: Observe + ?Sized>(&mut self, t_end: Time, budget: u64, obs: &mut O) -> RunReport {
         let start = self.events;
-        let stopped = loop {
-            match self.next_event_time() {
+        loop {
+            let next = self.next_event_time();
+            let stop = match next {
                 Some(t) if t <= t_end => {
-                    self.step();
+                    (self.events - start >= budget).then_some(StopReason::ReachedEventCount)
                 }
-                next => {
-                    if t_end.is_finite() && t_end > self.time() {
-                        self.engine.advance_clock_to(t_end);
-                    }
-                    break match next {
-                        Some(_) => StopReason::ReachedTime,
-                        None => StopReason::Exhausted,
-                    };
+                Some(_) => Some(StopReason::ReachedTime),
+                None => Some(StopReason::Exhausted),
+            };
+
+            if let Some(reason) = stop {
+                // Nothing more fires in this call. The current state holds
+                // until `next`, so settle the observer up to where the clock
+                // will end: `t_end` for a timed run, else the current time.
+                let now = self.time();
+                let end = if reason != StopReason::ReachedEventCount && t_end.is_finite() {
+                    t_end.max(now)
+                } else {
+                    now
+                };
+                // A grid point exactly at `end` is final only if no event
+                // is also due then (e.g. the respawn after an eviction).
+                let inclusive = next.is_none_or(|t| t > end);
+                if !obs.sample(end, inclusive, self) {
+                    return self.report(start, StopReason::RecorderFull);
                 }
+                if end > now {
+                    self.engine.advance_clock_to(end);
+                }
+                return self.report(start, reason);
             }
-        };
-        self.report(start, stopped)
+
+            // Settle everything before the next event, then fire it.
+            let t = next.expect("stop handled the no-event case");
+            if !obs.sample(t, false, self) || !obs.has_room_for_event() {
+                return self.report(start, StopReason::RecorderFull);
+            }
+            let (t, action) = self.step().expect("an event was pending");
+            obs.on_event(t, action, self);
+        }
     }
 
     fn report(&self, start_events: u64, stopped: StopReason) -> RunReport {

@@ -12,6 +12,17 @@ pub enum Direction {
 }
 
 impl Direction {
+    /// Names indexed by [`Direction::code`].
+    pub const NAMES: [&str; 2] = ["Left", "Right"];
+
+    /// Stable `u8` encoding used in recorded frames and metadata.
+    pub fn code(self) -> u8 {
+        match self {
+            Direction::Left => 0,
+            Direction::Right => 1,
+        }
+    }
+
     pub fn opposite(self) -> Self {
         match self {
             Direction::Left => Direction::Right,
@@ -52,6 +63,19 @@ pub enum SiteKind {
     /// **left** side. So `captures_from: Left` captures right-facing legs;
     /// `captures_from: Right` captures left-facing legs.
     Ctcf { captures_from: Direction, strength: f64 },
+}
+
+impl SiteKind {
+    /// Names indexed by [`SiteKind::code`].
+    pub const NAMES: [&str; 2] = ["Plain", "Ctcf"];
+
+    /// Stable `u8` encoding used in metadata.
+    pub fn code(self) -> u8 {
+        match self {
+            SiteKind::Plain => 0,
+            SiteKind::Ctcf { .. } => 1,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

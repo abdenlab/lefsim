@@ -83,7 +83,7 @@ impl Engine {
     /// Time of the soonest scheduled event, or `None` if every action is
     /// scheduled `Never`. Does not mutate.
     ///
-    /// Together with [`Engine::advance_clock_to`], this is what makes exact
+    /// Together with `Engine::advance_clock_to`, this is what makes exact
     /// time-grid sampling possible: state is piecewise-constant between
     /// events, so the state at any `t < next_event_time()` is the current one.
     pub fn next_event_time(&self) -> Option<Time> {

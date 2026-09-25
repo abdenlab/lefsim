@@ -8,7 +8,7 @@ use crate::engine::{Schedule, SimRng, Time};
 use crate::spawn::SpawnRule;
 use crate::world::{Direction, LefKey, LegKey, Mobility, World, resolve_mobility};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Rates {
     /// Step rate of a moving, unblocked leg.
     pub step: f64,
@@ -44,6 +44,17 @@ pub enum Action {
 }
 
 impl Action {
+    /// Names indexed by [`Action::code`].
+    pub const NAMES: [&str; 2] = ["Step", "Respawn"];
+
+    /// Stable `u8` encoding of the variant, used in recorded event frames.
+    pub fn code(self) -> u8 {
+        match self {
+            Action::Step { .. } => 0,
+            Action::Respawn { .. } => 1,
+        }
+    }
+
     /// Pure: compute when this action would next fire given the current world
     /// state and clock. Does not mutate.
     pub fn schedule(
