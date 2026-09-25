@@ -92,6 +92,29 @@ impl LefFrames {
         LefFrames { n_lefs, ..Default::default() }
     }
 
+    /// Empty frames with room for `n_snapshots` snapshots.
+    pub fn with_capacity(n_lefs: usize, n_snapshots: usize) -> Self {
+        let rows = n_lefs * n_snapshots;
+        LefFrames {
+            n_lefs,
+            time: Vec::with_capacity(n_snapshots),
+            left_pos: Vec::with_capacity(rows),
+            right_pos: Vec::with_capacity(rows),
+            left_mob: Vec::with_capacity(rows),
+            right_mob: Vec::with_capacity(rows),
+        }
+    }
+
+    /// Ensure room for `n_snapshots` more snapshots.
+    pub fn reserve(&mut self, n_snapshots: usize) {
+        let rows = self.n_lefs * n_snapshots;
+        self.time.reserve(n_snapshots);
+        self.left_pos.reserve(rows);
+        self.right_pos.reserve(rows);
+        self.left_mob.reserve(rows);
+        self.right_mob.reserve(rows);
+    }
+
     pub fn n_lefs(&self) -> usize {
         self.n_lefs
     }
@@ -215,9 +238,16 @@ impl Recorder {
     }
 
     /// Stop the driver once this many snapshots are buffered.
+    ///
+    /// The buffer is preallocated to exactly this size (and reallocated at
+    /// that size after each [`Recorder::take_frames`]), so streaming a long
+    /// run allocates the same few buffer sizes over and over instead of
+    /// growing each chunk by repeated doubling. Choose a chunk-sized bound,
+    /// not a huge safety cap.
     pub fn with_max_snapshots(mut self, n: usize) -> Self {
         assert!(n > 0, "max_snapshots must be positive");
         self.max_snapshots = Some(n);
+        self.frames.reserve(n.saturating_sub(self.frames.n_snapshots()));
         self
     }
 
@@ -236,7 +266,11 @@ impl Recorder {
 
     /// Take the buffered snapshots, leaving the recorder empty.
     pub fn take_frames(&mut self) -> LefFrames {
-        let empty = LefFrames::new(self.frames.n_lefs);
+        let n_lefs = self.frames.n_lefs;
+        let empty = match self.max_snapshots {
+            Some(max) => LefFrames::with_capacity(n_lefs, max),
+            None => LefFrames::new(n_lefs),
+        };
         std::mem::replace(&mut self.frames, empty)
     }
 
@@ -247,6 +281,9 @@ impl Recorder {
         out.clear();
         out.n_lefs = self.frames.n_lefs;
         std::mem::swap(out, &mut self.frames);
+        if let Some(max) = self.max_snapshots {
+            self.frames.reserve(max);
+        }
     }
 
     /// Record the current state at the current time, regardless of mode.
@@ -297,6 +334,26 @@ pub struct EventColumns {
 impl EventFrames {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Ensure room for `n_rows` more rows.
+    pub fn reserve(&mut self, n_rows: usize) {
+        self.time.reserve(n_rows);
+        self.leg_id.reserve(n_rows);
+        self.pos.reserve(n_rows);
+        self.mob.reserve(n_rows);
+        self.kind.reserve(n_rows);
+    }
+
+    /// Empty frames with room for `n_rows` rows.
+    pub fn with_capacity(n_rows: usize) -> Self {
+        EventFrames {
+            time: Vec::with_capacity(n_rows),
+            leg_id: Vec::with_capacity(n_rows),
+            pos: Vec::with_capacity(n_rows),
+            mob: Vec::with_capacity(n_rows),
+            kind: Vec::with_capacity(n_rows),
+        }
     }
 
     pub fn n_rows(&self) -> usize {
@@ -392,9 +449,13 @@ impl EventRecorder {
 
     /// Stop the driver before the buffer could exceed `n` rows. Must be at
     /// least 2, the most rows one event can produce.
+    ///
+    /// Like [`Recorder::with_max_snapshots`], the buffer is preallocated to
+    /// exactly this size, so choose a chunk-sized bound.
     pub fn with_max_rows(mut self, n: usize) -> Self {
         assert!(n >= 2, "max_rows must be at least 2");
         self.max_rows = Some(n);
+        self.frames.reserve(n.saturating_sub(self.frames.n_rows()));
         self
     }
 
@@ -403,7 +464,11 @@ impl EventRecorder {
     }
 
     pub fn take_frames(&mut self) -> EventFrames {
-        std::mem::take(&mut self.frames)
+        let empty = match self.max_rows {
+            Some(max) => EventFrames::with_capacity(max),
+            None => EventFrames::new(),
+        };
+        std::mem::replace(&mut self.frames, empty)
     }
 
     /// Move the buffered rows into `out` (replacing its contents) and reuse
@@ -411,6 +476,9 @@ impl EventRecorder {
     pub fn drain_into(&mut self, out: &mut EventFrames) {
         out.clear();
         std::mem::swap(out, &mut self.frames);
+        if let Some(max) = self.max_rows {
+            self.frames.reserve(max);
+        }
     }
 }
 
