@@ -1,11 +1,10 @@
 //! Smoke example: 100-site lattice with two oppositely-oriented CTCFs and a
-//! single LEF spawning at the midpoint. Runs for a small number of events
-//! and prints the trajectory.
+//! single LEF spawning at the midpoint. Prints the first events one by one,
+//! then the same run sampled on a regular time grid.
 
 use lefsim::*;
-use rand::SeedableRng;
 
-fn main() {
+fn build() -> Sim {
     // 100-site lattice with a convergent CTCF pair bounding a "TAD"
     // between sites 30 and 70:
     //  - site 30's capture side is its right side (captures left-walking
@@ -15,34 +14,55 @@ fn main() {
     let mut sites = vec![Site::plain(); 100];
     sites[30] = Site::ctcf(Direction::Right, 1.0);
     sites[70] = Site::ctcf(Direction::Left, 1.0);
-    let lattice = Lattice::new(sites);
 
-    let mut rng = SimRng::seed_from_u64(42);
-    let mut world = World::new(lattice);
-    let (_lef, [l_left, l_right]) = world.spawn_lef(50, &mut rng);
+    Sim::builder(Lattice::new(sites))
+        .seed(42)
+        .lef_at(50)
+        .build()
+        .expect("valid setup")
+}
 
-    let mut engine = Engine::new(Rates::default());
-    engine.initialize(&world, &mut rng);
+fn describe(sim: &Sim, action: Action) -> String {
+    match action {
+        Action::Step { leg } => format!("Step leg {}", sim.leg_id(leg).unwrap()),
+        Action::Respawn { lef } => format!("Respawn lef {}", sim.lef_id(lef).unwrap()),
+    }
+}
 
-    let mut touched = Touched::default();
-    println!(
-        "t=0.0000  init                   pos=({}, {})",
-        world.legs[l_left].pos, world.legs[l_right].pos
-    );
+fn main() {
+    // Event by event.
+    let mut sim = build();
+    let (l, r) = sim.lef_positions(0);
+    println!("t=0.0000  init             pos=({l}, {r})");
     for _ in 0..200 {
-        let Some((t, action)) =
-            engine.step(&mut world, &UniformNonCtcfSpawn, &mut rng, &mut touched)
-        else {
-            break;
-        };
+        let Some((t, action)) = sim.step() else { break };
+        let (l, r) = sim.lef_positions(0);
+        let (lm, rm) = sim.lef_mobilities(0);
         println!(
-            "t={:>8.4}  {:24}  pos=({}, {})  mob=({:?}, {:?})",
-            t,
-            format!("{:?}", action),
-            world.legs[l_left].pos,
-            world.legs[l_right].pos,
-            world.legs[l_left].mobility,
-            world.legs[l_right].mobility,
+            "t={t:>8.4}  {:15}  pos=({l}, {r})  mob=({lm:?}, {rm:?})",
+            describe(&sim, action)
+        );
+    }
+
+    // The same run, sampled every 10 time units.
+    let mut sim = build();
+    let (frames, report) = sim.collect_until(200.0, SampleMode::every_dt(10.0));
+    println!(
+        "\n{} events, {} snapshots, stopped: {:?}",
+        report.events,
+        frames.n_snapshots(),
+        report.stopped
+    );
+    for s in 0..frames.n_snapshots() {
+        let snap = frames.snapshot(s);
+        let name = |code: u8| Mobility::NAMES[code as usize];
+        println!(
+            "t={:>6.1}  pos=({}, {})  mob=({}, {})",
+            snap.time,
+            snap.left_pos[0],
+            snap.right_pos[0],
+            name(snap.left_mob[0]),
+            name(snap.right_mob[0]),
         );
     }
 }
