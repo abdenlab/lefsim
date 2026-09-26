@@ -5,7 +5,8 @@
   "scripts": {
     "build:wasm": "wasm-pack build crates/lefsim-wasm --target web --profile wasm-release --weak-refs",
     "test": "pnpm --filter lefsim test",
-    "demo": "pnpm --filter demo dev"
+    "demo": "pnpm --filter demo dev",
+    "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
     "wasm-pack": "^0.15.0"
