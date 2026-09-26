@@ -241,6 +241,15 @@ loop {
 Frames are plain `Vec`s with no Arrow dependency; binding crates wrap them
 without copying.
 
+**Keyframes.** `EventRecorder::with_keyframes(n_legs)` opens every batch with
+one `Keyframe` row per leg holding the full state, so each batch can be replayed
+on its own. That's what seeking and joining a stream partway through need.
+Rows carry absolute values, so replay is an idempotent overwrite, and dropping
+the keyframe rows leaves exactly the plain event log. Keyframes are written
+only at settled times, never partway through an eviction and its immediate
+respawn, so they never show a transient `Evicted` leg. For the same reason a
+bounded batch may run past its cap by the rows of such a chain (typically two).
+
 **Reproducibility.** A seed fixes the whole run, bit for bit, across platforms,
 including wasm32. `tests/determinism.rs` pins a golden hash of a long run.
 
@@ -271,7 +280,8 @@ deltas = pl.DataFrame(rec.events)  # time, leg_id, lef_id, pos, mobility, action
 meta = sim.meta()  # lattice, ctcfs, lefs, legs tables + rates
 ```
 
-Pass `layout="long"` for one row per leg instead of per LEF. Runs release the
+Add `keyframes=True` (with `events=True`) to open each event batch with the full
+state. Pass `layout="long"` for one row per leg instead of per LEF. Runs release the
 GIL and respond to Ctrl-C. For runs too large to hold in memory,
 `sim.stream(t_end, dt=...)` turns the simulation into a lazy Arrow stream that
 runs as it is read, in bounded memory:
@@ -321,6 +331,23 @@ function frame() {
 The views are only valid until the next call into the sim, because wasm memory
 can grow and invalidate them; copy anything you need to keep. Seeded runs
 match the Rust and Python bindings exactly.
+
+`sim.recordChunk(tEnd)` records keyframed event deltas as typed-array chunks,
+and a `Replayer` rebuilds live state from them in plain TypeScript, with no wasm.
+Its `state()` has the same shape as `Sim.state()`, so a renderer doesn't care
+whether it's watching a local sim or replaying recorded or streamed data.
+`advanceTo(t)` moves forward and stops at the end of the data received so far.
+`seek(t)` jumps anywhere by restoring the nearest keyframe.
+
+```ts
+const replayer = new Replayer(sim.nLefs);
+for (let c = sim.recordChunk(1000); ; c = sim.recordChunk(1000)) {
+  replayer.push(c);
+  if (c.stopped !== "recorder_full") break;
+}
+replayer.seek(250);
+const { leftPos, rightPos } = replayer.state();
+```
 
 `packages/demo` is a live demo: loop arcs over the lattice and a scrolling
 kymograph, with speed, LEF count and seed controls. To run it:
