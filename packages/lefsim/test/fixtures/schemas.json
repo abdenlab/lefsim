@@ -1,0 +1,261 @@
+{
+ "snapshots_wide": {
+  "metadata": {
+   "lefsim.n_lefs": "4",
+   "lefsim.layout": "wide",
+   "lefsim.kind": "snapshots"
+  },
+  "fields": [
+   {
+    "name": "time",
+    "type": "float64",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "lef_id",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "left_pos",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "right_pos",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "left_mobility",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Moving",
+     "Captured",
+     "Evicted"
+    ]
+   },
+   {
+    "name": "right_mobility",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Moving",
+     "Captured",
+     "Evicted"
+    ]
+   }
+  ]
+ },
+ "snapshots_long": {
+  "metadata": {
+   "lefsim.layout": "long",
+   "lefsim.n_lefs": "4",
+   "lefsim.kind": "snapshots"
+  },
+  "fields": [
+   {
+    "name": "time",
+    "type": "float64",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "leg_id",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "lef_id",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "facing",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Left",
+     "Right"
+    ]
+   },
+   {
+    "name": "pos",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "mobility",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Moving",
+     "Captured",
+     "Evicted"
+    ]
+   }
+  ]
+ },
+ "events": {
+  "metadata": {
+   "lefsim.kind": "events"
+  },
+  "fields": [
+   {
+    "name": "time",
+    "type": "float64",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "leg_id",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "lef_id",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "pos",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "mobility",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Moving",
+     "Captured",
+     "Evicted"
+    ]
+   },
+   {
+    "name": "action",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Step",
+     "Respawn",
+     "Keyframe"
+    ]
+   }
+  ]
+ },
+ "meta_lattice": {
+  "metadata": {
+   "lefsim.kind": "lattice"
+  },
+  "fields": [
+   {
+    "name": "site",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "kind",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Plain",
+     "Ctcf"
+    ]
+   }
+  ]
+ },
+ "meta_ctcfs": {
+  "metadata": {
+   "lefsim.kind": "ctcfs"
+  },
+  "fields": [
+   {
+    "name": "site",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "captures_from",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Left",
+     "Right"
+    ]
+   },
+   {
+    "name": "strength",
+    "type": "float64",
+    "nullable": false,
+    "dictionary": null
+   }
+  ]
+ },
+ "meta_lefs": {
+  "metadata": {
+   "lefsim.kind": "lefs"
+  },
+  "fields": [
+   {
+    "name": "lef_id",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "left_leg_id",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "right_leg_id",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   }
+  ]
+ },
+ "meta_legs": {
+  "metadata": {
+   "lefsim.kind": "legs"
+  },
+  "fields": [
+   {
+    "name": "leg_id",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "lef_id",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "facing",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Left",
+     "Right"
+    ]
+   }
+  ]
+ }
+}

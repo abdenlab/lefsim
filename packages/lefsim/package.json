@@ -5,13 +5,15 @@
   "description": "Stochastic simulation of loop-extrusion factors on a 1D lattice, in WebAssembly",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./arrow": "./src/arrow.ts"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "apache-arrow": "^21.2.0",
     "lefsim-wasm": "workspace:*"
   },
   "devDependencies": {

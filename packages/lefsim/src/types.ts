@@ -76,3 +76,22 @@ export interface SnapshotChunk extends SnapshotColumns {
   end: number;
   stopped: "reached_time" | "reached_event_count" | "exhausted" | "recorder_full";
 }
+
+export interface Rates {
+  /** Step rate of a moving, unblocked leg. */
+  step: number;
+  /** Respawn rate of a LEF with no leg captured. */
+  respawn: number;
+  /** Respawn rate of a LEF with at least one leg captured. */
+  respawnCaptured: number;
+}
+
+/** Static tables describing a run. Categorical columns hold codes. */
+export interface Meta {
+  nSites: number;
+  rates: Rates;
+  lattice: { kind: Uint8Array };
+  ctcfs: { site: Uint32Array; capturesFrom: Uint8Array; strength: Float64Array };
+  lefs: { leftLegId: Uint32Array; rightLegId: Uint32Array };
+  legs: { lefId: Uint32Array; facing: Uint8Array };
+}

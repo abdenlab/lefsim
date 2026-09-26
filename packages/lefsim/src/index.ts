@@ -10,10 +10,10 @@
 import wasmInit, { initSync as wasmInitSync, names, WasmSim } from "lefsim-wasm";
 import type { InitInput } from "lefsim-wasm";
 
-import type { DeltaChunk, LiveState, SnapshotChunk, SnapshotColumns } from "./types.ts";
+import type { DeltaChunk, LiveState, Meta, Rates, SnapshotChunk, SnapshotColumns } from "./types.ts";
 
 export { DIRECTION, KEYFRAME, MOBILITY, ROW_KIND, SITE_KIND } from "./types.ts";
-export type { DeltaChunk, LiveState, Mobility, SnapshotChunk, SnapshotColumns } from "./types.ts";
+export type { DeltaChunk, LiveState, Meta, Mobility, Rates, SnapshotChunk, SnapshotColumns } from "./types.ts";
 
 // ------------------------------------------------------------------ setup
 
@@ -70,15 +70,6 @@ export interface CtcfColumns {
   strength?: ArrayLike<number> | number;
 }
 
-export interface Rates {
-  /** Step rate of a moving, unblocked leg. */
-  step: number;
-  /** Respawn rate of a LEF with no leg captured. */
-  respawn: number;
-  /** Respawn rate of a LEF with at least one leg captured. */
-  respawnCaptured: number;
-}
-
 export interface SimOptions {
   nSites: number;
   ctcfs?: CtcfSpec[] | CtcfColumns;
@@ -124,16 +115,6 @@ export interface RunReport {
   eventsFired: number;
   time: number;
   stopped: StopReason;
-}
-
-/** Static tables describing a run. Categorical columns hold codes. */
-export interface Meta {
-  nSites: number;
-  rates: Rates;
-  lattice: { kind: Uint8Array };
-  ctcfs: { site: Uint32Array; capturesFrom: Uint8Array; strength: Float64Array };
-  lefs: { leftLegId: Uint32Array; rightLegId: Uint32Array };
-  legs: { lefId: Uint32Array; facing: Uint8Array };
 }
 
 // ------------------------------------------------------------------ validation

@@ -1,0 +1,40 @@
+{
+ "config": {
+  "nSites": 500,
+  "ctcfSites": [
+   25,
+   75,
+   125,
+   175,
+   225,
+   275,
+   325,
+   375,
+   425,
+   475
+  ],
+  "ctcfCapturesFrom": [
+   "right",
+   "left",
+   "right",
+   "left",
+   "right",
+   "left",
+   "right",
+   "left",
+   "right",
+   "left"
+  ],
+  "ctcfStrength": 0.7,
+  "nLefs": 20,
+  "seed": 24301,
+  "rates": {
+   "step": 1.0,
+   "respawn": 0.01,
+   "respawnCaptured": 0.002
+  },
+  "tEnd": 300.0,
+  "chunkSize": 400
+ },
+ "batches": 5
+}
