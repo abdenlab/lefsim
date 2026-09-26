@@ -237,3 +237,22 @@ export function deltaChunkFromArrow(b: RecordBatch, options: { end?: number } = 
     end: options.end ?? (time.length ? time[time.length - 1]! : -Infinity),
   };
 }
+
+// ------------------------------------------------------------------ streams
+
+/**
+ * A `TransformStream` from simulator chunks (as produced by `Sim.stream`)
+ * to Arrow record batches: snapshot chunks become snapshot batches in the
+ * given `layout`, event chunks become events batches.
+ *
+ * ```ts
+ * const batches = sim.stream(1e6, { dt: 1 }).pipeThrough(toRecordBatches());
+ * ```
+ */
+export function toRecordBatches(options: { layout?: Layout } = {}): TransformStream<SnapshotColumns | DeltaChunk, RecordBatch> {
+  return new TransformStream({
+    transform(chunk, controller) {
+      controller.enqueue("legId" in chunk ? eventsToArrow(chunk) : snapshotsToArrow(chunk, options));
+    },
+  });
+}

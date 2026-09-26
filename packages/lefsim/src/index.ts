@@ -188,6 +188,30 @@ function checkCount(n: number, what: string): number {
 
 export { Replayer } from "./replayer.ts";
 
+/**
+ * Iterate a `ReadableStream` with `for await`, in every browser.
+ *
+ * (`ReadableStream` is async-iterable natively only in recent Safari.)
+ * Breaking out of the loop cancels the stream, as native iteration does.
+ */
+export async function* iterate<T>(stream: ReadableStream<T>): AsyncGenerator<T, void, undefined> {
+  const reader = stream.getReader();
+  let finished = false;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        finished = true;
+        return;
+      }
+      yield value;
+    }
+  } finally {
+    if (finished) reader.releaseLock();
+    else await reader.cancel();
+  }
+}
+
 // ------------------------------------------------------------------ Sim
 
 /**
@@ -230,9 +254,18 @@ export class Sim implements Disposable {
     this.nLefs = this.#inner.n_lefs();
   }
 
+  /** Set while a {@link Sim.stream} is open: only the stream may drive. */
+  #streaming = false;
+
   get #sim(): WasmSim {
     if (!this.#inner) throw new Error("this Sim has been freed");
     return this.#inner;
+  }
+
+  /** The wasm sim, for calls that advance it. */
+  get #driver(): WasmSim {
+    if (this.#streaming) throw new Error("this Sim is being streamed; finish or cancel the stream first");
+    return this.#sim;
   }
 
   get nLegs(): number {
@@ -271,12 +304,12 @@ export class Sim implements Disposable {
     if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
     const maxEvents = options.maxEvents ?? Infinity;
     if (maxEvents !== Infinity) checkCount(maxEvents, "maxEvents");
-    return this.#sim.run_until(tEnd, maxEvents) as RunReport;
+    return this.#driver.run_until(tEnd, maxEvents) as RunReport;
   }
 
   /** Fire up to `n` events. */
   runEvents(n: number): RunReport {
-    return this.#sim.run_events(checkCount(n, "n")) as RunReport;
+    return this.#driver.run_events(checkCount(n, "n")) as RunReport;
   }
 
   /**
@@ -290,13 +323,13 @@ export class Sim implements Disposable {
     if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
     const maxEvents = options.maxEvents ?? Infinity;
     if (maxEvents !== Infinity) checkCount(maxEvents, "maxEvents");
-    const r = this.#sim.record_until(tEnd, maxEvents, options.dt, options.t0 ?? 0, options.events ?? false, options.keyframes ?? false);
+    const r = this.#driver.record_until(tEnd, maxEvents, options.dt, options.t0 ?? 0, options.events ?? false, options.keyframes ?? false);
     return withEventEnd(r as Recording);
   }
 
   /** {@link Sim.runEvents}, recording as in {@link Sim.recordUntil}. */
   recordEvents(n: number, options: RecordOptions = {}): Recording {
-    const r = this.#sim.record_events(checkCount(n, "n"), options.dt, options.t0 ?? 0, options.events ?? false, options.keyframes ?? false);
+    const r = this.#driver.record_events(checkCount(n, "n"), options.dt, options.t0 ?? 0, options.events ?? false, options.keyframes ?? false);
     return withEventEnd(r as Recording);
   }
 
@@ -314,7 +347,7 @@ export class Sim implements Disposable {
     if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
     const maxSnapshots = checkCount(options.maxSnapshots ?? 1_000, "maxSnapshots");
     const maxEvents = checkCount(options.maxEvents ?? 250_000, "maxEvents");
-    return this.#sim.record_snapshot_chunk(tEnd, options.dt, options.t0 ?? 0, maxSnapshots, maxEvents) as SnapshotChunk;
+    return this.#driver.record_snapshot_chunk(tEnd, options.dt, options.t0 ?? 0, maxSnapshots, maxEvents) as SnapshotChunk;
   }
 
   /**
@@ -330,7 +363,84 @@ export class Sim implements Disposable {
   recordEventChunk(tEnd: number, options: { maxRows?: number; keyframes?: boolean } = {}): EventChunk {
     if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
     const maxRows = checkCount(options.maxRows ?? 10_000, "maxRows");
-    return this.#sim.record_event_chunk(tEnd, maxRows, options.keyframes ?? true) as EventChunk;
+    return this.#driver.record_event_chunk(tEnd, maxRows, options.keyframes ?? true) as EventChunk;
+  }
+
+  /**
+   * Stream the run to `tEnd` as a `ReadableStream` of chunks, computed on
+   * demand: the sim advances only when the consumer reads, which gives
+   * backpressure for free. Pass exactly one of:
+   *
+   * - `dt` (optional `t0`): {@link SnapshotChunk}s of up to `chunkSize`
+   *   snapshots (default 1,000), each call firing at most `maxEvents`;
+   * - `events: true` (optional `keyframes`, default true):
+   *   {@link EventChunk}s of up to `chunkSize` rows (default 10,000).
+   *
+   * While the stream is open, calls that advance this Sim throw; read-only
+   * ones (`time`, `state()`, `meta()`) still work. Finishing or cancelling
+   * the stream releases it. Runs on the calling thread, one bounded chunk
+   * per read. To read with `for await` everywhere (including Safari), use
+   * {@link iterate}. For Arrow record batches, pipe it through
+   * `toRecordBatches()` from `lefsim/arrow`.
+   */
+  stream(
+    tEnd: number,
+    options:
+      | { dt: number; t0?: number; chunkSize?: number; maxEvents?: number }
+      | { events: true; keyframes?: boolean; chunkSize?: number },
+  ): ReadableStream<SnapshotChunk | EventChunk> {
+    if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
+    const isEvents = "events" in options && options.events === true;
+    const hasDt = "dt" in options && options.dt !== undefined;
+    if (isEvents === hasDt) throw new RangeError("pass exactly one of dt or events: true");
+    void this.#driver; // throws if freed or already streaming
+    let next: () => SnapshotChunk | EventChunk;
+    if (isEvents) {
+      const keyframes = options.keyframes ?? true;
+      const maxRows = checkCount(options.chunkSize ?? 10_000, "chunkSize");
+      const min = keyframes ? this.nLegs + 2 : 2;
+      if (maxRows < min) throw new RangeError(`chunkSize must be at least ${min}${keyframes ? " with keyframes" : ""}, got ${maxRows}`);
+      next = () => this.#sim.record_event_chunk(tEnd, maxRows, keyframes) as EventChunk;
+    } else {
+      const { dt, t0 = 0, maxEvents = 250_000 } = options as { dt: number; t0?: number; maxEvents?: number };
+      const maxSnapshots = checkCount(options.chunkSize ?? 1_000, "chunkSize");
+      if (maxSnapshots < 1) throw new RangeError("chunkSize must be positive");
+      checkCount(maxEvents, "maxEvents");
+      next = () => this.#sim.record_snapshot_chunk(tEnd, dt, t0, maxSnapshots, maxEvents) as SnapshotChunk;
+    }
+
+    this.#streaming = true;
+    const release = () => {
+      this.#streaming = false;
+    };
+    return new ReadableStream<SnapshotChunk | EventChunk>(
+      {
+        pull: async (controller) => {
+          try {
+            for (;;) {
+              const chunk = next();
+              const done = chunk.stopped !== "recorder_full" && chunk.stopped !== "reached_event_count";
+              if (chunk.time.length > 0) controller.enqueue(chunk);
+              if (done) {
+                release();
+                controller.close();
+                return;
+              }
+              if (chunk.time.length > 0) return;
+              // The event cap ran out before a snapshot was due: yield to the
+              // event loop before continuing, so the page stays responsive.
+              await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+          } catch (e) {
+            release();
+            controller.error(e);
+          }
+        },
+        cancel: release,
+      },
+      // No read-ahead: compute a chunk only when the consumer asks for one.
+      new CountQueuingStrategy({ highWaterMark: 0 }),
+    );
   }
 
   /** The current state of every LEF. See {@link LiveState} for the view contract. */
