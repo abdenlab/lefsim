@@ -389,3 +389,24 @@ fn optional_observers_behave_like_present_or_absent_ones() {
     assert_eq!(grid.unwrap().frames(), rec.frames());
     assert_eq!(state(&via_option), state(&direct));
 }
+
+#[test]
+fn one_recorder_can_switch_between_bounded_and_unbounded() {
+    let dt = 0.5;
+    let (whole, _) = build(18).collect_until(200.0, SampleMode::every_dt(dt));
+
+    let mut sim = build(18);
+    let mut rec = sim.recorder(SampleMode::every_dt(dt));
+    let mut frames = LefFrames::new(sim.n_lefs());
+    sim.run_until_with(50.0, &mut rec); // unbounded
+    frames.extend_from(&rec.take_frames());
+    rec.set_max_snapshots(Some(9)); // bounded chunks
+    while sim.run_until_with(150.0, &mut rec).stopped == StopReason::RecorderFull {
+        frames.extend_from(&rec.take_frames());
+    }
+    frames.extend_from(&rec.take_frames());
+    rec.set_max_snapshots(None); // unbounded again
+    sim.run_until_with(200.0, &mut rec);
+    frames.extend_from(&rec.take_frames());
+    assert_eq!(frames, whole);
+}

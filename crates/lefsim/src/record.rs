@@ -245,10 +245,19 @@ impl Recorder {
     /// growing each chunk by repeated doubling. Choose a chunk-sized bound,
     /// not a huge safety cap.
     pub fn with_max_snapshots(mut self, n: usize) -> Self {
-        assert!(n > 0, "max_snapshots must be positive");
-        self.max_snapshots = Some(n);
-        self.frames.reserve(n.saturating_sub(self.frames.n_snapshots()));
+        self.set_max_snapshots(Some(n));
         self
+    }
+
+    /// Change the bound in place (`None` removes it), keeping the grid
+    /// cursor, so one recorder can serve both bounded (chunked) and
+    /// unbounded calls without repeating or skipping grid points.
+    pub fn set_max_snapshots(&mut self, max: Option<usize>) {
+        if let Some(n) = max {
+            assert!(n > 0, "max_snapshots must be positive");
+            self.frames.reserve(n.saturating_sub(self.frames.n_snapshots()));
+        }
+        self.max_snapshots = max;
     }
 
     pub fn mode(&self) -> SampleMode {
