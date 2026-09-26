@@ -311,7 +311,12 @@ impl Recorder {
 /// Per-event deltas: one row per leg changed by a fired event.
 ///
 /// A `Step` produces one row, a `Respawn` two (one per leg, sharing a
-/// `time`). `kind` holds [`Action::code`], `mob` holds [`Mobility::code`](crate::Mobility::code).
+/// `time`). With keyframes enabled (see [`EventRecorder::with_keyframes`]),
+/// each batch also opens with one `Keyframe` row per leg.
+///
+/// `kind` holds codes into [`EventFrames::KIND_NAMES`] (for events these
+/// equal [`Action::code`]); `mob` holds [`Mobility::code`](crate::Mobility::code).
+/// Rows carry absolute values, so replaying them is an idempotent overwrite.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EventFrames {
     time: Vec<f64>,
@@ -332,6 +337,13 @@ pub struct EventColumns {
 }
 
 impl EventFrames {
+    /// Row-kind names, indexed by the codes in the `kind` column. The first
+    /// two are the [`Action`] variants; `Keyframe` is not an action.
+    pub const KIND_NAMES: [&str; 3] = ["Step", "Respawn", "Keyframe"];
+
+    /// The `kind` code of keyframe rows.
+    pub const KEYFRAME: u8 = 2;
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -426,20 +438,45 @@ impl EventFrames {
             self.kind.push(action.code());
         }
     }
+
+    /// One `Keyframe` row per leg, in `leg_id` order, with its current state.
+    fn push_keyframe(&mut self, time: Time, sim: &Sim, n_legs: usize) {
+        assert_eq!(n_legs, sim.n_legs(), "event recorder built for a different sim");
+        for (id, &leg) in sim.leg_keys().iter().enumerate() {
+            let state = &sim.world().legs[leg];
+            self.time.push(time);
+            self.leg_id.push(id as u32);
+            self.pos.push(state.pos);
+            self.mob.push(state.mobility.code());
+            self.kind.push(Self::KEYFRAME);
+        }
+    }
 }
 
 /// Logs [`EventFrames`] from the [`Sim`] drivers.
 ///
-/// Deltas alone don't say where legs started; pair them with a base
-/// snapshot (e.g. a [`Recorder`] snapshot at the start time) to replay.
+/// Deltas alone don't say where legs started. Either pair them with a base
+/// snapshot (e.g. a [`Recorder`] snapshot at the start time), or turn on
+/// [`EventRecorder::with_keyframes`] so every batch carries its own.
 ///
 /// With [`EventRecorder::with_max_rows`], the driver stops with
 /// [`StopReason::RecorderFull`](crate::StopReason::RecorderFull) *before*
 /// firing an event that might not fit, so no event is ever dropped.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct EventRecorder {
     frames: EventFrames,
     max_rows: Option<usize>,
+    /// `Some(n_legs)` when keyframes are on.
+    keyframe_legs: Option<usize>,
+    /// Whether the sim's time was settled (no event pending at exactly the
+    /// current time) at the last `sample` call.
+    settled: bool,
+}
+
+impl Default for EventRecorder {
+    fn default() -> Self {
+        EventRecorder { frames: EventFrames::new(), max_rows: None, keyframe_legs: None, settled: true }
+    }
 }
 
 impl EventRecorder {
@@ -454,9 +491,42 @@ impl EventRecorder {
     /// exactly this size, so choose a chunk-sized bound.
     pub fn with_max_rows(mut self, n: usize) -> Self {
         assert!(n >= 2, "max_rows must be at least 2");
+        if let Some(n_legs) = self.keyframe_legs {
+            assert!(n >= n_legs + 2, "max_rows must be at least n_legs + 2 with keyframes");
+        }
         self.max_rows = Some(n);
         self.frames.reserve(n.saturating_sub(self.frames.n_rows()));
         self
+    }
+
+    /// Open every batch with a keyframe: one `Keyframe` row per leg holding
+    /// the full state, so each batch can be replayed on its own.
+    ///
+    /// A keyframe is written whenever the buffer is empty (at the start, and
+    /// after each [`EventRecorder::take_frames`] / [`EventRecorder::drain_into`]),
+    /// stamped with the current time, and only once that time is *settled*.
+    /// During a zero-delay chain (an eviction and its immediate respawn),
+    /// it waits for the chain to finish, so keyframes never show the
+    /// transient `Evicted` state. Events fired before the first keyframe
+    /// aren't logged: the keyframe already reflects them.
+    ///
+    /// Batches also only end at settled times, so the next one can open with
+    /// a settled keyframe. A bounded buffer may therefore run past its cap by
+    /// the rows of a zero-delay chain in progress (typically two).
+    ///
+    /// `n_legs` is the sim's leg count; a bounded buffer must hold at least
+    /// a keyframe plus one event (`max_rows >= n_legs + 2`).
+    pub fn with_keyframes(mut self, n_legs: usize) -> Self {
+        if let Some(max) = self.max_rows {
+            assert!(max >= n_legs + 2, "max_rows must be at least n_legs + 2 with keyframes");
+        }
+        self.keyframe_legs = Some(n_legs);
+        self
+    }
+
+    /// Whether the next rows written will be a keyframe.
+    fn keyframe_pending(&self) -> bool {
+        self.keyframe_legs.is_some() && self.frames.is_empty()
     }
 
     pub fn frames(&self) -> &EventFrames {
@@ -553,16 +623,36 @@ pub(crate) mod sealed {
     }
 
     impl Observe for EventRecorder {
-        fn sample(&mut self, _: Time, _: bool, _: &Sim) -> bool {
+        fn sample(&mut self, bound: Time, inclusive: bool, sim: &Sim) -> bool {
+            let now = sim.time();
+            // State at `now` is final unless another event is due at `now`.
+            self.settled = inclusive || bound > now;
+            if let Some(n_legs) = self.keyframe_legs
+                && self.settled
+                && self.frames.is_empty()
+            {
+                self.frames.push_keyframe(now, sim, n_legs);
+            }
             true
         }
 
         fn has_room_for_event(&self) -> bool {
-            self.max_rows
-                .is_none_or(|max| self.frames.n_rows() + 2 <= max)
+            let Some(max) = self.max_rows else {
+                return true;
+            };
+            // With keyframes, only end a batch at a settled time, so the next
+            // one opens with a settled keyframe.
+            if self.keyframe_legs.is_some() && (self.frames.is_empty() || !self.settled) {
+                return true;
+            }
+            self.frames.n_rows() + 2 <= max
         }
 
         fn on_event(&mut self, time: Time, action: Action, sim: &Sim) {
+            // Until a keyframe opens the batch, it will capture this event.
+            if self.keyframe_pending() {
+                return;
+            }
             self.frames.push_event(time, action, sim);
         }
     }
