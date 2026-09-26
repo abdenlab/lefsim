@@ -369,7 +369,9 @@ for await (const batch of iterate(sim.stream(1e6, { dt: 1 }).pipeThrough(toRecor
 `packages/demo` is a live demo: loop arcs over the lattice and a scrolling
 kymograph, with speed, LEF count and seed controls, plus a leg-occupancy profile
 averaged from a second simulation streamed as Arrow batches in the background.
-To run it:
+Its replay page records a run as keyframed chunks and plays it back from a
+`Replayer`, with seeking. The loop and kymograph panels are the same drawing
+code on both pages; only the source of `state()` differs. To run it:
 
 ```
 pnpm install

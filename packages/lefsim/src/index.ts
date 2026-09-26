@@ -383,6 +383,8 @@ export class Sim implements Disposable {
    * {@link iterate}. For Arrow record batches, pipe it through
    * `toRecordBatches()` from `lefsim/arrow`.
    */
+  stream(tEnd: number, options: { dt: number; t0?: number; chunkSize?: number; maxEvents?: number }): ReadableStream<SnapshotChunk>;
+  stream(tEnd: number, options: { events: true; keyframes?: boolean; chunkSize?: number }): ReadableStream<EventChunk>;
   stream(
     tEnd: number,
     options:

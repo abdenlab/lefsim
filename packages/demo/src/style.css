@@ -276,3 +276,113 @@ footer {
     font-size: 1.5rem;
   }
 }
+
+/* ---------------------------------------------------------------- nav */
+
+nav {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 14px;
+  font-size: 0.9375rem;
+}
+
+nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+  padding-bottom: 2px;
+  border-bottom: 2px solid transparent;
+}
+
+nav a:hover {
+  color: var(--ink);
+}
+
+nav a[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- seek bar */
+
+.seek-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 4px 0 6px;
+}
+
+.seek {
+  position: relative;
+  flex: 1;
+  height: 24px;
+}
+
+.seek-track,
+.seek-buffered {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+}
+
+.seek-track {
+  right: 0;
+  background: var(--rule);
+}
+
+/* How much of the run has been recorded so far. */
+.seek-buffered {
+  width: 0;
+  background: var(--muted);
+}
+
+#seek {
+  position: relative;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+#seek::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+}
+
+#seek::-moz-range-track {
+  background: transparent;
+}
+
+#seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+#seek::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+#seek-out {
+  min-width: 12em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+#waiting dd {
+  color: var(--held);
+  font-weight: 600;
+}
