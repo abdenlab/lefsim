@@ -1,0 +1,13 @@
+{
+  "name": "lefsim-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:wasm": "wasm-pack build crates/lefsim-wasm --target web --profile wasm-release --weak-refs",
+    "test": "pnpm --filter lefsim test",
+    "demo": "pnpm --filter demo dev"
+  },
+  "devDependencies": {
+    "wasm-pack": "^0.15.0"
+  }
+}

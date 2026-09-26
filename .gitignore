@@ -6,3 +6,8 @@ Cargo.lock
 __pycache__/
 .pytest_cache/
 *.so
+
+# JS
+node_modules/
+crates/lefsim-wasm/pkg/
+packages/*/dist/

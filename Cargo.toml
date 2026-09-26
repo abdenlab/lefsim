@@ -16,3 +16,13 @@ smallvec = "1"
 rand = { version = "0.8", default-features = false }
 rand_pcg = { version = "0.3", default-features = false }
 libm = "0.2"
+
+# Used by `pnpm build:wasm`, so wasm tuning doesn't affect native release
+# builds (e.g. the Python extension). Measured: opt-level 3 was both the
+# fastest (4.8 M events/s vs 3.3 M for "z") and the smallest gzipped
+# (36.7 KB vs 37.7 KB for "z"), so there's no size/speed trade-off to make.
+[profile.wasm-release]
+inherits = "release"
+lto = true
+codegen-units = 1
+opt-level = 3
