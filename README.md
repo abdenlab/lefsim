@@ -291,6 +291,47 @@ maturin develop --uv --release
 pytest tests
 ```
 
+## Browser (WebAssembly)
+
+`crates/lefsim-wasm` compiles the core to WebAssembly (~37 KB gzipped), and the
+`lefsim` TypeScript package in `packages/lefsim` wraps it. A `Sim` there is the
+same single realization as in Rust and Python, advanced in place. Each frame,
+`state()` returns every LEF's current positions and mobility as typed-array
+views over wasm memory, with no copying.
+
+```ts
+import { init, Sim } from "lefsim";
+
+await init();
+using sim = new Sim({
+  nSites: 3000,
+  ctcfs: [{ site: 600, capturesFrom: "left", strength: 0.8 }, { site: 601, capturesFrom: "right", strength: 0.8 }],
+  nLefs: 20,
+  seed: 1,
+});
+
+function frame() {
+  sim.runUntil(sim.time + 5, { maxEvents: 40_000 }); // absolute time; cap the work per frame
+  const { leftPos, rightPos, leftMobility } = sim.state(); // views: valid until the next call into the sim
+  // ...draw
+  requestAnimationFrame(frame);
+}
+```
+
+The views are only valid until the next call into the sim, because wasm memory
+can grow and invalidate them; copy anything you need to keep. Seeded runs
+match the Rust and Python bindings exactly.
+
+`packages/demo` is a live demo: loop arcs over the lattice and a scrolling
+kymograph, with speed, LEF count and seed controls. To run it:
+
+```
+pnpm install
+pnpm build:wasm      # wasm-pack → crates/lefsim-wasm/pkg
+pnpm demo            # Vite dev server
+pnpm test            # vitest, against the real wasm build
+```
+
 ## Layout
 
 ```
@@ -308,4 +349,7 @@ crates/lefsim-py/       Python bindings
   src/                  Sim, Batch, Stream (pyo3); Arrow conversion
   python/lefsim/        package, type stubs
   tests/                pytest suite
+crates/lefsim-wasm/     WebAssembly bindings (wasm-bindgen)
+packages/lefsim/        TypeScript package wrapping them
+packages/demo/          live browser demo (Vite)
 ```
