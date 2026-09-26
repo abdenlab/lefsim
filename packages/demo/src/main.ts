@@ -1,7 +1,8 @@
 // Live demo of the lefsim WebAssembly build: a Sim advanced every animation
 // frame, drawn as loop arcs and a scrolling kymograph.
 
-import { init, MOBILITY, Sim, type LiveState, type SimOptions } from "lefsim";
+import { init, iterate, MOBILITY, Sim, type LiveState, type SimOptions } from "lefsim";
+import { toRecordBatches } from "lefsim/arrow";
 
 // ------------------------------------------------------------------ model
 
@@ -18,6 +19,12 @@ const CAPTURED = MOBILITY.indexOf("Captured");
 
 /** Cap on events per frame, so a burst can't stall the page. */
 const MAX_EVENTS_PER_FRAME = 40_000;
+
+/** Background run: snapshot spacing, and snapshots per streamed batch (one batch per frame). */
+const BG_DT = 1;
+const BG_CHUNK = 400;
+/** Discard the background run's first stretch, while LEFs settle from random placement. */
+const BG_BURN_IN = 2_000;
 
 function options(nLefs: number, seed: number): SimOptions {
   return { nSites: N_SITES, ctcfs: CTCFS, nLefs, seed, rates: RATES };
@@ -36,6 +43,9 @@ const summary = $<HTMLParagraphElement>("summary");
 const arcsCanvas = $<HTMLCanvasElement>("arcs");
 const kymoCanvas = $<HTMLCanvasElement>("kymo");
 const tooltip = $<HTMLDivElement>("tooltip");
+const occCanvas = $<HTMLCanvasElement>("occ");
+const occTooltip = $<HTMLDivElement>("occ-tooltip");
+const occHint = $("occ-hint");
 const rTime = $("r-time");
 const rEvents = $("r-events");
 const rRate = $("r-rate");
@@ -112,13 +122,17 @@ function restart() {
   lastFrame = undefined;
   resetKymograph();
   draw(sim.state());
+  startBackground(nLefs, seed + 1);
 }
 
 function setPlaying(on: boolean) {
   playing = on;
   playBtn.textContent = on ? "Pause" : "Play";
   lastFrame = undefined;
-  if (on) requestAnimationFrame(frame);
+  if (on) {
+    requestAnimationFrame(frame);
+    resumeBackground?.();
+  }
 }
 
 // ------------------------------------------------------------------ loop
@@ -302,6 +316,154 @@ function drawKymographRow() {
   void height;
 }
 
+// ------------------------------------------------------------------ background run
+
+// A second Sim with the same model, streamed as Arrow record batches and
+// averaged into a leg-occupancy profile. The stream only computes when read,
+// so reading one batch per frame paces it, and pausing just stops reading.
+
+let bgGeneration = 0;
+let resumeBackground: (() => void) | undefined;
+let occCounts = new Float64Array(N_SITES);
+let occSnapshots = 0;
+let occTime = 0;
+let occ = fit(occCanvas);
+
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+const whilePaused = () =>
+  playing ? Promise.resolve() : new Promise<void>((resolve) => (resumeBackground = resolve));
+
+async function startBackground(nLefs: number, seed: number) {
+  const generation = ++bgGeneration;
+  occCounts = new Float64Array(N_SITES);
+  occSnapshots = 0;
+  occTime = 0;
+  drawOccupancy();
+  const bg = new Sim(options(nLefs, seed));
+  try {
+    const batches = bg
+      .stream(Infinity, { dt: BG_DT, t0: BG_BURN_IN, chunkSize: BG_CHUNK })
+      .pipeThrough(toRecordBatches());
+    for await (const batch of iterate(batches)) {
+      if (generation !== bgGeneration) break; // restarted: breaking cancels the stream
+      const left = batch.getChild("left_pos")!.data[0]!.values as Uint32Array;
+      const right = batch.getChild("right_pos")!.data[0]!.values as Uint32Array;
+      for (let i = 0; i < left.length; i++) {
+        occCounts[left[i]!]!++;
+        occCounts[right[i]!]!++;
+      }
+      occSnapshots += nLefs > 0 ? left.length / nLefs : 0;
+      occTime = bg.time;
+      drawOccupancy();
+      await nextFrame();
+      await whilePaused();
+      if (generation !== bgGeneration) break;
+    }
+  } finally {
+    bg.free();
+  }
+}
+
+const OCC_LOG_MIN = 1e-4;
+
+function drawOccupancy() {
+  const { width, height } = occCanvas.getBoundingClientRect();
+  const ctx = occ;
+  const x = xScale(width);
+  const top = 16;
+  const base = height - 18;
+  ctx.clearRect(0, 0, width, height);
+
+  const edges = [0, ...BOUNDARIES.map((b) => b + 0.5), N_SITES - 1];
+  for (let i = 0; i < edges.length - 1; i += 2) {
+    ctx.fillStyle = colors.band;
+    ctx.fillRect(x(edges[i]!), top, x(edges[i + 1]!) - x(edges[i]!), base - top);
+  }
+
+  // Log scale: 1e-4 .. 1 legs per site, gridlines at each decade.
+  const y = (v: number) => base - ((Math.log10(Math.max(v, OCC_LOG_MIN)) - Math.log10(OCC_LOG_MIN)) / -Math.log10(OCC_LOG_MIN)) * (base - top);
+  ctx.font = "11px 'Atkinson Hyperlegible Next', system-ui, sans-serif";
+  for (let e = -4; e <= 0; e++) {
+    const gy = Math.round(y(10 ** e)) + 0.5;
+    ctx.strokeStyle = colors.rule;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x(0), gy);
+    ctx.lineTo(x(N_SITES - 1), gy);
+    ctx.stroke();
+  }
+  const drawLabels = () => {
+    // Labels last, with a paper-colored halo so the curve can't hide them.
+    ctx.lineWidth = 3;
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = colors.paper;
+    ctx.fillStyle = colors.muted;
+    for (let e = -4; e <= 0; e++) {
+      const label = e === 0 ? "1" : `10⁻${"⁰¹²³⁴"[-e]}`;
+      const gy = Math.round(y(10 ** e)) - 3;
+      ctx.strokeText(label, x(0) + 3, gy);
+      ctx.fillText(label, x(0) + 3, gy);
+    }
+  };
+
+  // CTCF chevrons under the axis.
+  ctx.fillStyle = colors.ink2;
+  for (const c of CTCFS) {
+    const dir = c.capturesFrom === "left" ? -1 : 1;
+    const cx = x(c.site) + dir * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + dir * 5, base + 9);
+    ctx.lineTo(cx, base + 5);
+    ctx.lineTo(cx, base + 13);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  if (occSnapshots === 0) {
+    drawLabels();
+    occHint.textContent = "mean legs per site, log scale; warming up…";
+    return;
+  }
+  // One point per pixel column: the mean over the sites it covers.
+  ctx.strokeStyle = colors.extruding;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  const x0 = x(0);
+  const x1 = x(N_SITES - 1);
+  for (let px = Math.floor(x0); px <= Math.ceil(x1); px++) {
+    const lo = Math.max(0, Math.floor(((px - x0) / (x1 - x0)) * (N_SITES - 1)));
+    const hi = Math.min(N_SITES - 1, Math.floor(((px + 1 - x0) / (x1 - x0)) * (N_SITES - 1)));
+    let sum = 0;
+    for (let s = lo; s <= hi; s++) sum += occCounts[s]!;
+    const py = y(sum / (hi - lo + 1) / occSnapshots);
+    if (px === Math.floor(x0)) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  drawLabels();
+  occHint.textContent = `mean legs per site, log scale; ${fmtCompact.format(occTime - BG_BURN_IN)} time units averaged`;
+}
+
+occCanvas.addEventListener("pointermove", (e) => {
+  if (occSnapshots === 0) return;
+  const rect = occCanvas.getBoundingClientRect();
+  const inner = rect.width - MARGIN.left - MARGIN.right;
+  const site = Math.round(((e.clientX - rect.left - MARGIN.left) / inner) * (N_SITES - 1));
+  if (site < 0 || site >= N_SITES) {
+    occTooltip.hidden = true;
+    return;
+  }
+  const v = occCounts[site]! / occSnapshots;
+  occTooltip.textContent = `Site ${fmt.format(site)}: ${v < 0.001 ? v.toExponential(1) : v.toFixed(3)} legs on average`;
+  occTooltip.hidden = false;
+  const tx = Math.min(e.clientX - rect.left + 12, rect.width - occTooltip.offsetWidth - 4);
+  occTooltip.style.left = `${Math.max(4, tx)}px`;
+  occTooltip.style.top = `${Math.max(4, e.clientY - rect.top - 36)}px`;
+});
+occCanvas.addEventListener("pointerleave", () => {
+  occTooltip.hidden = true;
+});
+
 // ------------------------------------------------------------------ readout
 
 function updateReadout(time: number) {
@@ -326,8 +488,10 @@ function updateReadout(time: number) {
 new ResizeObserver(() => {
   arcs = fit(arcsCanvas);
   kymo = fit(kymoCanvas);
+  occ = fit(occCanvas);
   resetKymograph();
   drawArcs();
+  drawOccupancy();
 }).observe(arcsCanvas);
 
 playBtn.addEventListener("click", () => setPlaying(!playing));

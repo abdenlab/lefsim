@@ -46,7 +46,7 @@
         <h2 id="arcs-title">Loops</h2>
         <div class="canvas-wrap" id="arcs-wrap">
           <canvas id="arcs" role="img" aria-label="Loop arcs over the lattice"></canvas>
-          <div id="tooltip" role="status" hidden></div>
+          <div id="tooltip" class="tooltip" role="status" hidden></div>
         </div>
       </section>
 
@@ -54,6 +54,14 @@
         <h2 id="kymo-title">Leg positions over time <span class="hint">newest at top</span></h2>
         <div class="canvas-wrap">
           <canvas id="kymo" role="img" aria-label="Kymograph of leg positions over time"></canvas>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="occ-title">
+        <h2 id="occ-title">Leg occupancy from a background run <span class="hint" id="occ-hint"></span></h2>
+        <div class="canvas-wrap" id="occ-wrap">
+          <canvas id="occ" role="img" aria-label="Mean legs per site across the lattice, log scale"></canvas>
+          <div id="occ-tooltip" class="tooltip" role="status" hidden></div>
         </div>
       </section>
 

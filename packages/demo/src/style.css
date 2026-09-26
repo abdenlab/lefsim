@@ -177,14 +177,18 @@ canvas {
 }
 
 #arcs {
-  height: clamp(200px, 32vh, 340px);
+  height: clamp(180px, 26vh, 300px);
 }
 
 #kymo {
-  height: clamp(160px, 24vh, 260px);
+  height: clamp(140px, 18vh, 220px);
 }
 
-#tooltip {
+#occ {
+  height: clamp(120px, 16vh, 200px);
+}
+
+.tooltip {
   position: absolute;
   pointer-events: none;
   padding: 6px 10px;

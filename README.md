@@ -349,8 +349,27 @@ replayer.seek(250);
 const { leftPos, rightPos } = replayer.state();
 ```
 
+For history rather than live state, `recordUntil(t, { dt, events, keyframes })`
+records grid snapshots and/or event deltas as typed-array columns, and
+`sim.stream(tEnd, { dt } | { events: true })` returns a `ReadableStream` of
+chunks, computed only as it's read. Arrow lives in a separate entry point,
+`lefsim/arrow`, so live-only pages don't bundle it. It builds Arrow JS record
+batches with exactly the Python binding's schemas, and `toRecordBatches()` turns
+a stream into batches:
+
+```ts
+import { iterate } from "lefsim";
+import { toRecordBatches } from "lefsim/arrow";
+
+for await (const batch of iterate(sim.stream(1e6, { dt: 1 }).pipeThrough(toRecordBatches()))) {
+  // batch is an Arrow RecordBatch: time, lef_id, left_pos, right_pos, ...
+}
+```
+
 `packages/demo` is a live demo: loop arcs over the lattice and a scrolling
-kymograph, with speed, LEF count and seed controls. To run it:
+kymograph, with speed, LEF count and seed controls, plus a leg-occupancy profile
+averaged from a second simulation streamed as Arrow batches in the background.
+To run it:
 
 ```
 pnpm install
