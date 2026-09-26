@@ -17,7 +17,10 @@
 use std::collections::HashSet;
 
 use js_sys::{Float64Array, Object, Reflect, Uint32Array, Uint8Array};
-use lefsim::{Direction, EventFrames, EventRecorder, Lattice, Mobility, Rates, RunReport, Site, StopReason};
+use lefsim::{
+    Direction, EventFrames, EventRecorder, Lattice, LefFrames, Mobility, Rates, Recorder, RunReport, SampleMode,
+    Site, StopReason,
+};
 use wasm_bindgen::prelude::*;
 
 fn set(obj: &Object, key: &str, value: impl Into<JsValue>) {
@@ -77,6 +80,52 @@ struct StateBuffers {
 pub struct WasmSim {
     sim: lefsim::Sim,
     state: StateBuffers,
+    /// The most recent grid recorder, kept so that consecutive recording
+    /// calls on the same grid continue it instead of repeating points.
+    grid: Option<Recorder>,
+}
+
+/// How a recording call drives the sim.
+enum Drive {
+    /// To `t_end`, firing at most `cap` events.
+    Until { t_end: f64, cap: u64 },
+    /// Exactly `n` events (fewer if none remain).
+    Events(u64),
+}
+
+/// `{time, leftPos, rightPos, leftMobility, rightMobility, nLefs}`: one
+/// `time` per snapshot, `nLefs` entries per snapshot in the other columns.
+fn snapshot_columns(frames: LefFrames) -> Object {
+    let c = frames.into_columns();
+    let out = Object::new();
+    set(&out, "time", Float64Array::from(&c.time[..]));
+    set(&out, "leftPos", Uint32Array::from(&c.left_pos[..]));
+    set(&out, "rightPos", Uint32Array::from(&c.right_pos[..]));
+    set(&out, "leftMobility", Uint8Array::from(&c.left_mob[..]));
+    set(&out, "rightMobility", Uint8Array::from(&c.right_mob[..]));
+    set(&out, "nLefs", c.n_lefs as u32);
+    out
+}
+
+/// `{time, legId, pos, mobility, kind}`
+fn event_columns(frames: EventFrames) -> Object {
+    let out = Object::new();
+    set(&out, "time", Float64Array::from(frames.time()));
+    set(&out, "legId", Uint32Array::from(frames.leg_id()));
+    set(&out, "pos", Uint32Array::from(frames.pos()));
+    set(&out, "mobility", Uint8Array::from(frames.mob()));
+    set(&out, "kind", Uint8Array::from(frames.kind()));
+    out
+}
+
+fn grid_mode(dt: f64, t0: f64) -> Result<SampleMode, JsError> {
+    if !(dt.is_finite() && dt > 0.0) {
+        return Err(JsError::new(&format!("dt must be positive and finite, got {dt}")));
+    }
+    if !t0.is_finite() {
+        return Err(JsError::new(&format!("t0 must be finite, got {t0}")));
+    }
+    Ok(SampleMode::EveryDt { dt, t0 })
 }
 
 #[wasm_bindgen]
@@ -166,7 +215,7 @@ impl WasmSim {
             left_mob: vec![0; n],
             right_mob: vec![0; n],
         };
-        Ok(WasmSim { sim, state })
+        Ok(WasmSim { sim, state, grid: None })
     }
 
     // ----- driving -----
@@ -192,12 +241,12 @@ impl WasmSim {
     /// `Keyframe` row per leg, and may exceed `max_rows` by the rows of a
     /// zero-delay chain in progress (chunks only end at settled times).
     ///
-    /// Returns `{time: Float64Array, legId: Uint32Array, pos: Uint32Array,
-    /// mobility: Uint8Array, kind: Uint8Array, end, stopped}`. `end` is the
-    /// time through which the chunk describes the state (the clock after the
-    /// call). `stopped` is "recorder_full" when the chunk filled first; call
-    /// again for the next chunk. Consecutive chunks tile the run exactly.
-    pub fn record_chunk(&mut self, t_end: f64, max_rows: u32, keyframes: bool) -> Result<Object, JsError> {
+    /// Returns event columns (see `record_until`) plus `end`, the time
+    /// through which the chunk describes the state (the clock after the
+    /// call), and `stopped`: "recorder_full" when the chunk filled first;
+    /// call again for the next chunk. Consecutive chunks tile the run
+    /// exactly. Every event adds a row, so `max_rows` also bounds the work.
+    pub fn record_event_chunk(&mut self, t_end: f64, max_rows: u32, keyframes: bool) -> Result<Object, JsError> {
         if t_end.is_nan() {
             return Err(JsError::new("t_end is NaN"));
         }
@@ -215,16 +264,120 @@ impl WasmSim {
             rec = rec.with_keyframes(n_legs);
         }
         let report = self.sim.run_until_with(t_end, &mut rec);
-        let f = rec.take_frames();
-        let out = Object::new();
-        set(&out, "time", Float64Array::from(f.time()));
-        set(&out, "legId", Uint32Array::from(f.leg_id()));
-        set(&out, "pos", Uint32Array::from(f.pos()));
-        set(&out, "mobility", Uint8Array::from(f.mob()));
-        set(&out, "kind", Uint8Array::from(f.kind()));
+        let out = event_columns(rec.take_frames());
         set(&out, "end", report.time);
         set(&out, "stopped", stop_name(report.stopped));
         Ok(out)
+    }
+
+    /// Run toward `t_end`, taking grid snapshots (`t0 + k * dt`) into one
+    /// chunk of at most `max_snapshots`, firing at most `max_events`.
+    ///
+    /// Returns snapshot columns (see `record_until`) plus `end` and
+    /// `stopped` ("recorder_full" or "reached_event_count" mean call again).
+    /// The grid continues across calls on the same `dt`/`t0`.
+    pub fn record_snapshot_chunk(
+        &mut self,
+        t_end: f64,
+        dt: f64,
+        t0: f64,
+        max_snapshots: u32,
+        max_events: f64,
+    ) -> Result<Object, JsError> {
+        if t_end.is_nan() {
+            return Err(JsError::new("t_end is NaN"));
+        }
+        let n_lefs = self.sim.n_lefs().max(1) as u64;
+        if max_snapshots == 0 || max_snapshots as u64 * n_lefs > MAX_CHUNK_ROWS as u64 {
+            return Err(JsError::new(&format!(
+                "maxSnapshots must be positive, and at most {} with {n_lefs} LEFs, got {max_snapshots}",
+                MAX_CHUNK_ROWS as u64 / n_lefs
+            )));
+        }
+        let cap = event_budget(max_events)?;
+        let mut rec = self.grid_recorder(grid_mode(dt, t0)?);
+        rec.set_max_snapshots(Some(max_snapshots as usize));
+        let report = self.sim.run_until_with_limit(t_end, cap, &mut rec);
+        let out = snapshot_columns(rec.take_frames());
+        self.grid = Some(rec);
+        set(&out, "end", report.time);
+        set(&out, "stopped", stop_name(report.stopped));
+        Ok(out)
+    }
+
+    /// Run to `t_end`, firing at most `max_events`, and record: grid
+    /// snapshots if `dt` is given, event deltas if `events` (keyframed if
+    /// `keyframes`). Returns `{eventsFired, time, stopped, snapshots, events}`
+    /// where `snapshots` is `{time, leftPos, rightPos, leftMobility,
+    /// rightMobility, nLefs}` or null and `events` is `{time, legId, pos,
+    /// mobility, kind}` or null.
+    pub fn record_until(
+        &mut self,
+        t_end: f64,
+        max_events: f64,
+        dt: Option<f64>,
+        t0: f64,
+        events: bool,
+        keyframes: bool,
+    ) -> Result<Object, JsError> {
+        if t_end.is_nan() {
+            return Err(JsError::new("t_end is NaN"));
+        }
+        let cap = event_budget(max_events)?;
+        self.record(Drive::Until { t_end, cap }, dt, t0, events, keyframes)
+    }
+
+    /// Fire up to `n` events, recording as in `record_until`.
+    pub fn record_events(
+        &mut self,
+        n: f64,
+        dt: Option<f64>,
+        t0: f64,
+        events: bool,
+        keyframes: bool,
+    ) -> Result<Object, JsError> {
+        let n = event_budget(n)?;
+        self.record(Drive::Events(n), dt, t0, events, keyframes)
+    }
+
+    fn record(&mut self, drive: Drive, dt: Option<f64>, t0: f64, events: bool, keyframes: bool) -> Result<Object, JsError> {
+        if keyframes && !events {
+            return Err(JsError::new("keyframes require events"));
+        }
+        let mode = dt.map(|dt| grid_mode(dt, t0)).transpose()?;
+        let mut deltas = events.then(|| {
+            let rec = EventRecorder::new();
+            if keyframes { rec.with_keyframes(self.sim.n_legs()) } else { rec }
+        });
+        let mut grid = mode.map(|m| {
+            let mut rec = self.grid_recorder(m);
+            rec.set_max_snapshots(None);
+            rec
+        });
+        let obs = &mut (&mut grid, &mut deltas);
+        let report = match drive {
+            Drive::Until { t_end, cap } => self.sim.run_until_with_limit(t_end, cap, obs),
+            Drive::Events(n) => self.sim.run_events_with(n, obs),
+        };
+        let out = report_object(report);
+        let snapshots = match grid.as_mut() {
+            Some(rec) => snapshot_columns(rec.take_frames()).into(),
+            None => JsValue::NULL,
+        };
+        if grid.is_some() {
+            self.grid = grid;
+        }
+        set(&out, "snapshots", snapshots);
+        set(&out, "events", deltas.map_or(JsValue::NULL, |mut d| event_columns(d.take_frames()).into()));
+        Ok(out)
+    }
+
+    /// The kept grid recorder if it's on the same grid, else a new one.
+    fn grid_recorder(&mut self, mode: SampleMode) -> Recorder {
+        match self.grid.take() {
+            Some(rec) if rec.mode() == mode => rec,
+            _ => self.sim.recorder(mode),
+        }
     }
 
     // ----- introspection -----
@@ -248,6 +401,10 @@ impl WasmSim {
 
     pub fn n_lefs(&self) -> u32 {
         self.sim.n_lefs() as u32
+    }
+
+    pub fn n_legs(&self) -> u32 {
+        self.sim.n_legs() as u32
     }
 
     /// `{step, respawn, respawnCaptured}`

@@ -54,3 +54,25 @@ export interface LiveState {
   leftMobility: Uint8Array;
   rightMobility: Uint8Array;
 }
+
+/**
+ * Grid snapshots of every LEF, snapshot-major: `time` has one entry per
+ * snapshot, and every other column has `nLefs` entries per snapshot, so
+ * snapshot `s`, LEF `i` is at index `s * nLefs + i`.
+ */
+export interface SnapshotColumns {
+  nLefs: number;
+  time: Float64Array;
+  leftPos: Uint32Array;
+  rightPos: Uint32Array;
+  /** {@link MOBILITY} codes. */
+  leftMobility: Uint8Array;
+  rightMobility: Uint8Array;
+}
+
+/** A chunk of grid snapshots, from `Sim.recordSnapshotChunk`. */
+export interface SnapshotChunk extends SnapshotColumns {
+  /** The sim's time after the call. */
+  end: number;
+  stopped: "reached_time" | "reached_event_count" | "exhausted" | "recorder_full";
+}

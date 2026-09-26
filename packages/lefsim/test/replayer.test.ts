@@ -22,7 +22,7 @@ function record(seed: number, tEnd: number, maxRows: number): DeltaChunk[] {
   using sim = make(seed);
   const chunks: DeltaChunk[] = [];
   for (;;) {
-    const chunk = sim.recordChunk(tEnd, { maxRows });
+    const chunk = sim.recordEventChunk(tEnd, { maxRows });
     chunks.push(chunk);
     if (chunk.stopped !== "recorder_full") return chunks;
   }
@@ -44,14 +44,14 @@ function reference(seed: number, times: number[]) {
 const grid = (from: number, to: number, step: number) =>
   Array.from({ length: Math.floor((to - from) / step) + 1 }, (_, i) => from + i * step);
 
-describe("recordChunk", () => {
+describe("recordEventChunk", () => {
   it("opens each chunk with a keyframe and tiles the run", () => {
     using sim = make(1);
     const nLegs = sim.nLegs;
     let prevEnd = 0;
-    const chunks: ReturnType<Sim["recordChunk"]>[] = [];
+    const chunks: ReturnType<Sim["recordEventChunk"]>[] = [];
     for (;;) {
-      const c = sim.recordChunk(300, { maxRows: 50 });
+      const c = sim.recordEventChunk(300, { maxRows: 50 });
       chunks.push(c);
       const t0 = c.time[0]!;
       expect(t0).toBe(prevEnd); // each chunk starts where the last one ended
@@ -71,17 +71,17 @@ describe("recordChunk", () => {
 
   it("without keyframes records plain events", () => {
     using sim = make(1);
-    const c = sim.recordChunk(50, { keyframes: false });
+    const c = sim.recordEventChunk(50, { keyframes: false });
     expect(c.kind.includes(KEYFRAME)).toBe(false);
     expect(c.stopped).toBe("reached_time");
   });
 
   it("rejects bad sizes and times", () => {
     using sim = make(1);
-    expect(() => sim.recordChunk(10, { maxRows: 17 })).toThrow(/at least 18 with keyframes/);
-    expect(() => sim.recordChunk(10, { maxRows: 1, keyframes: false })).toThrow(/at least 2/);
-    expect(() => sim.recordChunk(10, { maxRows: 2 ** 31 })).toThrow(/at most/);
-    expect(() => sim.recordChunk(Number.NaN)).toThrow(/NaN/);
+    expect(() => sim.recordEventChunk(10, { maxRows: 17 })).toThrow(/at least 18 with keyframes/);
+    expect(() => sim.recordEventChunk(10, { maxRows: 1, keyframes: false })).toThrow(/at least 2/);
+    expect(() => sim.recordEventChunk(10, { maxRows: 2 ** 31 })).toThrow(/at most/);
+    expect(() => sim.recordEventChunk(Number.NaN)).toThrow(/NaN/);
     expect(sim.time).toBe(0); // nothing ran
   });
 });
@@ -191,7 +191,7 @@ describe("Replayer", () => {
     using sim = new Sim({ ...strong, seed: 3 });
     let evictions = 0;
     for (;;) {
-      const c = sim.recordChunk(3000, { maxRows: 2 * sim.nLefs + 4 });
+      const c = sim.recordEventChunk(3000, { maxRows: 2 * sim.nLefs + 4 });
       const n = 2 * sim.nLefs;
       for (let i = 0; i < c.kind.length; i++) {
         if (c.mobility[i] === EVICTED) {

@@ -332,7 +332,7 @@ The views are only valid until the next call into the sim, because wasm memory
 can grow and invalidate them; copy anything you need to keep. Seeded runs
 match the Rust and Python bindings exactly.
 
-`sim.recordChunk(tEnd)` records keyframed event deltas as typed-array chunks,
+`sim.recordEventChunk(tEnd)` records keyframed event deltas as typed-array chunks,
 and a `Replayer` rebuilds live state from them in plain TypeScript, with no wasm.
 Its `state()` has the same shape as `Sim.state()`, so a renderer doesn't care
 whether it's watching a local sim or replaying recorded or streamed data.
@@ -341,7 +341,7 @@ whether it's watching a local sim or replaying recorded or streamed data.
 
 ```ts
 const replayer = new Replayer(sim.nLefs);
-for (let c = sim.recordChunk(1000); ; c = sim.recordChunk(1000)) {
+for (let c = sim.recordEventChunk(1000); ; c = sim.recordEventChunk(1000)) {
   replayer.push(c);
   if (c.stopped !== "recorder_full") break;
 }

@@ -10,10 +10,10 @@
 import wasmInit, { initSync as wasmInitSync, names, WasmSim } from "lefsim-wasm";
 import type { InitInput } from "lefsim-wasm";
 
-import type { DeltaChunk, LiveState } from "./types.ts";
+import type { DeltaChunk, LiveState, SnapshotChunk, SnapshotColumns } from "./types.ts";
 
 export { DIRECTION, KEYFRAME, MOBILITY, ROW_KIND, SITE_KIND } from "./types.ts";
-export type { DeltaChunk, LiveState, Mobility } from "./types.ts";
+export type { DeltaChunk, LiveState, Mobility, SnapshotChunk, SnapshotColumns } from "./types.ts";
 
 // ------------------------------------------------------------------ setup
 
@@ -94,10 +94,30 @@ export interface SimOptions {
 
 export type StopReason = "reached_time" | "reached_event_count" | "exhausted";
 
-/** A recorded chunk plus why recording stopped. */
-export interface RecordedChunk extends DeltaChunk {
+/** A recorded chunk of event deltas plus why recording stopped. */
+export interface EventChunk extends DeltaChunk {
   /** "recorder_full" means the chunk filled first: call again for the next. */
   stopped: StopReason | "recorder_full";
+}
+
+/** What to record in {@link Sim.recordUntil} / {@link Sim.recordEvents}. */
+export interface RecordOptions {
+  /** Take grid snapshots at `t0 + k * dt`. */
+  dt?: number;
+  /** Grid origin. Default 0. */
+  t0?: number;
+  /** Log event deltas. */
+  events?: boolean;
+  /** Open the event log with a keyframe (requires `events`). */
+  keyframes?: boolean;
+}
+
+/** The outcome of {@link Sim.recordUntil} / {@link Sim.recordEvents}. */
+export interface Recording extends RunReport {
+  /** Grid snapshots, if `dt` was given. */
+  snapshots: SnapshotColumns | null;
+  /** Event deltas, if `events` was set. `end` is the time after the call. */
+  events: DeltaChunk | null;
 }
 
 export interface RunReport {
@@ -172,6 +192,12 @@ function seedBigInt(seed: number | bigint | undefined): bigint {
   const s = BigInt(seed);
   if (s < 0n || s >= 2n ** 64n) throw new RangeError(`seed must be in [0, 2^64), got ${seed}`);
   return s;
+}
+
+/** Event columns from wasm lack `end`; it is the time after the call. */
+function withEventEnd(r: Recording): Recording {
+  if (r.events) r.events.end = r.time;
+  return r;
 }
 
 function checkCount(n: number, what: string): number {
@@ -273,18 +299,57 @@ export class Sim implements Disposable {
   }
 
   /**
+   * {@link Sim.runUntil}, recording grid snapshots (`dt`) and/or event
+   * deltas (`events`, optionally `keyframes`). Snapshots are exact, not
+   * interpolated: a grid point records the state after every event at or
+   * before it, and the grid includes `tEnd`. Consecutive calls with the same
+   * grid continue it without repeating points.
+   */
+  recordUntil(tEnd: number, options: RecordOptions & { maxEvents?: number } = {}): Recording {
+    if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
+    const maxEvents = options.maxEvents ?? Infinity;
+    if (maxEvents !== Infinity) checkCount(maxEvents, "maxEvents");
+    const r = this.#sim.record_until(tEnd, maxEvents, options.dt, options.t0 ?? 0, options.events ?? false, options.keyframes ?? false);
+    return withEventEnd(r as Recording);
+  }
+
+  /** {@link Sim.runEvents}, recording as in {@link Sim.recordUntil}. */
+  recordEvents(n: number, options: RecordOptions = {}): Recording {
+    const r = this.#sim.record_events(checkCount(n, "n"), options.dt, options.t0 ?? 0, options.events ?? false, options.keyframes ?? false);
+    return withEventEnd(r as Recording);
+  }
+
+  /**
+   * Run toward `tEnd`, taking grid snapshots into one chunk of at most
+   * `maxSnapshots` (default 1,000), firing at most `maxEvents` (default
+   * 250,000) so each call stays short. Call repeatedly while `stopped` is
+   * `"recorder_full"` or `"reached_event_count"`; the grid continues across
+   * calls.
+   */
+  recordSnapshotChunk(
+    tEnd: number,
+    options: { dt: number; t0?: number; maxSnapshots?: number; maxEvents?: number },
+  ): SnapshotChunk {
+    if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
+    const maxSnapshots = checkCount(options.maxSnapshots ?? 1_000, "maxSnapshots");
+    const maxEvents = checkCount(options.maxEvents ?? 250_000, "maxEvents");
+    return this.#sim.record_snapshot_chunk(tEnd, options.dt, options.t0 ?? 0, maxSnapshots, maxEvents) as SnapshotChunk;
+  }
+
+  /**
    * Run toward `tEnd` (absolute time), recording event deltas into one chunk
    * of at most `maxRows` rows (default 10,000). Call repeatedly until
    * `stopped` isn't `"recorder_full"`; consecutive chunks tile the run.
+   * Every event adds a row, so `maxRows` also bounds the work per call.
    *
    * With `keyframes` (the default), each chunk opens with one `Keyframe`
    * row per leg, so it can be replayed on its own, and may exceed `maxRows`
    * by the rows of a zero-delay chain in progress (typically two).
    */
-  recordChunk(tEnd: number, options: { maxRows?: number; keyframes?: boolean } = {}): RecordedChunk {
+  recordEventChunk(tEnd: number, options: { maxRows?: number; keyframes?: boolean } = {}): EventChunk {
     if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
     const maxRows = checkCount(options.maxRows ?? 10_000, "maxRows");
-    return this.#sim.record_chunk(tEnd, maxRows, options.keyframes ?? true) as RecordedChunk;
+    return this.#sim.record_event_chunk(tEnd, maxRows, options.keyframes ?? true) as EventChunk;
   }
 
   /** The current state of every LEF. See {@link LiveState} for the view contract. */
