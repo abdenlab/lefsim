@@ -435,3 +435,70 @@ def test_import_pulls_in_no_dataframe_libraries():
         "assert not bad, bad"
     )
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+# ---------------------------------------------------------------- keyframes
+
+
+def replay(events: pa.Table, n_legs: int) -> dict:
+    """Apply delta rows in order; returns {leg_id: (pos, mobility)}."""
+    state = {}
+    for leg, pos, mob in zip(
+        events["leg_id"].to_pylist(), events["pos"].to_pylist(), events["mobility"].to_pylist()
+    ):
+        state[leg] = (pos, mob)
+    assert len(state) == n_legs
+    return state
+
+
+def test_action_dictionary_includes_keyframe():
+    ev = pa.record_batch(make_sim().run_until(10.0, events=True).events)
+    assert ev["action"].dictionary.to_pylist() == ["Step", "Respawn", "Keyframe"]
+
+
+def test_keyframed_events_open_with_every_leg():
+    ev = table(make_sim(n_lefs=5).run_until(200.0, events=True, keyframes=True).events)
+    head = ev.slice(0, 10)
+    assert head["action"].to_pylist() == ["Keyframe"] * 10
+    assert head["leg_id"].to_pylist() == list(range(10))
+    assert set(head["time"].to_pylist()) == {0.0}
+    assert "Keyframe" not in ev.slice(10)["action"].to_pylist()
+
+
+def test_keyframed_stream_replays_and_reduces_to_the_plain_log():
+    plain_sim = make_sim(seed=13)
+    plain = table(plain_sim.run_until(300.0, events=True).events)
+    n_legs = plain_sim.n_legs
+
+    stream = make_sim(seed=13).stream(300.0, events=True, keyframes=True, chunk_size=60)
+    batches = [table(b) for b in stream]
+    assert len(batches) > 10
+    for b in batches:
+        assert b.slice(0, n_legs)["action"].to_pylist() == ["Keyframe"] * n_legs
+        assert b.num_rows <= 60 + 2  # soft only by a zero-delay chain
+
+    # Each batch replays on its own; the last one ends in the plain run's state.
+    snap = table(plain_sim.snapshot(layout="long"))
+    expected = dict(zip(snap["leg_id"].to_pylist(), zip(snap["pos"].to_pylist(), snap["mobility"].to_pylist())))
+    assert replay(batches[-1], n_legs) == expected
+
+    # Dropping keyframes leaves exactly the plain event log.
+    events = pa.concat_tables(batches)
+    events = events.filter(pa.compute.not_equal(events["action"].cast(pa.string()), "Keyframe"))
+    assert events.to_pydict() == plain.to_pydict()
+
+
+@pytest.mark.parametrize(
+    "call, match",
+    [
+        (lambda s: s.run_until(10.0, keyframes=True), "requires events=True"),
+        (lambda s: s.stream(10.0, dt=1.0, keyframes=True), "requires events=True"),
+        (lambda s: s.stream(10.0, events=True, keyframes=True, chunk_size=17), r"at least 18 with keyframes"),
+        (lambda s: s.stream(10.0, events=True, chunk_size=1), "at least 2 for events"),
+    ],
+)
+def test_keyframe_argument_errors(call, match):
+    sim = make_sim()  # 8 LEFs = 16 legs
+    with pytest.raises(ValueError, match=match):
+        call(sim)
+    sim.run_until(1.0)  # still usable

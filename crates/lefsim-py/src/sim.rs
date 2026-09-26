@@ -121,7 +121,26 @@ struct RecordOpts<'a> {
     dt: Option<f64>,
     t0: f64,
     events: bool,
+    keyframes: bool,
     layout: &'a str,
+}
+
+/// An event recorder, keyframed if asked. Validates first: the core
+/// asserts (which would surface as a PanicException) on a cap too small
+/// to hold a keyframe plus one event.
+fn event_recorder(n_legs: usize, max_rows: Option<usize>, keyframes: bool) -> PyResult<EventRecorder> {
+    if let Some(max) = max_rows {
+        let min = if keyframes { n_legs + 2 } else { 2 };
+        if max < min {
+            let why = if keyframes { format!(" with keyframes ({n_legs} legs + 2)") } else { " for events".into() };
+            return Err(value_error(format!("chunk_size must be at least {min}{why}")));
+        }
+    }
+    let mut rec = EventRecorder::new();
+    if let Some(max) = max_rows {
+        rec = rec.with_max_rows(max);
+    }
+    Ok(if keyframes { rec.with_keyframes(n_legs) } else { rec })
 }
 
 /// The outcome of a `run_until` / `run_events` call.
@@ -191,11 +210,18 @@ impl PySim {
         opts: RecordOpts<'_>,
     ) -> PyResult<PyRecording> {
         let layout = parse_layout(opts.layout)?;
+        if opts.keyframes && !opts.events {
+            return Err(value_error("keyframes=True requires events=True"));
+        }
+        let n_legs = self.sim()?.n_legs();
+        let mut deltas = match opts.events {
+            true => Some(event_recorder(n_legs, None, opts.keyframes)?),
+            false => None,
+        };
         let mut grid = match opts.dt.map(|dt| grid_mode(dt, opts.t0)).transpose()? {
             Some(mode) => Some(self.grid_recorder(mode)?),
             None => None,
         };
-        let mut deltas = opts.events.then(EventRecorder::new);
 
         let sim = self.sim.as_mut().ok_or_else(consumed)?;
         let report = run_interruptibly(py, sim, t_end, max_events, &mut (&mut grid, &mut deltas));
@@ -407,9 +433,12 @@ impl PySim {
     ///
     /// With `dt`, record snapshots on the grid `t0 + k * dt` (inclusive of
     /// `t_end`). With `events=True`, record one row per leg changed by each
-    /// event. Consecutive calls with the same grid continue it seamlessly.
-    /// Releases the GIL while running; Ctrl-C interrupts.
-    #[pyo3(signature = (t_end, *, dt = None, t0 = 0.0, events = false, layout = "wide"))]
+    /// event; add `keyframes=True` to open the event table with one
+    /// `Keyframe` row per leg holding the full state. Consecutive calls with
+    /// the same grid continue it seamlessly. Releases the GIL while running;
+    /// Ctrl-C interrupts.
+    #[pyo3(signature = (t_end, *, dt = None, t0 = 0.0, events = false, keyframes = false, layout = "wide"))]
+    #[allow(clippy::too_many_arguments)]
     fn run_until(
         &mut self,
         py: Python<'_>,
@@ -417,17 +446,19 @@ impl PySim {
         dt: Option<f64>,
         t0: f64,
         events: bool,
+        keyframes: bool,
         layout: &str,
     ) -> PyResult<PyRecording> {
         if t_end.is_nan() {
             return Err(value_error("t_end is NaN"));
         }
-        self.record(py, t_end, None, RecordOpts { dt, t0, events, layout })
+        self.record(py, t_end, None, RecordOpts { dt, t0, events, keyframes, layout })
     }
 
     /// Fire up to `n` events. Takes the same recording options as
     /// `run_until`; snapshots cover grid points up to the current time.
-    #[pyo3(signature = (n, *, dt = None, t0 = 0.0, events = false, layout = "wide"))]
+    #[pyo3(signature = (n, *, dt = None, t0 = 0.0, events = false, keyframes = false, layout = "wide"))]
+    #[allow(clippy::too_many_arguments)]
     fn run_events(
         &mut self,
         py: Python<'_>,
@@ -435,9 +466,10 @@ impl PySim {
         dt: Option<f64>,
         t0: f64,
         events: bool,
+        keyframes: bool,
         layout: &str,
     ) -> PyResult<PyRecording> {
-        self.record(py, f64::INFINITY, Some(n), RecordOpts { dt, t0, events, layout })
+        self.record(py, f64::INFINITY, Some(n), RecordOpts { dt, t0, events, keyframes, layout })
     }
 
     /// The current state as a one-snapshot batch, without advancing.
@@ -465,13 +497,20 @@ impl PySim {
     /// in chunks of `chunk_size` rows.
     ///
     /// Pass exactly one of `dt` (grid snapshots) or `events=True` (deltas).
+    /// With `events=True, keyframes=True`, every batch opens with one
+    /// `Keyframe` row per leg, so each batch can be replayed on its own; a
+    /// batch may then exceed `chunk_size` by the rows of a zero-delay chain
+    /// in progress (typically two), since batches only end at settled times.
     /// The stream can be iterated for `Batch`es, or passed to any Arrow
     /// PyCapsule consumer (e.g. `pyarrow.RecordBatchReader.from_stream`,
     /// `polars.DataFrame`, duckdb). It runs without the GIL, so it can be
     /// consumed from any thread.
     ///
     /// The Sim is moved into the stream and can't be used afterwards.
-    #[pyo3(signature = (t_end, *, dt = None, t0 = 0.0, events = false, layout = "wide", chunk_size = 10_000))]
+    #[pyo3(signature = (
+        t_end, *, dt = None, t0 = 0.0, events = false, keyframes = false, layout = "wide",
+        chunk_size = 10_000,
+    ))]
     #[allow(clippy::too_many_arguments)]
     fn stream(
         &mut self,
@@ -479,11 +518,15 @@ impl PySim {
         dt: Option<f64>,
         t0: f64,
         events: bool,
+        keyframes: bool,
         layout: &str,
         chunk_size: usize,
     ) -> PyResult<PyStream> {
         if t_end.is_nan() {
             return Err(value_error("t_end is NaN"));
+        }
+        if keyframes && !events {
+            return Err(value_error("keyframes=True requires events=True"));
         }
         let layout = parse_layout(layout)?;
         let reader = match (dt, events) {
@@ -496,11 +539,9 @@ impl PySim {
                 SimReader::snapshots(sim, t_end, rec.with_max_snapshots(chunk_size), layout)
             }
             (None, true) => {
-                if chunk_size < 2 {
-                    return Err(value_error("chunk_size must be at least 2 for events"));
-                }
+                let rec = event_recorder(self.sim()?.n_legs(), Some(chunk_size), keyframes)?;
                 let sim = self.sim.take().ok_or_else(consumed)?;
-                SimReader::events(sim, t_end, EventRecorder::new().with_max_rows(chunk_size))
+                SimReader::events(sim, t_end, rec)
             }
             _ => return Err(value_error("pass exactly one of dt=... or events=True")),
         };

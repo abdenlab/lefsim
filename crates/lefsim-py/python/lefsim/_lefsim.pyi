@@ -94,6 +94,7 @@ class Sim:
         dt: Optional[float] = None,
         t0: float = 0.0,
         events: bool = False,
+        keyframes: bool = False,
         layout: Layout = "wide",
     ) -> Recording: ...
     def run_events(
@@ -103,6 +104,7 @@ class Sim:
         dt: Optional[float] = None,
         t0: float = 0.0,
         events: bool = False,
+        keyframes: bool = False,
         layout: Layout = "wide",
     ) -> Recording: ...
     def snapshot(self, *, layout: Layout = "wide") -> Batch: ...
@@ -115,7 +117,12 @@ class Sim:
         dt: Optional[float] = None,
         t0: float = 0.0,
         events: bool = False,
+        keyframes: bool = False,
         layout: Layout = "wide",
         chunk_size: int = 10_000,
     ) -> Stream:
-        """Move this Sim into a lazy Arrow stream (pass ``dt`` or ``events=True``)."""
+        """Move this Sim into a lazy Arrow stream (pass ``dt`` or ``events=True``).
+
+        With ``events=True, keyframes=True`` every batch opens with one
+        ``Keyframe`` row per leg, so each batch can be replayed on its own.
+        """

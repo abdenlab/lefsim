@@ -12,7 +12,7 @@ use arrow_array::types::{Float64Type, UInt32Type, UInt8Type};
 use arrow_array::{ArrayRef, DictionaryArray, PrimitiveArray, RecordBatch, StringArray};
 use arrow_buffer::ScalarBuffer;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef};
-use lefsim::{Action, Direction, EventFrames, LefFrames, Mobility, SimMeta, SiteKind};
+use lefsim::{Direction, EventFrames, LefFrames, Mobility, SimMeta, SiteKind};
 
 /// Row layout of grid snapshots.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -188,7 +188,7 @@ pub fn events_batch(frames: EventFrames) -> Result<RecordBatch, ArrowError> {
             u32_col(lef_id),
             u32_col(c.pos),
             dict_col(c.mob, &Mobility::NAMES),
-            dict_col(c.kind, &Action::NAMES),
+            dict_col(c.kind, &EventFrames::KIND_NAMES),
         ],
     )
 }
