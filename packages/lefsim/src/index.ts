@@ -10,6 +10,11 @@
 import wasmInit, { initSync as wasmInitSync, names, WasmSim } from "lefsim-wasm";
 import type { InitInput } from "lefsim-wasm";
 
+import type { DeltaChunk, LiveState } from "./types.ts";
+
+export { DIRECTION, KEYFRAME, MOBILITY, ROW_KIND, SITE_KIND } from "./types.ts";
+export type { DeltaChunk, LiveState, Mobility } from "./types.ts";
+
 // ------------------------------------------------------------------ setup
 
 let memory: WebAssembly.Memory | undefined;
@@ -40,18 +45,8 @@ function wasmMemory(): WebAssembly.Memory {
 
 // ------------------------------------------------------------------ names
 
-/** Mobility names, indexed by the codes in {@link LiveState} mobility arrays. */
-export const MOBILITY = ["Moving", "Captured", "Evicted"] as const;
-export type Mobility = (typeof MOBILITY)[number];
-
-/** Direction names, indexed by the codes in {@link Meta} `capturesFrom` / `facing`. */
-export const DIRECTION = ["Left", "Right"] as const;
-
-/** Site-kind names, indexed by the codes in {@link Meta} `lattice.kind`. */
-export const SITE_KIND = ["Plain", "Ctcf"] as const;
-
 /** The code → name tables as the core defines them (requires {@link init}). */
-export function coreNames(): { mobility: string[]; direction: string[]; siteKind: string[] } {
+export function coreNames(): { mobility: string[]; direction: string[]; siteKind: string[]; rowKind: string[] } {
   wasmMemory();
   return names() as ReturnType<typeof coreNames>;
 }
@@ -99,26 +94,16 @@ export interface SimOptions {
 
 export type StopReason = "reached_time" | "reached_event_count" | "exhausted";
 
+/** A recorded chunk plus why recording stopped. */
+export interface RecordedChunk extends DeltaChunk {
+  /** "recorder_full" means the chunk filled first: call again for the next. */
+  stopped: StopReason | "recorder_full";
+}
+
 export interface RunReport {
   eventsFired: number;
   time: number;
   stopped: StopReason;
-}
-
-/**
- * Every LEF's current state, indexed by `lef_id`.
- *
- * The arrays are views into WebAssembly memory. **They are valid only until
- * the next call into the Sim** (or any Sim): wasm memory can grow, which
- * detaches them. Copy what you need to keep (`arr.slice()`).
- */
-export interface LiveState {
-  time: number;
-  leftPos: Uint32Array;
-  rightPos: Uint32Array;
-  /** {@link MOBILITY} codes. */
-  leftMobility: Uint8Array;
-  rightMobility: Uint8Array;
 }
 
 /** Static tables describing a run. Categorical columns hold codes. */
@@ -193,6 +178,8 @@ function checkCount(n: number, what: string): number {
   if (!Number.isInteger(n) || n < 0) throw new RangeError(`${what} must be a non-negative integer, got ${n}`);
   return n;
 }
+
+export { Replayer } from "./replayer.ts";
 
 // ------------------------------------------------------------------ Sim
 
@@ -283,6 +270,21 @@ export class Sim implements Disposable {
   /** Fire up to `n` events. */
   runEvents(n: number): RunReport {
     return this.#sim.run_events(checkCount(n, "n")) as RunReport;
+  }
+
+  /**
+   * Run toward `tEnd` (absolute time), recording event deltas into one chunk
+   * of at most `maxRows` rows (default 10,000). Call repeatedly until
+   * `stopped` isn't `"recorder_full"`; consecutive chunks tile the run.
+   *
+   * With `keyframes` (the default), each chunk opens with one `Keyframe`
+   * row per leg, so it can be replayed on its own, and may exceed `maxRows`
+   * by the rows of a zero-delay chain in progress (typically two).
+   */
+  recordChunk(tEnd: number, options: { maxRows?: number; keyframes?: boolean } = {}): RecordedChunk {
+    if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
+    const maxRows = checkCount(options.maxRows ?? 10_000, "maxRows");
+    return this.#sim.record_chunk(tEnd, maxRows, options.keyframes ?? true) as RecordedChunk;
   }
 
   /** The current state of every LEF. See {@link LiveState} for the view contract. */

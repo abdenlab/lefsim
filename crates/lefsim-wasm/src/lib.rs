@@ -17,7 +17,7 @@
 use std::collections::HashSet;
 
 use js_sys::{Float64Array, Object, Reflect, Uint32Array, Uint8Array};
-use lefsim::{Direction, Lattice, Mobility, Rates, RunReport, Site, StopReason};
+use lefsim::{Direction, EventFrames, EventRecorder, Lattice, Mobility, Rates, RunReport, Site, StopReason};
 use wasm_bindgen::prelude::*;
 
 fn set(obj: &Object, key: &str, value: impl Into<JsValue>) {
@@ -50,6 +50,11 @@ fn event_budget(n: f64) -> Result<u64, JsError> {
     }
     Ok(if n >= u64::MAX as f64 { u64::MAX } else { n as u64 })
 }
+
+/// Largest accepted chunk size. Bounded recorders preallocate their whole
+/// cap, so an enormous "safety" value would trap on allocation instead of
+/// throwing.
+const MAX_CHUNK_ROWS: u32 = 10_000_000;
 
 fn positive_rate(name: &str, value: Option<f64>, default: f64) -> Result<f64, JsError> {
     let rate = value.unwrap_or(default);
@@ -182,6 +187,46 @@ impl WasmSim {
         Ok(report_object(self.sim.run_events(event_budget(n)?)))
     }
 
+    /// Run toward `t_end` (absolute time), logging events into one chunk of
+    /// at most `max_rows` rows. With `keyframes`, the chunk opens with one
+    /// `Keyframe` row per leg, and may exceed `max_rows` by the rows of a
+    /// zero-delay chain in progress (chunks only end at settled times).
+    ///
+    /// Returns `{time: Float64Array, legId: Uint32Array, pos: Uint32Array,
+    /// mobility: Uint8Array, kind: Uint8Array, end, stopped}`. `end` is the
+    /// time through which the chunk describes the state (the clock after the
+    /// call). `stopped` is "recorder_full" when the chunk filled first; call
+    /// again for the next chunk. Consecutive chunks tile the run exactly.
+    pub fn record_chunk(&mut self, t_end: f64, max_rows: u32, keyframes: bool) -> Result<Object, JsError> {
+        if t_end.is_nan() {
+            return Err(JsError::new("t_end is NaN"));
+        }
+        let n_legs = self.sim.n_legs();
+        let min = if keyframes { n_legs + 2 } else { 2 };
+        if (max_rows as usize) < min {
+            let why = if keyframes { format!(" with keyframes ({n_legs} legs + 2)") } else { String::new() };
+            return Err(JsError::new(&format!("maxRows must be at least {min}{why}, got {max_rows}")));
+        }
+        if max_rows > MAX_CHUNK_ROWS {
+            return Err(JsError::new(&format!("maxRows must be at most {MAX_CHUNK_ROWS}, got {max_rows}")));
+        }
+        let mut rec = EventRecorder::new().with_max_rows(max_rows as usize);
+        if keyframes {
+            rec = rec.with_keyframes(n_legs);
+        }
+        let report = self.sim.run_until_with(t_end, &mut rec);
+        let f = rec.take_frames();
+        let out = Object::new();
+        set(&out, "time", Float64Array::from(f.time()));
+        set(&out, "legId", Uint32Array::from(f.leg_id()));
+        set(&out, "pos", Uint32Array::from(f.pos()));
+        set(&out, "mobility", Uint8Array::from(f.mob()));
+        set(&out, "kind", Uint8Array::from(f.kind()));
+        set(&out, "end", report.time);
+        set(&out, "stopped", stop_name(report.stopped));
+        Ok(out)
+    }
+
     // ----- introspection -----
 
     pub fn time(&self) -> f64 {
@@ -303,6 +348,7 @@ pub fn names() -> Object {
     set(&obj, "mobility", to_array(&Mobility::NAMES));
     set(&obj, "direction", to_array(&Direction::NAMES));
     set(&obj, "siteKind", to_array(&lefsim::SiteKind::NAMES));
+    set(&obj, "rowKind", to_array(&EventFrames::KIND_NAMES));
     obj
 }
 

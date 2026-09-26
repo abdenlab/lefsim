@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import fixture from "./fixtures/determinism_state.json";
-import { coreNames, DIRECTION, MOBILITY, Sim, SITE_KIND, type SimOptions } from "../src/index.ts";
+import { coreNames, DIRECTION, MOBILITY, ROW_KIND, Sim, SITE_KIND, type SimOptions } from "../src/index.ts";
 
 const TADS: SimOptions = {
   nSites: 3000,
@@ -33,6 +33,7 @@ describe("names", () => {
       mobility: [...MOBILITY],
       direction: [...DIRECTION],
       siteKind: [...SITE_KIND],
+      rowKind: [...ROW_KIND],
     });
   });
 });
