@@ -362,8 +362,9 @@ runs as it is read, in bounded memory:
 sim.stream(1e7, events=True, keyframes=True).to_parquet("events.parquet")  # consumes `sim`
 ```
 
-`to_parquet` writes one row group per keyframed chunk, and records where the run
-came from in the file's metadata: `lefsim.model` (the model the run started
+`to_parquet` writes one row group per keyframed chunk (zstd by default, with
+the event times byte-stream-split, which makes files about a third smaller), and
+records where the run came from in the file's metadata: `lefsim.model` (the model the run started
 from) and `lefsim.run` (seed, start time, when the recording starts and actually
 ends). Streams carry the same metadata in their Arrow schema.
 
@@ -464,6 +465,20 @@ import { toRecordBatches } from "lefsim/arrow";
 for await (const batch of iterate(sim.stream(1e6, { dt: 1 }).pipeThrough(toRecordBatches()))) {
   // batch is an Arrow RecordBatch: time, lef_id, left_pos, right_pos, ...
 }
+```
+
+The `lefsim/parquet` entry point replays files written by the Python binding's
+`Stream.to_parquet`, from a URL, a `File` or bytes. It reads the footer, then
+only the row groups each move needs, over HTTP with range requests, so a
+recording of any size can be scrubbed without downloading it. Reading is
+asynchronous there, so the methods that move return promises:
+
+```ts
+import { replayerFromParquet } from "lefsim/parquet";
+
+const r = await replayerFromParquet("https://example.org/run.parquet");
+await r.seek(5000); // fetches one row group
+const { leftPos, rightPos } = r.state(); // synchronous, as with a Replayer
 ```
 
 `packages/demo` is a live demo: loop arcs over the lattice and a scrolling

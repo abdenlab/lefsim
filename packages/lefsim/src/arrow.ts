@@ -27,10 +27,9 @@ import {
   type DataType,
 } from "apache-arrow";
 
-import { Replayer } from "./replayer.ts";
+import { Replayer, replayerFromRows } from "./replayer.ts";
 import {
   DIRECTION,
-  KEYFRAME,
   MOBILITY,
   ROW_KIND,
   type DeltaChunk,
@@ -282,38 +281,7 @@ export function replayerFromArrow(
     mobility: concat("mobility", Uint8Array),
     kind: concat("kind", Uint8Array),
   };
-  const n = rows.time.length;
-  const isKeyframe = (i: number) => rows.kind[i] === KEYFRAME;
-
-  let nLefs = options.nLefs;
-  if (nLefs === undefined) {
-    const first = rows.kind.indexOf(KEYFRAME);
-    if (first < 0) throw new RangeError("no keyframe in the log: pass nLefs, or record with keyframes");
-    let len = 0;
-    while (first + len < n && isKeyframe(first + len) && rows.time[first + len] === rows.time[first] && rows.legId[first + len] === len) len++;
-    nLefs = len / 2;
-  }
-
-  // One chunk per keyframe (a keyframe starts with leg 0), each describing
-  // the run up to the next keyframe.
-  const replayer = new Replayer(lattice, nLefs);
-  const slice = (a: number, b: number, end: number): DeltaChunk => ({
-    time: rows.time.subarray(a, b),
-    legId: rows.legId.subarray(a, b),
-    pos: rows.pos.subarray(a, b),
-    mobility: rows.mobility.subarray(a, b),
-    kind: rows.kind.subarray(a, b),
-    end,
-  });
-  let from = 0;
-  for (let i = 1; i < n; i++) {
-    if (isKeyframe(i) && rows.legId[i] === 0) {
-      replayer.push(slice(from, i, rows.time[i]!));
-      from = i;
-    }
-  }
-  if (n > from) replayer.push(slice(from, n, options.end ?? rows.time[n - 1]!));
-  return replayer;
+  return replayerFromRows(rows, lattice, options);
 }
 
 // ------------------------------------------------------------------ streams

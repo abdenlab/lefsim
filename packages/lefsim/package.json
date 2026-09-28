@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./arrow": "./src/arrow.ts"
+    "./arrow": "./src/arrow.ts",
+    "./parquet": "./src/parquet.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -14,6 +15,8 @@
   },
   "dependencies": {
     "apache-arrow": "^21.2.0",
+    "fzstd": "^0.1.1",
+    "hyparquet": "^1.31.2",
     "lefsim-wasm": "workspace:*"
   },
   "devDependencies": {

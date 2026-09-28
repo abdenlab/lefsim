@@ -117,10 +117,34 @@ reader = pa.RecordBatchReader.from_stream(
     streamed.stream(ipc_config["tEnd"], events=True, keyframes=True, max_rows=ipc_config["chunkSize"])
 )
 out = HERE / "python_events.arrows"
-with pa.OSFile(str(out), "wb") as sink, pa.ipc.new_stream(sink, reader.schema) as writer:
+# Sorted metadata, so regenerating gives the same bytes.
+schema = reader.schema.with_metadata(dict(sorted(reader.schema.metadata.items())))
+with pa.OSFile(str(out), "wb") as sink, pa.ipc.new_stream(sink, schema) as writer:
     n_batches = 0
     for b in reader:
-        writer.write_batch(b)
+        writer.write_batch(b.replace_schema_metadata(schema.metadata))
         n_batches += 1
 (HERE / "python_events.json").write_text(json.dumps({"config": ipc_config, "batches": n_batches}, indent=1) + "\n")
 print("wrote", out, f"({n_batches} batches, {out.stat().st_size:,} bytes)")
+
+
+# ---------------------------------------------------------------- Parquet
+# The same run as a keyframed Parquet file from Stream.to_parquet (zstd, one
+# row group per chunk), and as a plain snappy file with no lefsim metadata
+# and row groups that cut keyframes, for the TS reader's fallback.
+
+import pyarrow.parquet as pq
+
+out = HERE / "python_events.parquet"
+make_sim(ipc_config).stream(
+    ipc_config["tEnd"], events=True, keyframes=True, max_rows=ipc_config["chunkSize"]
+).to_parquet(out)
+print("wrote", out, f"({pq.ParquetFile(out).num_row_groups} row groups, {out.stat().st_size:,} bytes)")
+
+plain = pa.RecordBatchReader.from_stream(
+    make_sim(ipc_config).stream(ipc_config["tEnd"], events=True, keyframes=True, max_rows=ipc_config["chunkSize"])
+).read_all()
+out = HERE / "python_events_plain.parquet"
+pq.write_table(plain.replace_schema_metadata(None), out, compression="snappy", row_group_size=37)
+print("wrote", out, f"({out.stat().st_size:,} bytes)")
+
