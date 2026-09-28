@@ -12,8 +12,7 @@ test = false
 doctest = false
 
 [dependencies]
-lefsim.workspace = true
-rand.workspace = true
+lefsim = { workspace = true, features = ["serde"] }
 pyo3 = { version = "0.29", features = ["abi3-py39"] }
 # No buffer_protocol: we only export, and it would need abi3-py311.
 pyo3-arrow = { version = "0.19", default-features = false }
@@ -21,3 +20,6 @@ pyo3-arrow = { version = "0.19", default-features = false }
 arrow-array = "59"
 arrow-buffer = "59"
 arrow-schema = "59"
+arrow-cast = { version = "59", default-features = false }
+serde_json.workspace = true
+serde.workspace = true

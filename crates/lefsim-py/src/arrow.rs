@@ -12,7 +12,7 @@ use arrow_array::types::{Float64Type, UInt32Type, UInt8Type};
 use arrow_array::{ArrayRef, DictionaryArray, PrimitiveArray, RecordBatch, StringArray};
 use arrow_buffer::ScalarBuffer;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef};
-use lefsim::{Direction, EventFrames, Lattice, LefFrames, Mobility, SiteKind};
+use lefsim::{Direction, EventFrames, Lattice, LefColumns, LefStates, Mobility};
 
 /// Row layout of grid snapshots.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -115,11 +115,10 @@ pub fn snapshots_schema(layout: Layout, n_lefs: usize) -> SchemaRef {
     )
 }
 
-pub fn snapshots_batch(frames: LefFrames, layout: Layout) -> Result<RecordBatch, ArrowError> {
-    let n_lefs = frames.n_lefs();
-    let n_snapshots = frames.n_snapshots();
+pub fn snapshots_batch(c: LefColumns, layout: Layout) -> Result<RecordBatch, ArrowError> {
+    let n_lefs = c.n_lefs;
+    let n_snapshots = c.time.len();
     let schema = snapshots_schema(layout, n_lefs);
-    let c = frames.into_columns();
     let columns = match layout {
         Layout::Wide => {
             let n_rows = n_snapshots * n_lefs;
@@ -193,85 +192,114 @@ pub fn events_batch(frames: EventFrames) -> Result<RecordBatch, ArrowError> {
     )
 }
 
-// ----- static metadata -----
+// ----- model tables -----
 
-/// `(name, batch)` for each metadata table of a run on `lattice` with
-/// `n_lefs` LEFs.
-pub fn meta_batches(
-    lattice: &Lattice,
-    n_lefs: usize,
-) -> Result<Vec<(&'static str, RecordBatch)>, ArrowError> {
-    let kinds: Vec<u8> = lattice.sites().iter().map(|s| s.kind.code()).collect();
-    let ctcf_list = lattice.ctcfs();
-    let n_sites = kinds.len() as u32;
-    let n_lefs = n_lefs as u32;
-    let lattice = RecordBatch::try_new(
-        schema(
-            vec![field("site", DataType::UInt32), field("kind", dict_type())],
-            "lattice",
-            &[],
-        ),
-        vec![
-            u32_col((0..n_sites).collect()),
-            dict_col(kinds, &SiteKind::NAMES),
-        ],
-    )?;
-    let ctcfs = RecordBatch::try_new(
+/// A lattice as its CTCF table, with the lattice size in the metadata:
+/// everything needed to rebuild it.
+pub fn lattice_batch(lattice: &Lattice) -> Result<RecordBatch, ArrowError> {
+    let ctcfs = lattice.ctcfs();
+    RecordBatch::try_new(
         schema(
             vec![
                 field("site", DataType::UInt32),
                 field("captures_from", dict_type()),
                 field("strength", DataType::Float64),
             ],
-            "ctcfs",
-            &[],
+            "lattice",
+            &[("n_sites", lattice.len().to_string())],
         ),
         vec![
-            u32_col(ctcf_list.iter().map(|c| c.site).collect()),
-            dict_col(ctcf_list.iter().map(|c| c.captures_from.code()).collect(), &Direction::NAMES),
-            f64_col(ctcf_list.iter().map(|c| c.strength).collect()),
+            u32_col(ctcfs.iter().map(|c| c.site).collect()),
+            dict_col(ctcfs.iter().map(|c| c.captures_from.code()).collect(), &Direction::NAMES),
+            f64_col(ctcfs.iter().map(|c| c.strength).collect()),
         ],
-    )?;
-    let lefs = RecordBatch::try_new(
+    )
+}
+
+/// The LEF state table: one row per LEF, in `lef_id` order.
+pub fn lefs_batch(lefs: &LefStates) -> Result<RecordBatch, ArrowError> {
+    let codes = |m: &[Mobility]| m.iter().map(|m| m.code()).collect();
+    RecordBatch::try_new(
         schema(
             vec![
                 field("lef_id", DataType::UInt32),
-                field("left_leg_id", DataType::UInt32),
-                field("right_leg_id", DataType::UInt32),
+                field("left_pos", DataType::UInt32),
+                field("right_pos", DataType::UInt32),
+                field("left_mobility", dict_type()),
+                field("right_mobility", dict_type()),
             ],
             "lefs",
-            &[],
+            &[("n_lefs", lefs.len().to_string())],
         ),
         vec![
-            u32_col((0..n_lefs).collect()),
-            u32_col((0..n_lefs).map(|i| 2 * i).collect()),
-            u32_col((0..n_lefs).map(|i| 2 * i + 1).collect()),
+            u32_col((0..lefs.len() as u32).collect()),
+            u32_col(lefs.left_pos.clone()),
+            u32_col(lefs.right_pos.clone()),
+            dict_col(codes(&lefs.left_mobility), &Mobility::NAMES),
+            dict_col(codes(&lefs.right_mobility), &Mobility::NAMES),
         ],
-    )?;
-    let n_legs = 2 * n_lefs;
-    let legs = RecordBatch::try_new(
-        schema(
-            vec![
-                field("leg_id", DataType::UInt32),
-                field("lef_id", DataType::UInt32),
-                field("facing", dict_type()),
-            ],
-            "legs",
-            &[],
-        ),
-        vec![
-            u32_col((0..n_legs).collect()),
-            u32_col((0..n_legs).map(|i| i / 2).collect()),
-            dict_col(
-                (0..n_legs).map(|i| [Direction::Left, Direction::Right][i as usize % 2].code()).collect(),
-                &Direction::NAMES,
-            ),
-        ],
-    )?;
-    Ok(vec![
-        ("lattice", lattice),
-        ("ctcfs", ctcfs),
-        ("lefs", lefs),
-        ("legs", legs),
-    ])
+    )
+}
+
+// ----- reading columns back -----
+
+/// Why a column couldn't be read.
+pub struct ColumnError(pub String);
+
+fn column<'a>(batch: &'a RecordBatch, name: &str) -> Result<&'a ArrayRef, ColumnError> {
+    batch.column_by_name(name).ok_or_else(|| ColumnError(format!("missing column {name:?}")))
+}
+
+fn cast_to(array: &ArrayRef, to: &DataType, name: &str) -> Result<ArrayRef, ColumnError> {
+    let cast = arrow_cast::cast(array, to)
+        .map_err(|e| ColumnError(format!("column {name:?}: {e}")))?;
+    // Safe casts turn values that don't fit into nulls.
+    if cast.null_count() > array.null_count() || array.null_count() > 0 {
+        return Err(ColumnError(format!("column {name:?} has missing or out-of-range values")));
+    }
+    Ok(cast)
+}
+
+/// An integer column as `u32` (e.g. positions and ids).
+pub fn u32_values(batch: &RecordBatch, name: &str) -> Result<Vec<u32>, ColumnError> {
+    let array = column(batch, name)?;
+    if !array.data_type().is_integer() {
+        return Err(ColumnError(format!("column {name:?} must hold integers, got {}", array.data_type())));
+    }
+    let cast = cast_to(array, &DataType::UInt32, name)?;
+    Ok(cast.as_any().downcast_ref::<PrimitiveArray<UInt32Type>>().expect("cast").values().to_vec())
+}
+
+/// A float column as `f64`.
+pub fn f64_values(batch: &RecordBatch, name: &str) -> Result<Vec<f64>, ColumnError> {
+    let cast = cast_to(column(batch, name)?, &DataType::Float64, name)?;
+    Ok(cast.as_any().downcast_ref::<PrimitiveArray<Float64Type>>().expect("cast").values().to_vec())
+}
+
+/// A categorical column as codes into `names`: either names (strings or a
+/// dictionary of strings, matched case-insensitively) or the codes
+/// themselves (integers).
+pub fn code_values(batch: &RecordBatch, name: &str, names: &[&str]) -> Result<Vec<u8>, ColumnError> {
+    let array = column(batch, name)?;
+    if array.data_type().is_integer() {
+        let codes = cast_to(array, &DataType::UInt8, name)?;
+        let codes = codes.as_any().downcast_ref::<PrimitiveArray<UInt8Type>>().expect("cast");
+        if let Some(&bad) = codes.values().iter().find(|&&c| c as usize >= names.len()) {
+            return Err(ColumnError(format!("column {name:?}: invalid code {bad}")));
+        }
+        return Ok(codes.values().to_vec());
+    }
+    let strings = cast_to(array, &DataType::Utf8, name)?;
+    let strings = strings.as_any().downcast_ref::<StringArray>().expect("cast");
+    strings
+        .iter()
+        .map(|s| {
+            let s = s.expect("no nulls");
+            names
+                .iter()
+                .position(|n| n.eq_ignore_ascii_case(s))
+                .map(|i| i as u8)
+                .ok_or_else(|| ColumnError(format!("column {name:?}: unknown value {s:?} (expected one of {names:?})")))
+        })
+        .collect()
 }

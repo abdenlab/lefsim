@@ -1,4 +1,79 @@
 {
+ "lattice": {
+  "metadata": {
+   "lefsim.n_sites": "200",
+   "lefsim.kind": "lattice"
+  },
+  "fields": [
+   {
+    "name": "site",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "captures_from",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Left",
+     "Right"
+    ]
+   },
+   {
+    "name": "strength",
+    "type": "float64",
+    "nullable": false,
+    "dictionary": null
+   }
+  ]
+ },
+ "lefs": {
+  "metadata": {
+   "lefsim.kind": "lefs",
+   "lefsim.n_lefs": "4"
+  },
+  "fields": [
+   {
+    "name": "lef_id",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "left_pos",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "right_pos",
+    "type": "uint32",
+    "nullable": false,
+    "dictionary": null
+   },
+   {
+    "name": "left_mobility",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Moving",
+     "Captured",
+     "Evicted"
+    ]
+   },
+   {
+    "name": "right_mobility",
+    "type": "dict<uint8,utf8>",
+    "nullable": false,
+    "dictionary": [
+     "Moving",
+     "Captured",
+     "Evicted"
+    ]
+   }
+  ]
+ },
  "snapshots_wide": {
   "metadata": {
    "lefsim.n_lefs": "4",
@@ -54,9 +129,9 @@
  },
  "snapshots_long": {
   "metadata": {
+   "lefsim.kind": "snapshots",
    "lefsim.layout": "long",
-   "lefsim.n_lefs": "4",
-   "lefsim.kind": "snapshots"
+   "lefsim.n_lefs": "4"
   },
   "fields": [
    {
@@ -151,109 +226,6 @@
      "Step",
      "Respawn",
      "Keyframe"
-    ]
-   }
-  ]
- },
- "meta_lattice": {
-  "metadata": {
-   "lefsim.kind": "lattice"
-  },
-  "fields": [
-   {
-    "name": "site",
-    "type": "uint32",
-    "nullable": false,
-    "dictionary": null
-   },
-   {
-    "name": "kind",
-    "type": "dict<uint8,utf8>",
-    "nullable": false,
-    "dictionary": [
-     "Plain",
-     "Ctcf"
-    ]
-   }
-  ]
- },
- "meta_ctcfs": {
-  "metadata": {
-   "lefsim.kind": "ctcfs"
-  },
-  "fields": [
-   {
-    "name": "site",
-    "type": "uint32",
-    "nullable": false,
-    "dictionary": null
-   },
-   {
-    "name": "captures_from",
-    "type": "dict<uint8,utf8>",
-    "nullable": false,
-    "dictionary": [
-     "Left",
-     "Right"
-    ]
-   },
-   {
-    "name": "strength",
-    "type": "float64",
-    "nullable": false,
-    "dictionary": null
-   }
-  ]
- },
- "meta_lefs": {
-  "metadata": {
-   "lefsim.kind": "lefs"
-  },
-  "fields": [
-   {
-    "name": "lef_id",
-    "type": "uint32",
-    "nullable": false,
-    "dictionary": null
-   },
-   {
-    "name": "left_leg_id",
-    "type": "uint32",
-    "nullable": false,
-    "dictionary": null
-   },
-   {
-    "name": "right_leg_id",
-    "type": "uint32",
-    "nullable": false,
-    "dictionary": null
-   }
-  ]
- },
- "meta_legs": {
-  "metadata": {
-   "lefsim.kind": "legs"
-  },
-  "fields": [
-   {
-    "name": "leg_id",
-    "type": "uint32",
-    "nullable": false,
-    "dictionary": null
-   },
-   {
-    "name": "lef_id",
-    "type": "uint32",
-    "nullable": false,
-    "dictionary": null
-   },
-   {
-    "name": "facing",
-    "type": "dict<uint8,utf8>",
-    "nullable": false,
-    "dictionary": [
-     "Left",
-     "Right"
     ]
    }
   ]

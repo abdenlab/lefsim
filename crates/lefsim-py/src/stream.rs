@@ -63,7 +63,7 @@ impl SimReader {
 
     fn take_batch(&mut self) -> Result<RecordBatch, ArrowError> {
         match (&mut self.grid, &mut self.events) {
-            (Some(rec), _) => snapshots_batch(rec.take_frames(), self.layout),
+            (Some(rec), _) => snapshots_batch(rec.take_frames().into_columns(), self.layout),
             (None, Some(ev)) => events_batch(ev.take_frames()),
             (None, None) => unreachable!("a reader always has a recorder"),
         }

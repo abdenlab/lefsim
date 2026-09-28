@@ -20,7 +20,7 @@ import {
 } from "apache-arrow";
 import { describe, expect, it } from "vitest";
 
-import { deltaChunkFromArrow, eventsToArrow, metaToArrow, snapshotsToArrow } from "../src/arrow.ts";
+import { deltaChunkFromArrow, eventsToArrow, latticeToArrow, lefsToArrow, snapshotsToArrow } from "../src/arrow.ts";
 import { KEYFRAME, Replayer, Sim, type SimOptions } from "../src/index.ts";
 import schemas from "./fixtures/schemas.json";
 import ipcInfo from "./fixtures/python_events.json";
@@ -64,11 +64,14 @@ const SMALL: SimOptions = {
 
 describe("schema parity with the Python binding", () => {
   using sim = new Sim(SMALL);
+  const lattice = latticeToArrow(sim.meta());
+  const lefs = lefsToArrow(sim.state());
   const built = {
     snapshots_wide: snapshotsToArrow(sim.recordUntil(10, { dt: 1 }).snapshots!),
     snapshots_long: snapshotsToArrow(sim.recordUntil(20, { dt: 1 }).snapshots!, { layout: "long" }),
     events: eventsToArrow(sim.recordUntil(30, { events: true, keyframes: true }).events!),
-    ...Object.fromEntries(Object.entries(metaToArrow(sim.meta())).map(([k, v]) => [`meta_${k}`, v])),
+    lattice,
+    lefs,
   } as Record<keyof typeof schemas, RecordBatch>;
 
   it.each(Object.keys(schemas) as (keyof typeof schemas)[])("%s", (name) => {

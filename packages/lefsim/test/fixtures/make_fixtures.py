@@ -1,8 +1,8 @@
 """Regenerate cross-language fixtures from the Python binding.
 
-Run with the lefsim-py dev venv:
+Run with the lefsim-py dev venv, from crates/lefsim-py:
 
-    crates/lefsim-py/.venv/bin/python packages/lefsim/test/fixtures/make_fixtures.py
+    uv run --no-sync python ../../packages/lefsim/test/fixtures/make_fixtures.py
 
 The TS tests check that the wasm build, driven through the TS wrapper,
 reproduces these values exactly (both bindings wrap the same core, and the
@@ -29,19 +29,28 @@ config = {
     "rates": {"step": 1.0, "respawn": 0.01, "respawnCaptured": 0.002},
     "tEnd": 1000.0,
 }
-sim = lefsim.Sim(
-    config["nSites"],
-    ctcf_sites=config["ctcfSites"],
-    ctcf_captures_from=config["ctcfCapturesFrom"],
-    ctcf_strength=config["ctcfStrength"],
-    n_lefs=config["nLefs"],
-    seed=config["seed"],
-    step_rate=config["rates"]["step"],
-    respawn_rate=config["rates"]["respawn"],
-    respawn_rate_captured=config["rates"]["respawnCaptured"],
-)
+
+
+def make_sim(config):
+    """The Sim that the TS `new Sim(config)` builds: LEFs placed with the
+    seed, then run with the same seed."""
+    lattice = lefsim.Lattice(
+        config["nSites"],
+        ctcf_sites=config["ctcfSites"],
+        ctcf_captures_from=config["ctcfCapturesFrom"],
+        ctcf_strength=config["ctcfStrength"],
+    )
+    rates = config["rates"]
+    model = lefsim.Model(
+        lefsim.populate(lattice, config["nLefs"], seed=config["seed"]),
+        lefsim.Rates(rates["step"], rates["respawn"], rates["respawnCaptured"]),
+    )
+    return lefsim.Sim(model, seed=config["seed"])
+
+
+sim = make_sim(config)
 sim.run_until(config["tEnd"])
-snap = pa.record_batch(sim.snapshot())
+snap = pa.record_batch(sim.state())
 expected = {
     "time": sim.time,
     "eventCount": sim.event_count,
@@ -78,15 +87,14 @@ def describe(batch) -> dict:
     return {"metadata": metadata, "fields": fields}
 
 
-small = lefsim.Sim(
-    200, ctcf_sites=[60, 140], ctcf_captures_from=["right", "left"], n_lefs=4, seed=1
-)
-meta = small.meta()
+small_lattice = lefsim.Lattice(200, ctcf_sites=[60, 140], ctcf_captures_from=["right", "left"])
+small = lefsim.Sim(lefsim.Model(lefsim.populate(small_lattice, 4, seed=1)), seed=1)
 schemas = {
-    "snapshots_wide": describe(small.run_until(10.0, dt=1.0).snapshots),
-    "snapshots_long": describe(small.run_until(20.0, dt=1.0, layout="long").snapshots),
-    "events": describe(small.run_until(30.0, events=True, keyframes=True).events),
-    **{f"meta_{name}": describe(meta[name]) for name in ("lattice", "ctcfs", "lefs", "legs")},
+    "lattice": describe(small_lattice.to_arrow()),
+    "lefs": describe(small.world().to_arrow()),
+    "snapshots_wide": describe(small.record_until(10.0, dt=1.0).snapshots),
+    "snapshots_long": describe(small.record_until(20.0, dt=1.0, layout="long").snapshots),
+    "events": describe(small.record_until(30.0, events=True, keyframes=True).events),
 }
 out = HERE / "schemas.json"
 out.write_text(json.dumps(schemas, indent=1) + "\n")
@@ -98,17 +106,7 @@ print("wrote", out)
 # would send it. The TS tests replay it and compare with the wasm Sim.
 
 ipc_config = {**config, "tEnd": 300.0, "chunkSize": 400}
-streamed = lefsim.Sim(
-    ipc_config["nSites"],
-    ctcf_sites=ipc_config["ctcfSites"],
-    ctcf_captures_from=ipc_config["ctcfCapturesFrom"],
-    ctcf_strength=ipc_config["ctcfStrength"],
-    n_lefs=ipc_config["nLefs"],
-    seed=ipc_config["seed"],
-    step_rate=ipc_config["rates"]["step"],
-    respawn_rate=ipc_config["rates"]["respawn"],
-    respawn_rate_captured=ipc_config["rates"]["respawnCaptured"],
-)
+streamed = make_sim(ipc_config)
 reader = pa.RecordBatchReader.from_stream(
     streamed.stream(ipc_config["tEnd"], events=True, keyframes=True, chunk_size=ipc_config["chunkSize"])
 )

@@ -32,6 +32,7 @@ import {
   ROW_KIND,
   SITE_KIND,
   type DeltaChunk,
+  type LiveState,
   type Meta,
   type SnapshotColumns,
 } from "./types.ts";
@@ -146,6 +147,41 @@ export function eventsToArrow(chunk: DeltaChunk): RecordBatch {
       ["action", dict(chunk.kind, ROW_KIND)],
     ],
     "events",
+  );
+}
+
+/**
+ * The lattice as its CTCF table, with `lefsim.n_sites` in the schema
+ * metadata. Matches the Python binding's `Lattice.to_arrow()`.
+ */
+export function latticeToArrow(meta: Meta): RecordBatch {
+  return batch(
+    [
+      ["site", u32(meta.ctcfs.site)],
+      ["captures_from", dict(meta.ctcfs.capturesFrom, DIRECTION)],
+      ["strength", f64(meta.ctcfs.strength)],
+    ],
+    "lattice",
+    { n_sites: String(meta.nSites) },
+  );
+}
+
+/**
+ * The LEF state table, one row per LEF. Matches the Python binding's
+ * `World.to_arrow()`. Copies the (wasm-backed) state arrays.
+ */
+export function lefsToArrow(state: LiveState): RecordBatch {
+  const n = state.leftPos.length;
+  return batch(
+    [
+      ["lef_id", u32(Uint32Array.from({ length: n }, (_, i) => i))],
+      ["left_pos", u32(state.leftPos.slice())],
+      ["right_pos", u32(state.rightPos.slice())],
+      ["left_mobility", dict(state.leftMobility.slice(), MOBILITY)],
+      ["right_mobility", dict(state.rightMobility.slice(), MOBILITY)],
+    ],
+    "lefs",
+    { n_lefs: String(n) },
   );
 }
 
