@@ -88,7 +88,7 @@ pub enum StopReason {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct RunReport {
     /// Events fired during this call.
-    pub events: u64,
+    pub n_events: u64,
     /// Clock after this call.
     pub time: Time,
     pub stopped: StopReason,
@@ -162,7 +162,7 @@ impl Sim {
     }
 
     /// Total events fired since construction.
-    pub fn event_count(&self) -> u64 {
+    pub fn n_events(&self) -> u64 {
         self.events
     }
 
@@ -348,7 +348,7 @@ impl Sim {
 
     fn report(&self, start_events: u64, stopped: StopReason) -> RunReport {
         RunReport {
-            events: self.events - start_events,
+            n_events: self.events - start_events,
             time: self.time(),
             stopped,
         }
@@ -435,7 +435,7 @@ mod tests {
         let mut fork = sim.clone();
         sim.run_until(500.0);
         fork.run_until(500.0);
-        assert_eq!(sim.event_count(), fork.event_count());
+        assert_eq!(sim.n_events(), fork.n_events());
         assert_eq!(sim.world(), fork.world());
     }
 
@@ -452,7 +452,7 @@ mod tests {
         let mut next = Sim::with_start_time(model, 4, sim.time());
         assert_eq!(next.time(), 100.0);
         assert!(next.next_event_time().unwrap() >= 100.0);
-        assert!(next.run_until(200.0).events > 0);
+        assert!(next.run_until(200.0).n_events > 0);
     }
 
     #[test]
@@ -494,7 +494,7 @@ mod tests {
         assert_eq!(report.time, 25.0);
         assert_eq!(sim.time(), 25.0);
         assert!(sim.next_event_time().unwrap() > 25.0);
-        assert_eq!(report.events, sim.event_count());
+        assert_eq!(report.n_events, sim.n_events());
     }
 
     #[test]
@@ -507,7 +507,7 @@ mod tests {
         whole.run_until(20.0);
 
         assert_eq!(split.time(), whole.time());
-        assert_eq!(split.event_count(), whole.event_count());
+        assert_eq!(split.n_events(), whole.n_events());
         assert_eq!(split.world(), whole.world());
     }
 
@@ -515,20 +515,20 @@ mod tests {
     fn run_until_into_the_past_is_a_no_op() {
         let mut sim = Sim::new(model_at(&[50]), 0);
         sim.run_until(10.0);
-        let events = sim.event_count();
+        let events = sim.n_events();
         let report = sim.run_until(5.0);
-        assert_eq!(report.events, 0);
+        assert_eq!(report.n_events, 0);
         assert_eq!(sim.time(), 10.0);
-        assert_eq!(sim.event_count(), events);
+        assert_eq!(sim.n_events(), events);
     }
 
     #[test]
     fn run_events_fires_exact_budget() {
         let mut sim = Sim::new(model_at(&[50]), 0);
         let report = sim.run_events(123);
-        assert_eq!(report.events, 123);
+        assert_eq!(report.n_events, 123);
         assert_eq!(report.stopped, StopReason::ReachedEventCount);
-        assert_eq!(sim.event_count(), 123);
+        assert_eq!(sim.n_events(), 123);
     }
 
     #[test]

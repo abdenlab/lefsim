@@ -172,7 +172,7 @@ fn a_replayed_world_starts_a_new_run() {
     let model = Model::new(world, RATES, SpawnRule::UniformNonCtcf).unwrap();
     let mut branch = Sim::with_start_time(model, 99, r.time());
     assert_eq!(branch.time(), 250.0);
-    assert!(branch.run_until(300.0).events > 0);
+    assert!(branch.run_until(300.0).n_events > 0);
 }
 
 #[test]

@@ -323,7 +323,7 @@ package itself has no Python dependencies.
 import lefsim
 import polars as pl
 
-lattice = lefsim.Lattice(1000, ctcf_sites=[300, 700], ctcf_captures_from=["right", "left"], ctcf_strength=0.9)
+lattice = lefsim.Lattice(1000, {"site": [300, 700], "captures_from": ["right", "left"], "strength": 0.9})
 world = lefsim.populate(lattice, 10, seed=1)  # or lefsim.World(lattice, table_of_lefs)
 model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=1e-3, respawn_captured=1e-4))
 sim = lefsim.Sim(model, seed=42)
@@ -336,13 +336,17 @@ deltas = pl.DataFrame(rec.events)  # time, leg_id, lef_id, pos, mobility, action
 pl.DataFrame(sim.state())  # the current state, one row per LEF
 ```
 
-A `World` takes its LEFs as any Arrow table or a dict of columns (`left_pos`,
-`right_pos`, and optionally `left_mobility`/`right_mobility`), so
-`lefsim.World(lattice, sim.state())` or a polars DataFrame works.
-`lattice.to_arrow()` and `world.to_arrow()` give the tables back.
+Both tables go in and out the same way. A `Lattice` takes its CTCFs, and a
+`World` its LEFs, as any Arrow table (pyarrow, polars, pandas) or a dict of
+columns: `site`, `captures_from` and optional `strength` for CTCFs (single
+values apply to all), and `left_pos`, `right_pos` and optional
+`left_mobility`/`right_mobility` for LEFs. `lattice.to_arrow()` and
+`world.to_arrow()` give the tables back, so `lefsim.World(lattice, sim.state())`
+works too.
+
 `sim.model()` returns the current state as a `Model`, which saves with
-`model.to_json()` and loads with `lefsim.Model.from_json(s)`; the model types
-also pickle. `copy.copy(sim)` forks a run: the copy continues exactly as the
+`model.to_json()` and loads with `lefsim.Model.from_json(s)` (or `to_dict()` /
+`from_dict()` for plain Python data); the model types also pickle. `copy.copy(sim)` forks a run: the copy continues exactly as the
 original would.
 
 Add `keyframes=True` (with `events=True`) to open each event batch with the full

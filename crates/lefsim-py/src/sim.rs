@@ -12,6 +12,9 @@ use crate::stream::{PyStream, SimReader};
 /// Events fired per call into the core between checks for Ctrl-C.
 pub const EVENTS_PER_CHUNK: u64 = 250_000;
 
+/// Default `max_snapshots` / `max_rows` for a stream's batches.
+const DEFAULT_CHUNK: usize = 10_000;
+
 pub fn parse_layout(layout: &str) -> PyResult<Layout> {
     Layout::parse(layout)
         .ok_or_else(|| value_error(format!("layout must be 'lef' or 'leg', got {layout:?}")))
@@ -52,9 +55,9 @@ pub fn run_interruptibly<O: Observer + Send>(
     max_events: Option<u64>,
     obs: &mut O,
 ) -> PyResult<RunReport> {
-    let start_events = sim.event_count();
+    let start_events = sim.n_events();
     loop {
-        let fired = sim.event_count() - start_events;
+        let fired = sim.n_events() - start_events;
         let report = match max_events {
             Some(n) => {
                 let budget = (n - fired).min(EVENTS_PER_CHUNK);
@@ -63,10 +66,10 @@ pub fn run_interruptibly<O: Observer + Send>(
             None => py.detach(|| sim.run_until_with_limit(t_end, EVENTS_PER_CHUNK, obs)),
         };
         py.check_signals()?;
-        let fired = sim.event_count() - start_events;
+        let fired = sim.n_events() - start_events;
         let budget_left = max_events.is_none_or(|n| fired < n);
         if report.stopped != StopReason::ReachedEventCount || !budget_left {
-            return Ok(RunReport { events: fired, ..report });
+            return Ok(RunReport { n_events: fired, ..report });
         }
     }
 }
@@ -102,14 +105,15 @@ fn event_recorder(
 /// methods "recorder_full").
 #[pyclass(module = "lefsim", name = "RunReport", frozen, get_all)]
 pub struct PyRunReport {
-    events_fired: u64,
+    /// Events fired by this call.
+    n_events: u64,
     time: f64,
     stopped: &'static str,
 }
 
 impl From<RunReport> for PyRunReport {
     fn from(r: RunReport) -> Self {
-        PyRunReport { events_fired: r.events, time: r.time, stopped: stop_name(r.stopped) }
+        PyRunReport { n_events: r.n_events, time: r.time, stopped: stop_name(r.stopped) }
     }
 }
 
@@ -117,8 +121,8 @@ impl From<RunReport> for PyRunReport {
 impl PyRunReport {
     fn __repr__(&self) -> String {
         format!(
-            "lefsim.RunReport(events_fired={}, time={:?}, stopped={:?})",
-            self.events_fired, self.time, self.stopped
+            "lefsim.RunReport(n_events={}, time={:?}, stopped={:?})",
+            self.n_events, self.time, self.stopped
         )
     }
 }
@@ -130,7 +134,8 @@ pub struct PyRecording {
     snapshots: Option<Py<PyBatch>>,
     /// Event deltas, if `events=True`.
     events: Option<Py<PyBatch>>,
-    events_fired: u64,
+    /// Events fired by this call.
+    n_events: u64,
     /// Simulation time after the call: the recording describes the run
     /// through this time.
     time: f64,
@@ -145,8 +150,8 @@ impl PyRecording {
             None => "None".to_string(),
         };
         format!(
-            "lefsim.Recording(events_fired={}, time={:?}, stopped={:?}, snapshots={}, events={})",
-            self.events_fired,
+            "lefsim.Recording(n_events={}, time={:?}, stopped={:?}, snapshots={}, events={})",
+            self.n_events,
             self.time,
             self.stopped,
             rows(&self.snapshots),
@@ -256,7 +261,7 @@ impl PySim {
         Ok(PyRecording {
             snapshots,
             events,
-            events_fired: report.events,
+            n_events: report.n_events,
             time: report.time,
             stopped: stop_name(report.stopped),
         })
@@ -300,8 +305,8 @@ impl PySim {
 
     /// Total events fired so far.
     #[getter]
-    fn event_count(&self) -> PyResult<u64> {
-        Ok(self.sim()?.event_count())
+    fn n_events(&self) -> PyResult<u64> {
+        Ok(self.sim()?.n_events())
     }
 
     /// Time of the next event, or `None` if none remain.
@@ -354,11 +359,11 @@ impl PySim {
     fn __repr__(&self) -> String {
         match &self.sim {
             Some(s) => format!(
-                "lefsim.Sim(n_sites={}, n_lefs={}, time={:?}, event_count={})",
+                "lefsim.Sim(n_sites={}, n_lefs={}, time={:?}, n_events={})",
                 s.n_sites(),
                 s.n_lefs(),
                 s.time(),
-                s.event_count()
+                s.n_events()
             ),
             None => "lefsim.Sim(<consumed by stream>)".to_string(),
         }
@@ -486,13 +491,14 @@ impl PySim {
         self.record(py, t_end, None, what)
     }
 
-    /// Hand this simulation to a lazy Arrow stream that runs it to `t_end`
-    /// in chunks of `chunk_size` rows.
+    /// Hand this simulation to a lazy Arrow stream that runs it to `t_end`,
+    /// one bounded chunk per batch, as the `record_*_chunk` methods would.
     ///
-    /// Pass exactly one of `dt` (grid snapshots) or `events=True` (deltas).
+    /// Pass exactly one of `dt` (grid snapshots, at most `max_snapshots` per
+    /// batch) or `events=True` (deltas, about `max_rows` rows per batch).
     /// With `events=True, keyframes=True`, every batch opens with one
     /// `Keyframe` row per leg, so each batch can be replayed on its own; a
-    /// batch may then exceed `chunk_size` by the rows of a zero-delay chain
+    /// batch may then exceed `max_rows` by the rows of a zero-delay chain
     /// in progress (typically two), since batches only end at settled times.
     /// The stream can be iterated for `Batch`es, or passed to any Arrow
     /// PyCapsule consumer (e.g. `pyarrow.RecordBatchReader.from_stream`,
@@ -503,7 +509,7 @@ impl PySim {
     /// it first (`copy.copy(sim)`) to keep going from here.
     #[pyo3(signature = (
         t_end, *, dt = None, t0 = 0.0, events = false, keyframes = false, layout = "lef",
-        chunk_size = 10_000,
+        max_snapshots = None, max_rows = None,
     ))]
     #[allow(clippy::too_many_arguments)]
     fn stream(
@@ -514,7 +520,8 @@ impl PySim {
         events: bool,
         keyframes: bool,
         layout: &str,
-        chunk_size: usize,
+        max_snapshots: Option<usize>,
+        max_rows: Option<usize>,
     ) -> PyResult<PyStream> {
         check_time("t_end", t_end)?;
         if keyframes && !events {
@@ -523,15 +530,23 @@ impl PySim {
         let layout = parse_layout(layout)?;
         let reader = match (dt, events) {
             (Some(dt), false) => {
-                if chunk_size == 0 {
-                    return Err(value_error("chunk_size must be positive"));
+                if max_rows.is_some() {
+                    return Err(value_error("max_rows applies to events=True; use max_snapshots with dt"));
+                }
+                let max = max_snapshots.unwrap_or(DEFAULT_CHUNK);
+                if max == 0 {
+                    return Err(value_error("max_snapshots must be positive"));
                 }
                 let rec = self.grid_recorder(grid_mode(dt, t0)?)?;
                 let sim = self.sim.take().ok_or_else(consumed)?;
-                SimReader::snapshots(sim, t_end, rec.with_max_snapshots(chunk_size), layout)
+                SimReader::snapshots(sim, t_end, rec.with_max_snapshots(max), layout)
             }
             (None, true) => {
-                let rec = event_recorder(self.sim()?.n_legs(), Some((chunk_size, "chunk_size")), keyframes)?;
+                if max_snapshots.is_some() {
+                    return Err(value_error("max_snapshots applies to dt=...; use max_rows with events=True"));
+                }
+                let max = max_rows.unwrap_or(DEFAULT_CHUNK);
+                let rec = event_recorder(self.sim()?.n_legs(), Some((max, "max_rows")), keyframes)?;
                 let sim = self.sim.take().ok_or_else(consumed)?;
                 SimReader::events(sim, t_end, rec)
             }

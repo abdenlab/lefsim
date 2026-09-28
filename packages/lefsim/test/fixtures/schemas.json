@@ -76,8 +76,8 @@
  },
  "snapshots_lef": {
   "metadata": {
-   "lefsim.n_lefs": "4",
-   "lefsim.kind": "lefs"
+   "lefsim.kind": "lefs",
+   "lefsim.n_lefs": "4"
   },
   "fields": [
    {

@@ -13,7 +13,7 @@ use pyo3_arrow::input::AnyRecordBatch;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::arrow::{ColumnError, Layout, code_values, lattice_batch, state_batch, u32_values};
+use crate::arrow::{ColumnError, Layout, code_values, f64_values, lattice_batch, state_batch, u32_values};
 use crate::batch::PyBatch;
 
 pub fn value_error(msg: impl Into<String>) -> PyErr {
@@ -72,7 +72,7 @@ where
         .extract()
         .map_err(|_| value_error(format!("{name} must be a scalar or a sequence")))?;
     if many.len() != n {
-        return Err(value_error(format!("{name} has {} entries but ctcf_sites has {n}", many.len())));
+        return Err(value_error(format!("{name} has {} entries but site has {n}", many.len())));
     }
     Ok(many)
 }
@@ -115,11 +115,56 @@ fn reduce<'py, T: Serialize>(
 // Lattice
 // ===================================================================
 
+/// The CTCF columns, read from an Arrow table or batch.
+fn ctcfs_from_arrow(source: AnyRecordBatch) -> PyResult<Vec<Ctcf>> {
+    let mut ctcfs = Vec::new();
+    for batch in source.into_reader()? {
+        let batch: RecordBatch = batch.map_err(arrow_error)?;
+        let sites = u32_values(&batch, "site")?;
+        let sides = code_values(&batch, "captures_from", &Direction::NAMES)?;
+        let strength = match batch.column_by_name("strength") {
+            Some(_) => f64_values(&batch, "strength")?,
+            None => vec![1.0; batch.num_rows()],
+        };
+        for ((site, side), strength) in sites.into_iter().zip(sides).zip(strength) {
+            let captures_from = if side == Direction::Left.code() { Direction::Left } else { Direction::Right };
+            ctcfs.push(Ctcf { site, captures_from, strength });
+        }
+    }
+    Ok(ctcfs)
+}
+
+/// The CTCF columns, read from a mapping (e.g. a dict). `captures_from` and
+/// `strength` may be single values for all CTCFs.
+fn ctcfs_from_mapping(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Ctcf>> {
+    let sites: Vec<u32> = obj
+        .get_item("site")
+        .map_err(|_| value_error("missing column \"site\""))?
+        .extract()
+        .map_err(|_| value_error("site must be a sequence of non-negative integers"))?;
+    let n = sites.len();
+    let sides: Vec<String> = match obj.get_item("captures_from") {
+        Ok(col) => broadcast(&col, n, "captures_from")?,
+        Err(_) if n == 0 => Vec::new(),
+        Err(_) => return Err(value_error("missing column \"captures_from\"")),
+    };
+    let strength: Vec<f64> = match obj.get_item("strength") {
+        Ok(col) => broadcast(&col, n, "strength")?,
+        Err(_) => vec![1.0; n],
+    };
+    (0..n)
+        .map(|i| Ok(Ctcf { site: sites[i], captures_from: parse_direction(&sides[i])?, strength: strength[i] }))
+        .collect()
+}
+
 /// A 1D lattice of `n_sites` sites, some of them CTCFs.
 ///
-/// `ctcf_captures_from` says which side of each CTCF captures ('left' or
-/// 'right'); `ctcf_strength` is the probability, in [0, 1], that a landing
-/// leg interacts with it. Both may be one value for all CTCFs.
+/// `ctcfs` is a table with one row per CTCF: `site`, `captures_from`
+/// ('left' or 'right': the side that captures) and optionally `strength`
+/// (the probability, in [0, 1], that a landing leg interacts; 1 by
+/// default). Pass any Arrow table (pyarrow, polars, `Lattice.to_arrow()`)
+/// or a dict of columns, where `captures_from` and `strength` may be single
+/// values for all CTCFs.
 #[pyclass(module = "lefsim", name = "Lattice", frozen, eq, skip_from_py_object)]
 #[derive(Clone, PartialEq)]
 pub struct PyLattice(pub lefsim::Lattice);
@@ -127,34 +172,28 @@ pub struct PyLattice(pub lefsim::Lattice);
 #[pymethods]
 impl PyLattice {
     #[new]
-    #[pyo3(signature = (n_sites, *, ctcf_sites = Vec::new(), ctcf_captures_from = None, ctcf_strength = None))]
-    fn new(
-        n_sites: usize,
-        ctcf_sites: Vec<u32>,
-        ctcf_captures_from: Option<&Bound<'_, PyAny>>,
-        ctcf_strength: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Self> {
-        let n = ctcf_sites.len();
-        let sides: Vec<String> = match ctcf_captures_from {
-            Some(obj) => broadcast(obj, n, "ctcf_captures_from")?,
-            None if n == 0 => Vec::new(),
-            None => return Err(value_error("ctcf_captures_from is required with ctcf_sites")),
+    #[pyo3(signature = (n_sites, ctcfs = None))]
+    fn new(n_sites: usize, ctcfs: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let ctcfs = match ctcfs {
+            None => Vec::new(),
+            Some(obj) if obj.hasattr("__arrow_c_stream__")? || obj.hasattr("__arrow_c_array__")? => {
+                ctcfs_from_arrow(obj.extract::<AnyRecordBatch>()?)?
+            }
+            Some(obj) if obj.hasattr("__getitem__")? && !obj.is_instance_of::<PyString>() => ctcfs_from_mapping(obj)?,
+            Some(_) => {
+                return Err(PyTypeError::new_err(
+                    "ctcfs must be an Arrow table (e.g. pyarrow, polars) or a mapping of columns",
+                ));
+            }
         };
-        let strength: Vec<f64> = match ctcf_strength {
-            Some(obj) => broadcast(obj, n, "ctcf_strength")?,
-            None => vec![1.0; n],
-        };
-        let ctcfs = (0..n)
-            .map(|i| {
-                Ok(Ctcf {
-                    site: ctcf_sites[i],
-                    captures_from: parse_direction(&sides[i])?,
-                    strength: strength[i],
-                })
-            })
-            .collect::<PyResult<Vec<_>>>()?;
         let lattice = lefsim::Lattice::with_ctcfs(n_sites, &ctcfs).map_err(|e| value_error(e.to_string()))?;
         Ok(PyLattice(lattice))
+    }
+
+    /// Number of CTCF sites.
+    #[getter]
+    fn n_ctcfs(&self) -> usize {
+        self.0.len() - self.0.n_plain()
     }
 
     #[getter]
@@ -200,7 +239,7 @@ impl PyLattice {
     }
 
     fn __repr__(&self) -> String {
-        format!("lefsim.Lattice(n_sites={}, n_ctcfs={})", self.0.len(), self.0.len() - self.0.n_plain())
+        format!("lefsim.Lattice(n_sites={}, n_ctcfs={})", self.0.len(), self.n_ctcfs())
     }
 }
 
@@ -351,9 +390,9 @@ impl PyWorld {
 /// A world with `n_lefs` LEFs placed one at a time by a spawn rule, exactly
 /// as respawns place them. `seed` drives only this placement.
 #[pyfunction]
-#[pyo3(signature = (lattice, n_lefs, *, seed = 0, rule = "uniform_non_ctcf"))]
-pub fn populate(lattice: &PyLattice, n_lefs: usize, seed: u64, rule: &str) -> PyResult<PyWorld> {
-    let rule = parse_rule(rule)?;
+#[pyo3(signature = (lattice, n_lefs, *, seed = 0, spawn_rule = "uniform_non_ctcf"))]
+pub fn populate(lattice: &PyLattice, n_lefs: usize, seed: u64, spawn_rule: &str) -> PyResult<PyWorld> {
+    let rule = parse_rule(spawn_rule)?;
     let world = lefsim::populate(lattice.0.clone(), n_lefs, &rule, seed).map_err(|e| value_error(e.to_string()))?;
     Ok(PyWorld(world))
 }
@@ -445,10 +484,10 @@ pub struct PyModel(pub lefsim::Model);
 #[pymethods]
 impl PyModel {
     #[new]
-    #[pyo3(signature = (world, rates = None, *, spawn = "uniform_non_ctcf"))]
-    fn new(world: &PyWorld, rates: Option<&PyRates>, spawn: &str) -> PyResult<Self> {
+    #[pyo3(signature = (world, rates = None, *, spawn_rule = "uniform_non_ctcf"))]
+    fn new(world: &PyWorld, rates: Option<&PyRates>, spawn_rule: &str) -> PyResult<Self> {
         let rates = rates.map_or_else(lefsim::Rates::default, |r| r.0);
-        let model = lefsim::Model::new(world.0.clone(), rates, parse_rule(spawn)?)
+        let model = lefsim::Model::new(world.0.clone(), rates, parse_rule(spawn_rule)?)
             .map_err(|e| value_error(e.to_string()))?;
         Ok(PyModel(model))
     }
@@ -470,7 +509,7 @@ impl PyModel {
 
     /// The spawn rule's name.
     #[getter]
-    fn spawn(&self) -> &'static str {
+    fn spawn_rule(&self) -> &'static str {
         rule_name(self.0.spawn())
     }
 
@@ -502,7 +541,7 @@ impl PyModel {
     fn __repr__(&self) -> String {
         let w = self.0.world();
         format!(
-            "lefsim.Model(n_sites={}, n_lefs={}, {}, spawn={:?})",
+            "lefsim.Model(n_sites={}, n_lefs={}, {}, spawn_rule={:?})",
             w.lattice().len(),
             w.n_lefs(),
             PyRates(self.0.rates()).__repr__().trim_start_matches("lefsim."),

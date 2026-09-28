@@ -34,12 +34,8 @@ config = {
 def make_sim(config):
     """The Sim that the TS `new Sim(config)` builds: LEFs placed with the
     seed, then run with the same seed."""
-    lattice = lefsim.Lattice(
-        config["nSites"],
-        ctcf_sites=config["ctcfSites"],
-        ctcf_captures_from=config["ctcfCapturesFrom"],
-        ctcf_strength=config["ctcfStrength"],
-    )
+    ctcfs = {"site": config["ctcfSites"], "captures_from": config["ctcfCapturesFrom"], "strength": config["ctcfStrength"]}
+    lattice = lefsim.Lattice(config["nSites"], ctcfs)
     rates = config["rates"]
     model = lefsim.Model(
         lefsim.populate(lattice, config["nLefs"], seed=config["seed"]),
@@ -53,7 +49,7 @@ sim.run_until(config["tEnd"])
 snap = pa.record_batch(sim.state())
 expected = {
     "time": sim.time,
-    "eventCount": sim.event_count,
+    "eventCount": sim.n_events,
     "nextEventTime": sim.next_event_time,
     "leftPos": snap["left_pos"].to_pylist(),
     "rightPos": snap["right_pos"].to_pylist(),
@@ -83,11 +79,12 @@ def describe(batch) -> dict:
         else:
             kind, dictionary = NEUTRAL[f.type], None
         fields.append({"name": f.name, "type": kind, "nullable": f.nullable, "dictionary": dictionary})
-    metadata = {k.decode(): v.decode() for k, v in (rb.schema.metadata or {}).items()}
+    # Sorted: the binding builds metadata from a hash map, so its order varies.
+    metadata = {k.decode(): v.decode() for k, v in sorted((rb.schema.metadata or {}).items())}
     return {"metadata": metadata, "fields": fields}
 
 
-small_lattice = lefsim.Lattice(200, ctcf_sites=[60, 140], ctcf_captures_from=["right", "left"])
+small_lattice = lefsim.Lattice(200, {"site": [60, 140], "captures_from": ["right", "left"]})
 small = lefsim.Sim(lefsim.Model(lefsim.populate(small_lattice, 4, seed=1)), seed=1)
 schemas = {
     "lattice": describe(small_lattice.to_arrow()),
@@ -108,7 +105,7 @@ print("wrote", out)
 ipc_config = {**config, "tEnd": 300.0, "chunkSize": 400}
 streamed = make_sim(ipc_config)
 reader = pa.RecordBatchReader.from_stream(
-    streamed.stream(ipc_config["tEnd"], events=True, keyframes=True, chunk_size=ipc_config["chunkSize"])
+    streamed.stream(ipc_config["tEnd"], events=True, keyframes=True, max_rows=ipc_config["chunkSize"])
 )
 out = HERE / "python_events.arrows"
 with pa.OSFile(str(out), "wb") as sink, pa.ipc.new_stream(sink, reader.schema) as writer:

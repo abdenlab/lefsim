@@ -49,7 +49,7 @@ fn main() {
     let (frames, report) = sim.collect_until(200.0, SampleMode::every_dt(10.0));
     println!(
         "\n{} events, {} snapshots, stopped: {:?}",
-        report.events,
+        report.n_events,
         frames.n_snapshots(),
         report.stopped
     );

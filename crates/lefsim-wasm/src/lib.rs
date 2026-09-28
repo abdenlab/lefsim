@@ -37,7 +37,7 @@ fn stop_name(stop: StopReason) -> &'static str {
 
 fn report_object(report: RunReport) -> Object {
     let obj = Object::new();
-    set(&obj, "eventsFired", report.events as f64);
+    set(&obj, "eventsFired", report.n_events as f64);
     set(&obj, "time", report.time);
     set(&obj, "stopped", stop_name(report.stopped));
     obj
@@ -370,7 +370,7 @@ impl WasmSim {
 
     /// Exact up to 2^53 events, which avoids BigInt on the JS side.
     pub fn event_count(&self) -> f64 {
-        self.sim.event_count() as f64
+        self.sim.n_events() as f64
     }
 
     pub fn next_event_time(&self) -> Option<f64> {

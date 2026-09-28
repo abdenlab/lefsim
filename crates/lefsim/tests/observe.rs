@@ -102,10 +102,10 @@ fn recording_does_not_perturb_the_run() {
     let mut events = EventRecorder::new();
     observed.run_until_with(t_end, &mut (&mut rec, &mut events));
 
-    assert_eq!(observed.event_count(), plain.event_count());
+    assert_eq!(observed.n_events(), plain.n_events());
     assert_eq!(observed.time(), plain.time());
     assert_eq!(state(&observed), state(&plain));
-    assert!(events.frames().n_rows() as u64 >= plain.event_count());
+    assert!(events.frames().n_rows() as u64 >= plain.n_events());
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn event_rows_match_actions() {
     let mut sim = build(9);
     let mut ev = EventRecorder::new();
     let report = sim.run_events_with(2000, &mut ev);
-    assert_eq!(report.events, 2000);
+    assert_eq!(report.n_events, 2000);
 
     let f = ev.frames();
     let step = Action::Step { leg: LegKey::default() }.code();
@@ -351,7 +351,7 @@ fn event_capped_chunks_record_the_same_as_one_run() {
     loop {
         let report = sim.run_until_with_limit(t_end, 37, &mut (&mut rec, &mut ev));
         chunks += 1;
-        assert!(report.events <= 37);
+        assert!(report.n_events <= 37);
         match report.stopped {
             StopReason::ReachedEventCount => continue,
             StopReason::ReachedTime => break,

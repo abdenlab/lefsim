@@ -29,10 +29,7 @@ RATES = lefsim.Rates(step=1.0, respawn=0.02, respawn_captured=0.005)
 def make_lattice(strength=0.8):
     """200 sites with a convergent CTCF pair plus an extra right-capturing CTCF."""
     return lefsim.Lattice(
-        200,
-        ctcf_sites=[60, 100, 140],
-        ctcf_captures_from=["right", "right", "left"],
-        ctcf_strength=strength,
+        200, {"site": [60, 100, 140], "captures_from": ["right", "right", "left"], "strength": strength}
     )
 
 
@@ -65,36 +62,46 @@ def test_lattice_properties_and_table():
 
 
 @pytest.mark.parametrize(
-    "kwargs, match",
+    "n_sites, ctcfs, match",
     [
-        (dict(n_sites=0), "at least one site"),
-        (dict(n_sites=10, ctcf_sites=[3]), "ctcf_captures_from is required"),
-        (dict(n_sites=10, ctcf_sites=[10], ctcf_captures_from="left"), "outside"),
-        (dict(n_sites=10, ctcf_sites=[3, 3], ctcf_captures_from="left"), "twice"),
-        (dict(n_sites=10, ctcf_sites=[3], ctcf_captures_from="up"), "'left' or 'right'"),
-        (dict(n_sites=10, ctcf_sites=[3, 4], ctcf_captures_from=["left"]), "1 entries"),
-        (dict(n_sites=10, ctcf_sites=[3], ctcf_captures_from="left", ctcf_strength=1.5), r"\[0, 1\]"),
+        (0, None, "at least one site"),
+        (10, {"site": [3]}, "missing column \"captures_from\""),
+        (10, {"captures_from": "left"}, "missing column \"site\""),
+        (10, {"site": [10], "captures_from": "left"}, "outside"),
+        (10, {"site": [3, 3], "captures_from": "left"}, "twice"),
+        (10, {"site": [3], "captures_from": "up"}, "'left' or 'right'"),
+        (10, {"site": [3, 4], "captures_from": ["left"]}, "1 entries"),
+        (10, {"site": [3], "captures_from": "left", "strength": 1.5}, r"\[0, 1\]"),
     ],
 )
-def test_lattice_errors(kwargs, match):
-    n_sites = kwargs.pop("n_sites")
+def test_lattice_errors(n_sites, ctcfs, match):
     with pytest.raises(ValueError, match=match):
-        lefsim.Lattice(n_sites, **kwargs)
+        lefsim.Lattice(n_sites, ctcfs)
 
 
-def test_captures_from_is_case_insensitive_and_broadcasts():
-    lattice = lefsim.Lattice(50, ctcf_sites=[10, 20], ctcf_captures_from="Right", ctcf_strength=0.5)
+def test_lattice_ctcfs_broadcast_and_default_strength():
+    lattice = lefsim.Lattice(50, {"site": [10, 20], "captures_from": "Right"})
     ctcfs = table(lattice.to_arrow())
     assert ctcfs["captures_from"].to_pylist() == ["Right", "Right"]
-    assert ctcfs["strength"].to_pylist() == [0.5, 0.5]
+    assert ctcfs["strength"].to_pylist() == [1.0, 1.0]
+    assert (lattice.n_sites, lattice.n_ctcfs, lattice.n_plain) == (50, 2, 48)
+
+
+def test_lattice_round_trips_through_arrow_tables():
+    lattice = make_lattice()
+    batch = lattice.to_arrow()
+    assert lefsim.Lattice(200, batch) == lattice
+    assert lefsim.Lattice(200, table(batch)) == lattice
+    assert lefsim.Lattice(200, pl.DataFrame(batch)) == lattice
+    assert lefsim.Lattice(200, table(batch).to_pandas()) == lattice
+    codes = pa.table({"site": pa.array([60], pa.uint32()), "captures_from": pa.array([1], pa.uint8())})
+    assert table(lefsim.Lattice(200, codes).to_arrow())["captures_from"].to_pylist() == ["Right"]
 
 
 def test_numpy_inputs_are_accepted():
     lattice = lefsim.Lattice(
         50,
-        ctcf_sites=np.array([10, 20]),
-        ctcf_captures_from=["left", "right"],
-        ctcf_strength=np.array([0.2, 0.9]),
+        {"site": np.array([10, 20]), "captures_from": ["left", "right"], "strength": np.array([0.2, 0.9])},
     )
     assert table(lattice.to_arrow())["site"].to_pylist() == [10, 20]
 
@@ -122,7 +129,7 @@ def test_populate_errors():
     with pytest.raises(ValueError, match="too many LEFs"):
         lefsim.populate(lefsim.Lattice(10), 6)
     with pytest.raises(ValueError, match="unknown spawn rule"):
-        lefsim.populate(lefsim.Lattice(10), 1, rule="anywhere")
+        lefsim.populate(lefsim.Lattice(10), 1, spawn_rule="anywhere")
 
 
 def test_world_from_a_dict_of_columns():
@@ -201,7 +208,7 @@ def test_model_parts():
     assert model.world == world
     assert model.lattice == world.lattice
     assert model.rates == RATES
-    assert model.spawn == "uniform_non_ctcf"
+    assert model.spawn_rule == "uniform_non_ctcf"
     assert lefsim.Model(world).rates == lefsim.Rates()
 
 
@@ -223,7 +230,7 @@ def test_model_checks_the_spawn_rule():
     with pytest.raises(ValueError, match="too many LEFs"):
         lefsim.Model(world)
     with pytest.raises(ValueError, match="unknown spawn rule"):
-        lefsim.Model(lefsim.World(lefsim.Lattice(4)), spawn="anywhere")
+        lefsim.Model(lefsim.World(lefsim.Lattice(4)), spawn_rule="anywhere")
 
 
 def test_model_json_round_trip_and_shape():
@@ -275,7 +282,7 @@ def test_from_dict_validates():
 def test_construction_and_properties():
     sim = make_sim(n_lefs=3)
     assert (sim.n_sites, sim.n_lefs, sim.n_legs) == (200, 3, 6)
-    assert sim.time == 0.0 and sim.event_count == 0
+    assert sim.time == 0.0 and sim.n_events == 0
     assert sim.next_event_time > 0
     assert sim.rates == RATES
     assert sim.model() == make_model(n_lefs=3)
@@ -299,7 +306,7 @@ def test_the_model_is_copied_in_and_read_back_as_the_current_state():
     assert now != model and now.world == sim.world()
     # Restarting from it continues from here.
     restarted = lefsim.Sim(now, seed=2, start_time=sim.time)
-    assert restarted.run_until(200.0).events_fired > 0
+    assert restarted.run_until(200.0).n_events > 0
 
 
 def test_copy_forks_the_run():
@@ -317,9 +324,9 @@ def test_run_reports():
     sim = make_sim()
     report = sim.run_until(10.0)
     assert (report.time, report.stopped) == (10.0, "reached_time")
-    assert report.events_fired == sim.event_count
+    assert report.n_events == sim.n_events
     report = sim.run_events(1000)
-    assert (report.events_fired, report.stopped) == (1000, "reached_event_count")
+    assert (report.n_events, report.stopped) == (1000, "reached_event_count")
     assert "RunReport" in repr(report)
 
 
@@ -360,16 +367,12 @@ def test_python_reproduces_the_rust_golden_stream():
     """Same run as crates/lefsim/tests/determinism.rs, hashed the same way
     from the Arrow output. Proves Python sees exactly the Rust trajectory."""
     sites = list(range(25, 500, 50))
-    lattice = lefsim.Lattice(
-        500,
-        ctcf_sites=sites,
-        ctcf_captures_from=["right" if i % 100 == 25 else "left" for i in sites],
-        ctcf_strength=0.7,
-    )
+    sides = ["right" if i % 100 == 25 else "left" for i in sites]
+    lattice = lefsim.Lattice(500, {"site": sites, "captures_from": sides, "strength": 0.7})
     world = lefsim.populate(lattice, 20, seed=0x5EED)
     model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=0.01, respawn_captured=0.002))
     rec = lefsim.Sim(model, seed=0x5EED).record_events(50_000, dt=5.0, events=True)
-    assert rec.events_fired == 50_000
+    assert rec.n_events == 50_000
 
     ev = pa.record_batch(rec.events)
     event_rows = np.zeros(
@@ -430,9 +433,9 @@ def test_consecutive_calls_continue_the_grid():
 def test_record_events_counts():
     sim = make_sim()
     rec = sim.record_events(1000, events=True)
-    assert rec.events_fired == 1000 and rec.stopped == "reached_event_count"
+    assert rec.n_events == 1000 and rec.stopped == "reached_event_count"
     assert rec.snapshots is None and rec.events.num_rows >= 1000
-    assert sim.event_count == 1000
+    assert sim.n_events == 1000
 
 
 def test_snapshot_chunks_tile_the_grid():
@@ -588,7 +591,7 @@ def test_wide_columns_reshape_to_snapshot_by_lef():
 
 def test_iterating_a_stream_matches_record_until():
     expected = make_sim(seed=9).record_until(200.0, dt=0.5).snapshots
-    stream = make_sim(seed=9).stream(200.0, dt=0.5, chunk_size=37)
+    stream = make_sim(seed=9).stream(200.0, dt=0.5, max_snapshots=37)
     batches = list(stream)
     assert stream.closed
     assert len(batches) > 5
@@ -598,7 +601,7 @@ def test_iterating_a_stream_matches_record_until():
 
 def test_event_stream_matches_record_until():
     expected = make_sim(seed=10).record_until(150.0, events=True).events
-    stream = make_sim(seed=10).stream(150.0, events=True, chunk_size=50)
+    stream = make_sim(seed=10).stream(150.0, events=True, max_rows=50)
     batches = list(stream)
     assert all(b.num_rows <= 50 for b in batches)
     assert pa.concat_tables(table(b) for b in batches).equals(table(expected))
@@ -607,7 +610,7 @@ def test_event_stream_matches_record_until():
 @pytest.mark.parametrize("consumer", ["pyarrow", "polars", "duckdb"])
 def test_stream_capsule_consumers(consumer):
     expected = table(make_sim(seed=11).record_until(100.0, dt=0.5).snapshots)
-    stream = make_sim(seed=11).stream(100.0, dt=0.5, chunk_size=64)
+    stream = make_sim(seed=11).stream(100.0, dt=0.5, max_snapshots=64)
     if consumer == "pyarrow":
         got = pa.RecordBatchReader.from_stream(stream).read_all()
     elif consumer == "polars":
@@ -646,7 +649,7 @@ def test_stream_continues_the_grid_of_earlier_calls():
     whole = table(make_sim(seed=12).record_until(40.0, dt=1.0).snapshots)
     sim = make_sim(seed=12)
     head = table(sim.record_until(15.0, dt=1.0).snapshots)
-    tail = pa.concat_tables(table(b) for b in sim.stream(40.0, dt=1.0, chunk_size=7))
+    tail = pa.concat_tables(table(b) for b in sim.stream(40.0, dt=1.0, max_snapshots=7))
     assert pa.concat_tables([head, tail]).equals(whole)
 
 
@@ -656,10 +659,12 @@ def test_stream_continues_the_grid_of_earlier_calls():
         (dict(), "exactly one"),
         (dict(dt=1.0, events=True), "exactly one"),
         (dict(dt=0.0), "dt must be positive"),
-        (dict(dt=1.0, chunk_size=0), "chunk_size"),
-        (dict(events=True, chunk_size=1), "at least 2"),
+        (dict(dt=1.0, max_snapshots=0), "max_snapshots must be positive"),
+        (dict(dt=1.0, max_rows=10), "max_rows applies to events"),
+        (dict(events=True, max_snapshots=10), "max_snapshots applies to dt"),
+        (dict(events=True, max_rows=1), "at least 2"),
         (dict(dt=1.0, keyframes=True), "requires events=True"),
-        (dict(events=True, keyframes=True, chunk_size=17), r"at least 18 with keyframes"),
+        (dict(events=True, keyframes=True, max_rows=17), r"at least 18 with keyframes"),
     ],
 )
 def test_stream_argument_errors(kwargs, match):
@@ -691,7 +696,7 @@ def test_keyframed_stream_reduces_to_the_plain_log():
     plain = table(plain_sim.record_until(300.0, events=True).events)
     n_legs = plain_sim.n_legs
 
-    stream = make_sim(seed=13).stream(300.0, events=True, keyframes=True, chunk_size=60)
+    stream = make_sim(seed=13).stream(300.0, events=True, keyframes=True, max_rows=60)
     batches = [table(b) for b in stream]
     assert len(batches) > 10
     for b in batches:
@@ -706,8 +711,8 @@ def test_keyframed_stream_reduces_to_the_plain_log():
 # ---------------------------------------------------------------- replayer
 
 
-def keyframed_stream(seed, t_end, chunk_size=100):
-    return make_sim(seed=seed).stream(t_end, events=True, keyframes=True, chunk_size=chunk_size)
+def keyframed_stream(seed, t_end, max_rows=100):
+    return make_sim(seed=seed).stream(t_end, events=True, keyframes=True, max_rows=max_rows)
 
 
 def live_worlds(seed, times):
@@ -766,7 +771,7 @@ def test_replayer_reads_any_arrow_source(tmp_path):
 
 
 def test_replayer_state_and_late_join():
-    batches = list(keyframed_stream(17, 300.0, chunk_size=80))
+    batches = list(keyframed_stream(17, 300.0, max_rows=80))
     r = lefsim.Replayer.from_arrow(batches[3:], make_lattice())
     first = table(batches[3])["time"][0].as_py()
     assert r.start == first and not r.ready
@@ -782,7 +787,7 @@ def test_replayer_state_and_late_join():
 
 
 def test_replayer_trim_before():
-    r = lefsim.Replayer.from_arrow(keyframed_stream(18, 300.0, chunk_size=60), make_lattice())
+    r = lefsim.Replayer.from_arrow(keyframed_stream(18, 300.0, max_rows=60), make_lattice())
     r.advance_to(250.0)
     r.trim_before(200.0)
     assert 0.0 < r.start <= 200.0
@@ -810,12 +815,8 @@ def test_replayer_reproduces_the_cross_language_fixture():
     import pyarrow.ipc as ipc
 
     config = json.loads((FIXTURES / "python_events.json").read_text())["config"]
-    lattice = lefsim.Lattice(
-        config["nSites"],
-        ctcf_sites=config["ctcfSites"],
-        ctcf_captures_from=config["ctcfCapturesFrom"],
-        ctcf_strength=config["ctcfStrength"],
-    )
+    ctcfs = {"site": config["ctcfSites"], "captures_from": config["ctcfCapturesFrom"], "strength": config["ctcfStrength"]}
+    lattice = lefsim.Lattice(config["nSites"], ctcfs)
     rates = config["rates"]
     model = lefsim.Model(
         lefsim.populate(lattice, config["nLefs"], seed=config["seed"]),

@@ -27,7 +27,7 @@ fn fingerprint() -> u64 {
     let mut rec = sim.recorder(SampleMode::every_dt(5.0));
     let mut ev = EventRecorder::new();
     let report = sim.run_events_with(50_000, &mut (&mut rec, &mut ev));
-    assert_eq!(report.events, 50_000);
+    assert_eq!(report.n_events, 50_000);
 
     let mut h: u64 = 0xcbf29ce484222325;
     let mut eat = |bytes: &[u8]| {

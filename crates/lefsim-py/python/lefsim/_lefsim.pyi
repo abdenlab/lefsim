@@ -32,21 +32,19 @@ class Batch:
 class Lattice:
     """A 1D lattice of ``n_sites`` sites, some of them CTCFs.
 
-    ``ctcf_captures_from`` says which side of each CTCF captures ("left" or
-    "right"); ``ctcf_strength`` is the probability, in [0, 1], that a landing
-    leg interacts with it. Both may be one value for all CTCFs.
+    ``ctcfs`` has one row per CTCF: ``site``, ``captures_from`` ("left" or
+    "right": the side that captures) and optionally ``strength`` (the
+    probability, in [0, 1], that a landing leg interacts; 1 by default).
+    Pass any Arrow table (pyarrow, polars, ``Lattice.to_arrow()``) or a dict
+    of columns, where ``captures_from`` and ``strength`` may be single values
+    for all CTCFs.
     """
 
-    def __init__(
-        self,
-        n_sites: int,
-        *,
-        ctcf_sites: Sequence[int] = (),
-        ctcf_captures_from: Union[Literal["left", "right"], Sequence[str], None] = None,
-        ctcf_strength: Union[float, Sequence[float], None] = None,
-    ) -> None: ...
+    def __init__(self, n_sites: int, ctcfs: Union[Mapping[str, Any], Any, None] = None) -> None: ...
     @property
     def n_sites(self) -> int: ...
+    @property
+    def n_ctcfs(self) -> int: ...
     @property
     def n_plain(self) -> int:
         """Number of non-CTCF sites."""
@@ -87,7 +85,7 @@ class World:
     @classmethod
     def from_json(cls, s: str) -> "World": ...
 
-def populate(lattice: Lattice, n_lefs: int, *, seed: int = 0, rule: SpawnRuleName = "uniform_non_ctcf") -> World:
+def populate(lattice: Lattice, n_lefs: int, *, seed: int = 0, spawn_rule: SpawnRuleName = "uniform_non_ctcf") -> World:
     """A world with ``n_lefs`` LEFs placed one at a time by a spawn rule,
     exactly as respawns place them. ``seed`` drives only this placement."""
 
@@ -124,7 +122,7 @@ class Model:
     document; loading checks everything construction does.
     """
 
-    def __init__(self, world: World, rates: Optional[Rates] = None, *, spawn: SpawnRuleName = "uniform_non_ctcf") -> None: ...
+    def __init__(self, world: World, rates: Optional[Rates] = None, *, spawn_rule: SpawnRuleName = "uniform_non_ctcf") -> None: ...
     @property
     def world(self) -> World: ...
     @property
@@ -132,7 +130,7 @@ class Model:
     @property
     def rates(self) -> Rates: ...
     @property
-    def spawn(self) -> SpawnRuleName: ...
+    def spawn_rule(self) -> SpawnRuleName: ...
     def to_dict(self) -> Any:
         """As plain Python data, in the same shape as the JSON."""
     @classmethod
@@ -144,7 +142,8 @@ class Model:
 class RunReport:
     """What a run did."""
 
-    events_fired: int
+    n_events: int
+    """Events fired by this call."""
     time: float
     stopped: Stopped
 
@@ -153,7 +152,8 @@ class Recording:
 
     snapshots: Optional[Batch]
     events: Optional[Batch]
-    events_fired: int
+    n_events: int
+    """Events fired by this call."""
     time: float
     stopped: Stopped
 
@@ -181,7 +181,8 @@ class Sim:
     @property
     def time(self) -> float: ...
     @property
-    def event_count(self) -> int: ...
+    def n_events(self) -> int:
+        """Total events fired so far."""
     @property
     def next_event_time(self) -> Optional[float]: ...
     @property
@@ -237,9 +238,12 @@ class Sim:
         events: bool = False,
         keyframes: bool = False,
         layout: Layout = "lef",
-        chunk_size: int = 10_000,
+        max_snapshots: Optional[int] = None,
+        max_rows: Optional[int] = None,
     ) -> Stream:
-        """Move this Sim into a lazy Arrow stream (pass ``dt`` or ``events=True``)."""
+        """Move this Sim into a lazy Arrow stream: pass ``dt`` (batches of at
+        most ``max_snapshots`` snapshots) or ``events=True`` (about
+        ``max_rows`` rows). Both default to 10,000."""
 
 class Replayer:
     """Rebuilds the state of a run at any recorded time from a keyframed
