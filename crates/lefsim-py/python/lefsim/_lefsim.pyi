@@ -167,7 +167,7 @@ class Stream:
     @property
     def time(self) -> float:
         """The time the batches read so far describe the run through."""
-    def to_parquet(self, path: Any) -> None:
+    def to_parquet(self, path: Any, *, compression: str = "zstd") -> None:
         """Write a keyframed event stream to Parquet, one row group per batch,
         with ``lefsim.model``, ``lefsim.run`` (actual ``record_end``) and
         ``lefsim.row_groups = "keyframed"`` in the footer. Requires pyarrow."""

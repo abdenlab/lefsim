@@ -776,6 +776,8 @@ def test_to_parquet_writes_one_keyframed_row_group_per_chunk(tmp_path):
 
     f = pq.ParquetFile(path)
     meta = f.metadata.metadata  # the footer's key-value metadata
+    time_column = f.metadata.row_group(0).column(0)
+    assert time_column.compression == "ZSTD" and "BYTE_STREAM_SPLIT" in time_column.encodings
     run = json.loads(meta[b"lefsim.run"])
     assert (run["record_start"], run["record_end"]) == (30.0, 300.0)
     assert meta[b"lefsim.row_groups"] == b"keyframed"
@@ -894,6 +896,15 @@ def test_from_parquet_falls_back_for_other_files(tmp_path):
     assert r.world_at(150.0) == live_worlds(26, [150.0])[0]
     with pytest.raises(ValueError, match="reads its own data"):
         lefsim.Replayer.from_parquet(write_run(tmp_path, 27)).push(events)
+
+
+def test_to_parquet_compression_is_an_option(tmp_path):
+    import pyarrow.parquet as pq
+
+    path = tmp_path / "snappy.parquet"
+    make_sim().stream(50.0, events=True, keyframes=True).to_parquet(path, compression="snappy")
+    assert pq.ParquetFile(path).metadata.row_group(0).column(0).compression == "SNAPPY"
+    assert lefsim.Replayer.from_parquet(path).world_at(40.0) == live_worlds(1, [40.0])[0]
 
 
 def test_to_parquet_takes_only_keyframed_event_streams(tmp_path):

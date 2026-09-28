@@ -187,8 +187,11 @@ impl PyStream {
     /// and `lefsim.run`, with `record_end` set to where the data actually
     /// ends (if writing stops early, e.g. on Ctrl-C, the file is still
     /// valid up to there), and `lefsim.row_groups = "keyframed"`.
+    /// `compression` is any codec pyarrow writes; the default, zstd, and
+    /// snappy are also readable by the TS package's `lefsim/parquet`.
     /// Requires pyarrow. Consumes the stream.
-    fn to_parquet(slf: &Bound<'_, Self>, path: &Bound<'_, PyAny>) -> PyResult<()> {
+    #[pyo3(signature = (path, *, compression = "zstd"))]
+    fn to_parquet(slf: &Bound<'_, Self>, path: &Bound<'_, PyAny>, compression: &str) -> PyResult<()> {
         {
             let me = slf.borrow();
             if !me.keyframed {
@@ -201,7 +204,7 @@ impl PyStream {
                 return Err(PyIOError::new_err("stream was already read"));
             }
         }
-        slf.py().import("lefsim._parquet")?.call_method1("write_stream", (slf, path))?;
+        slf.py().import("lefsim._parquet")?.call_method1("write_stream", (slf, path, compression))?;
         Ok(())
     }
 

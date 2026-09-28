@@ -139,7 +139,8 @@ fn row_group_starts(file: &Bound<'_, PyAny>) -> PyResult<Option<Vec<Time>>> {
         if stats.is_none() || !stats.getattr("has_min_max")?.extract::<bool>()? {
             return Ok(None);
         }
-        starts.push(stats.getattr("min")?.extract::<f64>()?);
+        // Parquet writes a zero float minimum as -0.0; `+ 0.0` makes it +0.0.
+        starts.push(stats.getattr("min")?.extract::<f64>()? + 0.0);
     }
     Ok(Some(starts))
 }
