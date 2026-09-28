@@ -5,7 +5,7 @@
  * tell whether it's watching a local simulation or a recorded/streamed one.
  */
 
-import { KEYFRAME, type DeltaChunk, type Lattice, type LiveState, type World } from "./types.ts";
+import { KEYFRAME, type DeltaChunk, type Lattice, type LiveState, type SnapshotColumns, type World } from "./types.ts";
 
 interface KeyframeRef {
   chunk: number;
@@ -37,6 +37,8 @@ export class Replayer {
   #rightPos: Uint32Array;
   #leftMob: Uint8Array;
   #rightMob: Uint8Array;
+  /** The grid of the last `snapshots` call and its next index; cleared by a seek. */
+  #grid: { dt: number; t0: number; next: number } | null = null;
 
   /** A replayer for a run on `lattice` with `nLefs` LEFs. */
   constructor(lattice: Lattice, nLefs: number) {
@@ -141,7 +143,62 @@ export class Replayer {
     this.#applyThrough(target);
     this.#ready = true;
     this.#time = target;
+    this.#grid = null;
     return target;
+  }
+
+  /**
+   * Snapshots on the grid `t0 + k * dt` from `tStart` (default: the current
+   * time, or the first keyframe if not ready) through `tEnd` (default:
+   * {@link Replayer.end}): the same columns `Sim.recordUntil(tEnd, { dt })`
+   * records. Leaves the replayer at the last grid point. Like a recording,
+   * consecutive calls on the same grid continue it without repeating a
+   * point; a seek starts afresh.
+   */
+  snapshots(dt: number, options: { t0?: number; tStart?: number; tEnd?: number } = {}): SnapshotColumns {
+    const t0 = options.t0 ?? 0;
+    if (!(Number.isFinite(dt) && dt > 0)) throw new RangeError(`dt must be positive and finite, got ${dt}`);
+    if (!Number.isFinite(t0)) throw new RangeError(`t0 must be finite, got ${t0}`);
+    if (options.tStart !== undefined) this.seek(options.tStart);
+    const tEnd = options.tEnd ?? this.#end;
+    if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
+
+    const from = this.#ready ? this.#time : this.start;
+    const times: number[] = [];
+    let next: number | null = null;
+    if (from !== null) {
+      // Grid points are `t0 + k * dt`, computed exactly as a recording
+      // computes them, so the two agree bit for bit.
+      const point = (k: number) => t0 + k * dt;
+      let k = Math.max(0, Math.ceil((from - t0) / dt));
+      while (k > 0 && point(k - 1) >= from) k--;
+      while (point(k) < from) k++;
+      const g = this.#grid;
+      if (g && g.dt === dt && g.t0 === t0) k = Math.max(k, g.next);
+      const last = Math.min(tEnd, this.#end);
+      for (; point(k) <= last; k++) times.push(point(k));
+      next = k;
+    }
+
+    const n = this.nLefs;
+    const out: SnapshotColumns = {
+      nLefs: n,
+      time: Float64Array.from(times),
+      leftPos: new Uint32Array(times.length * n),
+      rightPos: new Uint32Array(times.length * n),
+      leftMobility: new Uint8Array(times.length * n),
+      rightMobility: new Uint8Array(times.length * n),
+    };
+    times.forEach((t, s) => {
+      this.advanceTo(t);
+      out.leftPos.set(this.#leftPos, s * n);
+      out.rightPos.set(this.#rightPos, s * n);
+      out.leftMobility.set(this.#leftMob, s * n);
+      out.rightMobility.set(this.#rightMob, s * n);
+    });
+    // After the loop: its first advance may seek, which clears the grid.
+    if (next !== null) this.#grid = { dt, t0, next };
+    return out;
   }
 
   /**

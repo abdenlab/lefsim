@@ -141,6 +141,29 @@ describe("Replayer", () => {
     expect(copy(r.state())).toEqual(reference(2, [10]).get(10));
   });
 
+  it("snapshots(dt) decodes to the grid a recording would have taken", () => {
+    using sim = make(2);
+    const rec = sim.recordUntil(T, { dt: 0.37 }).snapshots!;
+    const r = new Replayer(LATTICE, OPTIONS.nLefs!);
+    for (const c of chunks) r.push(c);
+    expect(r.snapshots(0.37)).toEqual(rec);
+
+    // In pieces: each call continues the grid, whether or not it ends on a point.
+    const pieces = new Replayer(LATTICE, OPTIONS.nLefs!);
+    for (const c of chunks) pieces.push(c);
+    const parts = [0, 0.37 * 40, 100, 100, 222.2, T].map((tEnd) => pieces.snapshots(0.37, { tEnd }));
+    const concat = (key: "time" | "leftPos" | "rightMobility") =>
+      parts.flatMap((p) => Array.from(p[key] as ArrayLike<number>));
+    for (const key of ["time", "leftPos", "rightMobility"] as const) {
+      expect(concat(key)).toEqual(Array.from(rec[key] as ArrayLike<number>));
+    }
+
+    // tStart seeks, starting the grid afresh from there.
+    const again = r.snapshots(0.37, { tStart: 0.5, tEnd: 1 });
+    expect(Array.from(again.time)).toEqual([0.74]);
+    expect(() => r.snapshots(0)).toThrow(/dt/);
+  });
+
   it("world() is the state at its time, ready to branch a new run from", () => {
     const r = new Replayer(LATTICE, OPTIONS.nLefs!);
     for (const c of chunks) r.push(c);

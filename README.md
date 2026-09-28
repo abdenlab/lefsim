@@ -425,7 +425,9 @@ and a `Replayer` rebuilds live state from them in plain TypeScript, with no wasm
 Its `state()` has the same shape as `Sim.state()`, so a renderer doesn't care
 whether it's watching a local sim or replaying recorded or streamed data.
 `advanceTo(t)` moves forward and stops at the end of the data received so far.
-`seek(t)` jumps anywhere by restoring the nearest keyframe.
+`seek(t)` jumps anywhere by restoring the nearest keyframe. `snapshots(dt)`
+decodes the log to a time grid, the same columns `recordUntil(tEnd, { dt })`
+would have recorded.
 
 ```ts
 const replayer = new Replayer(sim.lattice, sim.nLefs);
