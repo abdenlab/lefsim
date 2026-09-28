@@ -780,6 +780,12 @@ def test_to_parquet_writes_one_keyframed_row_group_per_chunk(tmp_path):
     assert (run["record_start"], run["record_end"]) == (30.0, 300.0)
     assert meta[b"lefsim.row_groups"] == b"keyframed"
     assert lefsim.Model.from_json(meta[b"lefsim.model"].decode()) == make_model(seed=22)
+    # The schema's view (the stream's metadata when writing began) has the
+    # same model and marker; its run info has the requested end.
+    view = f.schema_arrow.metadata
+    assert view[b"lefsim.model"] == meta[b"lefsim.model"]
+    assert view[b"lefsim.row_groups"] == b"keyframed"
+    assert json.loads(view[b"lefsim.run"])["record_end"] == 300.0
 
     # Each row group is one chunk and opens with a full keyframe.
     fresh = make_sim(seed=22)
@@ -811,6 +817,8 @@ def test_an_interrupted_write_leaves_a_valid_file(tmp_path):
     run = json.loads(f.metadata.metadata[b"lefsim.run"])
     last_row = f.read_row_group(f.num_row_groups - 1)["time"].to_pylist()[-1]
     assert f.num_row_groups > 0 and last_row <= run["record_end"] < float("inf")
+    # The schema's view still has what the stream asked for: no end.
+    assert json.loads(f.schema_arrow.metadata[b"lefsim.run"])["record_end"] is None
 
 
 def write_run(tmp_path, seed, t_end=400.0, record_from=0.0, max_rows=80):

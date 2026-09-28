@@ -15,14 +15,17 @@ def write_stream(stream, path):
 
     schema = pa.schema(stream)
     run = json.loads(schema.metadata[b"lefsim.run"])
+    # The layout marker goes in at the start, with the rest of the metadata,
+    # so the file's stored notes and its schema's notes agree.
+    schema = schema.with_metadata({**schema.metadata, b"lefsim.row_groups": b"keyframed"})
     with pq.ParquetWriter(path, schema) as writer:
         try:
             for batch in stream:
-                batch = pa.record_batch(batch)
+                batch = pa.record_batch(batch).replace_schema_metadata(schema.metadata)
                 if batch.num_rows:
                     writer.write_batch(batch, row_group_size=batch.num_rows)
         finally:
             # Where the data actually ends: the requested end if the stream
             # ran to completion, otherwise the end of the last batch written.
             run["record_end"] = stream.time
-            writer.add_key_value_metadata({"lefsim.run": json.dumps(run), "lefsim.row_groups": "keyframed"})
+            writer.add_key_value_metadata({"lefsim.run": json.dumps(run)})
