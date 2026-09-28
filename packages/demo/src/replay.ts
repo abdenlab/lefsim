@@ -10,7 +10,7 @@
 
 import { init, iterate, Replayer, Sim } from "lefsim";
 
-import { N_SITES, options, readRunInputs } from "./model.ts";
+import { N_SITES, newSim, readRunInputs } from "./model.ts";
 import { $, fmt, fmtCompact, Kymograph, LoopView, onThemeChange, snapshotOf, type Frame } from "./render.ts";
 
 /** Length of each recorded run, in simulation time units. */
@@ -73,8 +73,8 @@ async function recordRun() {
     `${nLefs} loop extruders on a ${fmt.format(N_SITES)}-site lattice, recorded in your browser as ` +
     `keyframed event chunks and replayed. The panels are drawn by the live page's code, from a ` +
     `Replayer instead of a Sim.`;
-  const sim = new Sim(options(nLefs, seed));
-  const r = new Replayer(sim.nLefs);
+  const sim = newSim(nLefs, seed);
+  const r = new Replayer(sim.lattice, sim.nLefs);
   replayer = r;
   recording = true;
   chunks = 0;
@@ -86,7 +86,7 @@ async function recordRun() {
   kymograph.reset();
   updateRecording();
   try {
-    for await (const chunk of iterate(sim.stream(T_END, { events: true, chunkSize: CHUNK_ROWS }))) {
+    for await (const chunk of iterate(sim.stream(T_END, { events: true, maxRows: CHUNK_ROWS }))) {
       if (generation !== recordGeneration) break; // a new run started: breaking cancels the stream
       r.push(chunk);
       chunks++;

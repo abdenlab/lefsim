@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { KEYFRAME, MOBILITY, Replayer, Sim, type DeltaChunk, type LiveState, type SimOptions } from "../src/index.ts";
+import { createLattice, createModel, KEYFRAME, MOBILITY, Replayer, Sim, type DeltaChunk, type LiveState } from "../src/index.ts";
+import { makeSim, type Setup } from "./helpers.ts";
 
 const EVICTED = MOBILITY.indexOf("Evicted");
 
-const OPTIONS: SimOptions = {
+const OPTIONS: Setup = {
   nSites: 200,
   ctcfs: [
     { site: 60, capturesFrom: "right", strength: 0.9 },
@@ -15,7 +16,9 @@ const OPTIONS: SimOptions = {
   rates: { step: 1, respawn: 0.02, respawnCaptured: 0.005 },
 };
 
-const make = (seed: number) => new Sim({ ...OPTIONS, seed });
+const LATTICE = createLattice(OPTIONS.nSites, OPTIONS.ctcfs);
+
+const make = (seed: number) => makeSim({ ...OPTIONS, seed });
 
 /** Record a run to `tEnd` as keyframed chunks. */
 function record(seed: number, tEnd: number, maxRows: number): DeltaChunk[] {
@@ -27,6 +30,13 @@ function record(seed: number, tEnd: number, maxRows: number): DeltaChunk[] {
     if (chunk.stopped !== "recorder_full") return chunks;
   }
 }
+
+const copyTyped = (s: LiveState) => ({
+  leftPos: s.leftPos.slice(),
+  rightPos: s.rightPos.slice(),
+  leftMobility: s.leftMobility.slice(),
+  rightMobility: s.rightMobility.slice(),
+});
 
 const copy = (s: LiveState) => ({
   leftPos: Array.from(s.leftPos),
@@ -93,7 +103,7 @@ describe("Replayer", () => {
   const ref = reference(2, times);
 
   it("reproduces the live sim at every time, advancing forward", () => {
-    const r = new Replayer(OPTIONS.nLefs!);
+    const r = new Replayer(LATTICE, OPTIONS.nLefs!);
     for (const c of chunks) r.push(c);
     expect(r.start).toBe(0);
     expect(r.end).toBe(T);
@@ -104,7 +114,7 @@ describe("Replayer", () => {
   });
 
   it("jumps forward any distance, including onto keyframe times", () => {
-    const r = new Replayer(OPTIONS.nLefs!);
+    const r = new Replayer(LATTICE, OPTIONS.nLefs!);
     for (const c of chunks) r.push(c);
     const starts = chunks.map((c) => c.time[0]!);
     const jumps = [0.5, 0.9, starts[3]!, starts[3]! + 0.1, starts[9]!, 250, starts.at(-2)!, T].sort((a, b) => a - b);
@@ -116,7 +126,7 @@ describe("Replayer", () => {
   });
 
   it("seeks to any time in any order", () => {
-    const r = new Replayer(OPTIONS.nLefs!);
+    const r = new Replayer(LATTICE, OPTIONS.nLefs!);
     for (const c of chunks) r.push(c);
     // A fixed pseudo-random order, so the test is deterministic.
     const order = [...times].sort((a, b) => ((a * 7919) % 101) - ((b * 7919) % 101));
@@ -131,9 +141,20 @@ describe("Replayer", () => {
     expect(copy(r.state())).toEqual(reference(2, [10]).get(10));
   });
 
+  it("world() is the state at its time, ready to branch a new run from", () => {
+    const r = new Replayer(LATTICE, OPTIONS.nLefs!);
+    for (const c of chunks) r.push(c);
+    const world = r.worldAt(250);
+    expect(world.lattice).toBe(LATTICE);
+    expect({ time: 250, ...world.lefs }).toEqual({ time: 250, ...copyTyped(r.state()) });
+    using branch = new Sim(createModel(world, OPTIONS.rates), { seed: 99, startTime: r.time });
+    expect(branch.time).toBe(250);
+    expect(branch.runUntil(300).nEvents).toBeGreaterThan(0);
+  });
+
   it("can join late, from any chunk", () => {
     for (const k of [1, Math.floor(chunks.length / 2), chunks.length - 1]) {
-      const r = new Replayer(OPTIONS.nLefs!);
+      const r = new Replayer(LATTICE, OPTIONS.nLefs!);
       for (const c of chunks.slice(k)) r.push(c);
       const start = chunks[k]!.time[0]!;
       expect(r.start).toBe(start);
@@ -148,7 +169,7 @@ describe("Replayer", () => {
   });
 
   it("stops at the end of the data (buffering) and resumes when more arrives", () => {
-    const r = new Replayer(OPTIONS.nLefs!);
+    const r = new Replayer(LATTICE, OPTIONS.nLefs!);
     const half = Math.floor(chunks.length / 2);
     for (const c of chunks.slice(0, half)) r.push(c);
     const end = r.end;
@@ -161,7 +182,7 @@ describe("Replayer", () => {
   });
 
   it("is not ready until a keyframe is applied, and skips rows before one", () => {
-    const r = new Replayer(OPTIONS.nLefs!);
+    const r = new Replayer(LATTICE, OPTIONS.nLefs!);
     expect(r.ready).toBe(false);
     expect(() => r.state()).toThrow(/no keyframe/);
     // A chunk with its keyframe stripped can't be decoded on its own...
@@ -187,7 +208,7 @@ describe("Replayer", () => {
   });
 
   it("trimBefore drops old chunks but keeps later seeks working", () => {
-    const r = new Replayer(OPTIONS.nLefs!);
+    const r = new Replayer(LATTICE, OPTIONS.nLefs!);
     for (const c of chunks) r.push(c);
     r.advanceTo(T);
     const cut = 300;
@@ -203,7 +224,7 @@ describe("Replayer", () => {
 
   it("never shows an Evicted leg in a keyframe", () => {
     const strong = { ...OPTIONS, ctcfs: (OPTIONS.ctcfs as { site: number; capturesFrom: "left" | "right" }[]).map((c) => ({ ...c, strength: 1 })) };
-    using sim = new Sim({ ...strong, seed: 3 });
+    using sim = makeSim({ ...strong, seed: 3 });
     let evictions = 0;
     for (;;) {
       const c = sim.recordEventChunk(3000, { maxRows: 2 * sim.nLefs + 4 });
@@ -220,11 +241,11 @@ describe("Replayer", () => {
   });
 
   it("validates chunks", () => {
-    const r = new Replayer(2);
+    const r = new Replayer(LATTICE, 2);
     const bad = { ...chunks[0]!, legId: chunks[0]!.legId.subarray(1) };
     expect(() => r.push(bad)).toThrow(/equal length/);
     expect(() => r.push(chunks[0]!)).toThrow(/expected 4/); // 8 LEFs' keyframe into a 2-LEF replayer
-    const ok = new Replayer(OPTIONS.nLefs!);
+    const ok = new Replayer(LATTICE, OPTIONS.nLefs!);
     ok.push(chunks[1]!);
     expect(() => ok.push(chunks[0]!)).toThrow(/precede/);
   });

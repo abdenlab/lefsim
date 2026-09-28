@@ -6,10 +6,10 @@
 export const MOBILITY = ["Moving", "Captured", "Evicted"] as const;
 export type Mobility = (typeof MOBILITY)[number];
 
-/** Direction names, indexed by the codes in {@link Meta} `capturesFrom` / `facing`. */
+/** Direction names, indexed by the codes in {@link Ctcfs} `capturesFrom`. */
 export const DIRECTION = ["Left", "Right"] as const;
 
-/** Site-kind names, indexed by the codes in {@link Meta} `lattice.kind`. */
+/** Site-kind names, indexed by the core's site-kind codes. */
 export const SITE_KIND = ["Plain", "Ctcf"] as const;
 
 /** Row-kind names, indexed by the codes in a {@link DeltaChunk}'s `kind`. */
@@ -74,8 +74,14 @@ export interface SnapshotColumns {
 export interface SnapshotChunk extends SnapshotColumns {
   /** The sim's time after the call. */
   end: number;
-  stopped: "reached_time" | "reached_event_count" | "exhausted" | "recorder_full";
+  stopped: StopReason;
 }
+
+/**
+ * Why a run call returned. `"recorder_full"` comes only from the chunk
+ * methods and streams: the chunk filled first; call again for the next.
+ */
+export type StopReason = "reached_time" | "reached_event_count" | "exhausted" | "recorder_full";
 
 export interface Rates {
   /** Step rate of a moving, unblocked leg. */
@@ -86,12 +92,42 @@ export interface Rates {
   respawnCaptured: number;
 }
 
-/** Static tables describing a run. Categorical columns hold codes. */
-export interface Meta {
-  nSites: number;
-  rates: Rates;
-  lattice: { kind: Uint8Array };
-  ctcfs: { site: Uint32Array; capturesFrom: Uint8Array; strength: Float64Array };
-  lefs: { leftLegId: Uint32Array; rightLegId: Uint32Array };
-  legs: { lefId: Uint32Array; facing: Uint8Array };
+/** The built-in spawn rules: where a LEF lands when it (re)spawns. */
+export type SpawnRule = "uniform_non_ctcf";
+
+/** A lattice's CTCFs as columns. `capturesFrom` holds {@link DIRECTION} codes. */
+export interface Ctcfs {
+  site: Uint32Array;
+  capturesFrom: Uint8Array;
+  strength: Float64Array;
+}
+
+/** A 1D lattice: its size and its CTCFs. Create with `createLattice`. */
+export interface Lattice {
+  readonly nSites: number;
+  readonly ctcfs: Ctcfs;
+}
+
+/**
+ * The LEF table: one row per LEF, row `i` being LEF `i`. Mobility columns
+ * hold {@link MOBILITY} codes. The same columns as a {@link LiveState}.
+ */
+export interface Lefs {
+  leftPos: Uint32Array;
+  rightPos: Uint32Array;
+  leftMobility: Uint8Array;
+  rightMobility: Uint8Array;
+}
+
+/** The state of a simulation at one moment. Create with `createWorld` or `populate`. */
+export interface World {
+  readonly lattice: Lattice;
+  readonly lefs: Lefs;
+}
+
+/** A complete model: everything a run needs except a seed. Create with `createModel`. */
+export interface Model {
+  readonly world: World;
+  readonly rates: Rates;
+  readonly spawnRule: SpawnRule;
 }

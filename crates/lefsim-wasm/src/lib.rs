@@ -17,7 +17,7 @@
 use js_sys::{Float64Array, Object, Reflect, Uint32Array, Uint8Array};
 use lefsim::{
     Ctcf, Direction, EventFrames, EventRecorder, Lattice, LefFrames, LefStates, Mobility, Model, Rates, Recorder, RunReport,
-    SampleMode, SpawnRule, StopReason,
+    SampleMode, SpawnRule, StopReason, World,
 };
 use wasm_bindgen::prelude::*;
 
@@ -37,7 +37,7 @@ fn stop_name(stop: StopReason) -> &'static str {
 
 fn report_object(report: RunReport) -> Object {
     let obj = Object::new();
-    set(&obj, "eventsFired", report.n_events as f64);
+    set(&obj, "nEvents", report.n_events as f64);
     set(&obj, "time", report.time);
     set(&obj, "stopped", stop_name(report.stopped));
     obj
@@ -57,15 +57,6 @@ fn event_budget(n: f64) -> Result<u64, JsError> {
 /// throwing.
 const MAX_CHUNK_ROWS: u32 = 10_000_000;
 
-fn positive_rate(name: &str, value: Option<f64>, default: f64) -> Result<f64, JsError> {
-    let rate = value.unwrap_or(default);
-    if !(rate.is_finite() && rate > 0.0) {
-        return Err(JsError::new(&format!("{name} must be positive and finite, got {rate}")));
-    }
-    Ok(rate)
-}
-
-/// Contiguous per-LEF copies of the live state, for zero-copy JS views.
 /// A simulation. See the `lefsim` TypeScript package for the documented API.
 #[wasm_bindgen]
 pub struct WasmSim {
@@ -111,29 +102,160 @@ fn event_columns(frames: EventFrames) -> Object {
     out
 }
 
-/// A world with a moving LEF at each of `lef_sites`, then `n_lefs` more
-/// placed by the uniform spawn rule. With no explicit sites, that's
-/// [`lefsim::populate`]; mixing the two goes away with the new constructor.
-fn initial_world(lattice: Lattice, lef_sites: &[u32], n_lefs: usize, seed: u64) -> Result<lefsim::World, String> {
-    use lefsim::{Mobility::Moving, Spawn};
-    use rand::SeedableRng;
+fn js_err(e: impl std::fmt::Display) -> JsError {
+    JsError::new(&e.to_string())
+}
 
-    let rule = SpawnRule::UniformNonCtcf;
-    if lef_sites.is_empty() {
-        return lefsim::populate(lattice, n_lefs, &rule, seed).map_err(|e| e.to_string());
+/// A lattice from its size and CTCF columns (`side` holds `Direction` codes).
+fn lattice_from(n_sites: u32, site: &[u32], side: &[u8], strength: &[f64]) -> Result<Lattice, JsError> {
+    if side.len() != site.len() || strength.len() != site.len() {
+        return Err(JsError::new("CTCF site, side and strength arrays must have equal length"));
     }
-    rule.check(&lattice, lef_sites.len() + n_lefs).map_err(|e| e.to_string())?;
-    let mut world = lefsim::World::new(lattice);
-    for &p in lef_sites {
-        world.add_lef((p, Moving), (p, Moving)).map_err(|e| e.to_string())?;
+    let ctcfs = (0..site.len())
+        .map(|i| {
+            let captures_from = match side[i] {
+                0 => Direction::Left,
+                1 => Direction::Right,
+                other => return Err(JsError::new(&format!("invalid CTCF side code {other}"))),
+            };
+            Ok(Ctcf { site: site[i], captures_from, strength: strength[i] })
+        })
+        .collect::<Result<Vec<_>, JsError>>()?;
+    Lattice::with_ctcfs(n_sites as usize, &ctcfs).map_err(js_err)
+}
+
+/// A LEF table from its columns (mobility as `Mobility` codes). Column
+/// lengths are checked by `World::from_lef_states`.
+fn lefs_from(left_pos: &[u32], right_pos: &[u32], left_mob: &[u8], right_mob: &[u8]) -> Result<LefStates, JsError> {
+    let mobility = |codes: &[u8]| {
+        codes
+            .iter()
+            .map(|&c| Mobility::from_code(c).ok_or_else(|| JsError::new(&format!("invalid mobility code {c}"))))
+            .collect::<Result<Vec<_>, JsError>>()
+    };
+    Ok(LefStates {
+        left_pos: left_pos.to_vec(),
+        right_pos: right_pos.to_vec(),
+        left_mobility: mobility(left_mob)?,
+        right_mobility: mobility(right_mob)?,
+    })
+}
+
+fn rule_from(name: &str) -> Result<SpawnRule, JsError> {
+    match name {
+        "uniform_non_ctcf" => Ok(SpawnRule::UniformNonCtcf),
+        _ => Err(JsError::new(&format!("unknown spawn rule {name:?} (available: \"uniform_non_ctcf\")"))),
     }
-    let mut rng = lefsim::SimRng::seed_from_u64(seed);
-    for _ in 0..n_lefs {
-        // The uniform rule only picks plain sites, where landing is Moving.
-        let p = rule.sample(&world, &mut rng);
-        world.add_lef((p, Moving), (p, Moving)).map_err(|e| e.to_string())?;
-    }
-    Ok(world)
+}
+
+/// `{leftPos, rightPos, leftMobility, rightMobility}`, copied.
+fn lefs_object(lefs: &LefStates) -> Object {
+    let out = Object::new();
+    set(&out, "leftPos", Uint32Array::from(&lefs.left_pos[..]));
+    set(&out, "rightPos", Uint32Array::from(&lefs.right_pos[..]));
+    set(&out, "leftMobility", Uint8Array::from(Mobility::as_codes(&lefs.left_mobility)));
+    set(&out, "rightMobility", Uint8Array::from(Mobility::as_codes(&lefs.right_mobility)));
+    out
+}
+
+#[allow(clippy::too_many_arguments)]
+fn model_from(
+    n_sites: u32,
+    site: &[u32],
+    side: &[u8],
+    strength: &[f64],
+    left_pos: &[u32],
+    right_pos: &[u32],
+    left_mob: &[u8],
+    right_mob: &[u8],
+    step: f64,
+    respawn: f64,
+    respawn_captured: f64,
+    spawn_rule: &str,
+) -> Result<Model, JsError> {
+    let lattice = lattice_from(n_sites, site, side, strength)?;
+    let lefs = lefs_from(left_pos, right_pos, left_mob, right_mob)?;
+    let world = World::from_lef_states(lattice, &lefs).map_err(js_err)?;
+    let rates = Rates { step, respawn, respawn_captured };
+    Model::new(world, rates, rule_from(spawn_rule)?).map_err(js_err)
+}
+
+// ----- validation and construction outside a sim -----
+
+/// Throws unless the lattice is valid.
+#[wasm_bindgen]
+pub fn check_lattice(n_sites: u32, site: &[u32], side: &[u8], strength: &[f64]) -> Result<(), JsError> {
+    lattice_from(n_sites, site, side, strength).map(|_| ())
+}
+
+/// Throws unless the LEFs make a valid world on the lattice.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn check_world(
+    n_sites: u32,
+    site: &[u32],
+    side: &[u8],
+    strength: &[f64],
+    left_pos: &[u32],
+    right_pos: &[u32],
+    left_mob: &[u8],
+    right_mob: &[u8],
+) -> Result<(), JsError> {
+    let lattice = lattice_from(n_sites, site, side, strength)?;
+    let lefs = lefs_from(left_pos, right_pos, left_mob, right_mob)?;
+    World::from_lef_states(lattice, &lefs).map(|_| ()).map_err(js_err)
+}
+
+/// Throws unless the world, rates and spawn rule make a valid model.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn check_model(
+    n_sites: u32,
+    site: &[u32],
+    side: &[u8],
+    strength: &[f64],
+    left_pos: &[u32],
+    right_pos: &[u32],
+    left_mob: &[u8],
+    right_mob: &[u8],
+    step: f64,
+    respawn: f64,
+    respawn_captured: f64,
+    spawn_rule: &str,
+) -> Result<(), JsError> {
+    model_from(n_sites, site, side, strength, left_pos, right_pos, left_mob, right_mob, step, respawn, respawn_captured, spawn_rule)
+        .map(|_| ())
+}
+
+/// `n_lefs` LEFs placed by the spawn rule, as the LEF columns.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn populate(
+    n_sites: u32,
+    site: &[u32],
+    side: &[u8],
+    strength: &[f64],
+    n_lefs: u32,
+    seed: u64,
+    spawn_rule: &str,
+) -> Result<Object, JsError> {
+    let lattice = lattice_from(n_sites, site, side, strength)?;
+    let world = lefsim::populate(lattice, n_lefs as usize, &rule_from(spawn_rule)?, seed).map_err(js_err)?;
+    Ok(lefs_object(&world.lef_states()))
+}
+
+/// The core's default rates, `{step, respawn, respawnCaptured}`.
+#[wasm_bindgen]
+pub fn default_rates() -> Object {
+    rates_object(Rates::default())
+}
+
+fn rates_object(r: Rates) -> Object {
+    let obj = Object::new();
+    set(&obj, "step", r.step);
+    set(&obj, "respawn", r.respawn);
+    set(&obj, "respawnCaptured", r.respawn_captured);
+    obj
 }
 
 fn grid_mode(dt: f64, t0: f64) -> Result<SampleMode, JsError> {
@@ -148,54 +270,31 @@ fn grid_mode(dt: f64, t0: f64) -> Result<SampleMode, JsError> {
 
 #[wasm_bindgen]
 impl WasmSim {
-    /// `ctcf_captures_from` holds `Direction` codes (0 = left, 1 = right).
-    /// Omitted rates fall back to the core's `Rates::default()`.
+    /// A sim of the model given as columns (see `check_model`), from
+    /// `start_time`. `side` and the mobility columns hold the core's codes.
     #[wasm_bindgen(constructor)]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         n_sites: u32,
-        ctcf_sites: &[u32],
-        ctcf_captures_from: &[u8],
-        ctcf_strength: &[f64],
-        lef_sites: &[u32],
-        n_lefs: u32,
+        site: &[u32],
+        side: &[u8],
+        strength: &[f64],
+        left_pos: &[u32],
+        right_pos: &[u32],
+        left_mob: &[u8],
+        right_mob: &[u8],
+        step: f64,
+        respawn: f64,
+        respawn_captured: f64,
+        spawn_rule: &str,
         seed: u64,
-        step_rate: Option<f64>,
-        respawn_rate: Option<f64>,
-        respawn_rate_captured: Option<f64>,
+        start_time: f64,
     ) -> Result<WasmSim, JsError> {
-        let n_ctcf = ctcf_sites.len();
-        if ctcf_captures_from.len() != n_ctcf || ctcf_strength.len() != n_ctcf {
-            return Err(JsError::new("CTCF site, side and strength arrays must have equal length"));
+        if !start_time.is_finite() {
+            return Err(JsError::new(&format!("startTime must be finite, got {start_time}")));
         }
-
-        let ctcfs = (0..n_ctcf)
-            .map(|i| {
-                let captures_from = match ctcf_captures_from[i] {
-                    0 => Direction::Left,
-                    1 => Direction::Right,
-                    other => return Err(JsError::new(&format!("invalid CTCF side code {other}"))),
-                };
-                Ok(Ctcf { site: ctcf_sites[i], captures_from, strength: ctcf_strength[i] })
-            })
-            .collect::<Result<Vec<_>, JsError>>()?;
-        let lattice = Lattice::with_ctcfs(n_sites as usize, &ctcfs).map_err(|e| JsError::new(&e.to_string()))?;
-
-        let defaults = Rates::default();
-        let rates = Rates {
-            step: positive_rate("step rate", step_rate, defaults.step)?,
-            respawn: positive_rate("respawn rate", respawn_rate, defaults.respawn)?,
-            respawn_captured: positive_rate(
-                "captured respawn rate",
-                respawn_rate_captured,
-                defaults.respawn_captured,
-            )?,
-        };
-
-        let world = initial_world(lattice, lef_sites, n_lefs as usize, seed).map_err(|e| JsError::new(&e))?;
-        let model = Model::new(world, rates, SpawnRule::UniformNonCtcf).map_err(|e| JsError::new(&e.to_string()))?;
-        let sim = lefsim::Sim::new(model, seed);
-
+        let model = model_from(n_sites, site, side, strength, left_pos, right_pos, left_mob, right_mob, step, respawn, respawn_captured, spawn_rule)?;
+        let sim = lefsim::Sim::with_start_time(model, seed, start_time);
         let state = sim.world().lef_states();
         Ok(WasmSim { sim, state, grid: None })
     }
@@ -369,7 +468,7 @@ impl WasmSim {
     }
 
     /// Exact up to 2^53 events, which avoids BigInt on the JS side.
-    pub fn event_count(&self) -> f64 {
+    pub fn n_events(&self) -> f64 {
         self.sim.n_events() as f64
     }
 
@@ -391,12 +490,34 @@ impl WasmSim {
 
     /// `{step, respawn, respawnCaptured}`
     pub fn rates(&self) -> Object {
-        let r = self.sim.rates();
-        let obj = Object::new();
-        set(&obj, "step", r.step);
-        set(&obj, "respawn", r.respawn);
-        set(&obj, "respawnCaptured", r.respawn_captured);
-        obj
+        rates_object(self.sim.rates())
+    }
+
+    /// The current LEF table, `{leftPos, rightPos, leftMobility,
+    /// rightMobility}`, copied (safe to keep).
+    pub fn lefs(&self) -> Object {
+        lefs_object(&self.sim.world().lef_states())
+    }
+
+    /// Fire one event. Returns `[time, actionCode, id]` (`id` is a `leg_id`
+    /// for a step, a `lef_id` for a respawn) or `null` if none remain.
+    pub fn step(&mut self) -> JsValue {
+        match self.sim.step() {
+            None => JsValue::NULL,
+            Some((t, action)) => {
+                let id = match action {
+                    lefsim::Action::Step { leg } => self.sim.leg_id(leg),
+                    lefsim::Action::Respawn { lef } => self.sim.lef_id(lef),
+                }
+                .expect("the sim's own entity");
+                js_sys::Array::of3(&t.into(), &action.code().into(), &id.into()).into()
+            }
+        }
+    }
+
+    /// An exact fork: a copy that continues the run as this one would.
+    pub fn fork(&self) -> WasmSim {
+        WasmSim { sim: self.sim.clone(), state: self.state.clone(), grid: self.grid.clone() }
     }
 
     // ----- live state -----
@@ -422,55 +543,6 @@ impl WasmSim {
 
     pub fn right_mob_ptr(&self) -> *const u8 {
         Mobility::as_codes(&self.state.right_mobility).as_ptr()
-    }
-
-    // ----- static metadata -----
-
-    /// `{nSites, rates, lattice: {kind}, ctcfs: {site, capturesFrom,
-    /// strength}, lefs: {leftLegId, rightLegId}, legs: {lefId, facing}}`,
-    /// columns as typed arrays of the core's codes.
-    pub fn meta(&self) -> Object {
-        let lattice = self.sim.world().lattice();
-        let kinds: Vec<u8> = lattice.sites().iter().map(|s| s.kind.code()).collect();
-        let ctcfs = lattice.ctcfs();
-        let n = self.sim.n_lefs() as u32;
-        let table = |cols: &[(&str, JsValue)]| {
-            let obj = Object::new();
-            for (k, v) in cols {
-                set(&obj, k, v.clone());
-            }
-            obj
-        };
-        let out = Object::new();
-        set(&out, "nSites", self.sim.n_sites() as u32);
-        set(&out, "rates", self.rates());
-        set(&out, "lattice", table(&[("kind", Uint8Array::from(&kinds[..]).into())]));
-        set(
-            &out,
-            "ctcfs",
-            table(&[
-                ("site", Uint32Array::from(&ctcfs.iter().map(|c| c.site).collect::<Vec<_>>()[..]).into()),
-                ("capturesFrom", Uint8Array::from(&ctcfs.iter().map(|c| c.captures_from.code()).collect::<Vec<_>>()[..]).into()),
-                ("strength", Float64Array::from(&ctcfs.iter().map(|c| c.strength).collect::<Vec<_>>()[..]).into()),
-            ]),
-        );
-        set(
-            &out,
-            "lefs",
-            table(&[
-                ("leftLegId", Uint32Array::from(&(0..n).map(|i| 2 * i).collect::<Vec<_>>()[..]).into()),
-                ("rightLegId", Uint32Array::from(&(0..n).map(|i| 2 * i + 1).collect::<Vec<_>>()[..]).into()),
-            ]),
-        );
-        set(
-            &out,
-            "legs",
-            table(&[
-                ("lefId", Uint32Array::from(&(0..2 * n).map(|i| i / 2).collect::<Vec<_>>()[..]).into()),
-                ("facing", Uint8Array::from(&(0..2 * n).map(|i| [Direction::Left, Direction::Right][i as usize % 2].code()).collect::<Vec<_>>()[..]).into()),
-            ]),
-        );
-        out
     }
 }
 

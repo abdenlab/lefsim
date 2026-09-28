@@ -30,10 +30,9 @@ import {
   DIRECTION,
   MOBILITY,
   ROW_KIND,
-  SITE_KIND,
   type DeltaChunk,
-  type LiveState,
-  type Meta,
+  type Lattice,
+  type Lefs,
   type SnapshotColumns,
 } from "./types.ts";
 
@@ -152,67 +151,36 @@ export function eventsToArrow(chunk: DeltaChunk): RecordBatch {
  * The lattice as its CTCF table, with `lefsim.n_sites` in the schema
  * metadata. Matches the Python binding's `Lattice.to_arrow()`.
  */
-export function latticeToArrow(meta: Meta): RecordBatch {
+export function latticeToArrow(lattice: Lattice): RecordBatch {
   return batch(
     [
-      ["site", u32(meta.ctcfs.site)],
-      ["captures_from", dict(meta.ctcfs.capturesFrom, DIRECTION)],
-      ["strength", f64(meta.ctcfs.strength)],
+      ["site", u32(lattice.ctcfs.site)],
+      ["captures_from", dict(lattice.ctcfs.capturesFrom, DIRECTION)],
+      ["strength", f64(lattice.ctcfs.strength)],
     ],
     "lattice",
-    { n_sites: String(meta.nSites) },
+    { n_sites: String(lattice.nSites) },
   );
 }
 
 /**
- * The LEF state table, one row per LEF. Matches the Python binding's
- * `World.to_arrow()`. Copies the (wasm-backed) state arrays.
+ * The LEF table, one row per LEF: a world's LEFs, or a `LiveState` (whose
+ * wasm-backed arrays are copied). Matches the Python binding's
+ * `World.to_arrow()`.
  */
-export function lefsToArrow(state: LiveState): RecordBatch {
-  const n = state.leftPos.length;
+export function lefsToArrow(lefs: Lefs): RecordBatch {
+  const n = lefs.leftPos.length;
   return batch(
     [
       ["lef_id", u32(Uint32Array.from({ length: n }, (_, i) => i))],
-      ["left_pos", u32(state.leftPos.slice())],
-      ["right_pos", u32(state.rightPos.slice())],
-      ["left_mobility", dict(state.leftMobility.slice(), MOBILITY)],
-      ["right_mobility", dict(state.rightMobility.slice(), MOBILITY)],
+      ["left_pos", u32(lefs.leftPos.slice())],
+      ["right_pos", u32(lefs.rightPos.slice())],
+      ["left_mobility", dict(lefs.leftMobility.slice(), MOBILITY)],
+      ["right_mobility", dict(lefs.rightMobility.slice(), MOBILITY)],
     ],
     "lefs",
     { n_lefs: String(n) },
   );
-}
-
-/** The static tables from `Sim.meta()` as record batches. */
-export function metaToArrow(meta: Meta): { lattice: RecordBatch; ctcfs: RecordBatch; lefs: RecordBatch; legs: RecordBatch } {
-  const range = (n: number) => Uint32Array.from({ length: n }, (_, i) => i);
-  return {
-    lattice: batch([["site", u32(range(meta.nSites))], ["kind", dict(meta.lattice.kind, SITE_KIND)]], "lattice"),
-    ctcfs: batch(
-      [
-        ["site", u32(meta.ctcfs.site)],
-        ["captures_from", dict(meta.ctcfs.capturesFrom, DIRECTION)],
-        ["strength", f64(meta.ctcfs.strength)],
-      ],
-      "ctcfs",
-    ),
-    lefs: batch(
-      [
-        ["lef_id", u32(range(meta.lefs.leftLegId.length))],
-        ["left_leg_id", u32(meta.lefs.leftLegId)],
-        ["right_leg_id", u32(meta.lefs.rightLegId)],
-      ],
-      "lefs",
-    ),
-    legs: batch(
-      [
-        ["leg_id", u32(range(meta.legs.lefId.length))],
-        ["lef_id", u32(meta.legs.lefId)],
-        ["facing", dict(meta.legs.facing, DIRECTION)],
-      ],
-      "legs",
-    ),
-  };
 }
 
 // ------------------------------------------------------------------ adapter

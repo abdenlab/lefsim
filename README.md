@@ -385,22 +385,25 @@ uv run --no-sync pytest tests
 
 ## Browser (WebAssembly)
 
-`crates/lefsim-wasm` compiles the core to WebAssembly (~37 KB gzipped), and the
-`lefsim` TypeScript package in `packages/lefsim` wraps it. A `Sim` there is the
-same single realization as in Rust and Python, advanced in place. Each frame,
-`state()` returns every LEF's current positions and mobility as typed-array
-views over wasm memory, with no copying.
+`crates/lefsim-wasm` compiles the core to WebAssembly (~57 KB gzipped), and the
+`lefsim` TypeScript package in `packages/lefsim` wraps it with the same API as
+Python, in camelCase. Lattices, worlds and models are plain objects with
+typed-array columns, built by functions that check them through the core, so an
+invalid one is reported where it's written. A `Sim` is the same single
+realization as in Rust and Python, advanced in place. Each frame, `state()`
+returns every LEF's current positions and mobility as typed-array views over
+wasm memory, with no copying.
 
 ```ts
-import { init, Sim } from "lefsim";
+import { createLattice, createModel, init, populate, Sim } from "lefsim";
 
 await init();
-using sim = new Sim({
-  nSites: 3000,
-  ctcfs: [{ site: 600, capturesFrom: "left", strength: 0.8 }, { site: 601, capturesFrom: "right", strength: 0.8 }],
-  nLefs: 20,
-  seed: 1,
-});
+const lattice = createLattice(3000, [
+  { site: 600, capturesFrom: "left", strength: 0.8 },
+  { site: 601, capturesFrom: "right", strength: 0.8 },
+]);
+const model = createModel(populate(lattice, 20, { seed: 1 }), { step: 1, respawn: 2e-3, respawnCaptured: 4e-4 });
+using sim = new Sim(model, { seed: 1 });
 
 function frame() {
   sim.runUntil(sim.time + 5, { maxEvents: 40_000 }); // absolute time; cap the work per frame
@@ -411,8 +414,11 @@ function frame() {
 ```
 
 The views are only valid until the next call into the sim, because wasm memory
-can grow and invalidate them; copy anything you need to keep. Seeded runs
-match the Rust and Python bindings exactly.
+can grow and invalidate them; copy anything you need to keep (`sim.world()`
+returns a copy). Seeded runs match the Rust and Python bindings exactly.
+`sim.model()` returns the current state as a model, `sim.clone()` forks the run
+exactly, and `modelToJson` / `modelFromJson` read and write the same model
+document as Python and Rust.
 
 `sim.recordEventChunk(tEnd)` records keyframed event deltas as typed-array chunks,
 and a `Replayer` rebuilds live state from them in plain TypeScript, with no wasm.
@@ -422,18 +428,19 @@ whether it's watching a local sim or replaying recorded or streamed data.
 `seek(t)` jumps anywhere by restoring the nearest keyframe.
 
 ```ts
-const replayer = new Replayer(sim.nLefs);
+const replayer = new Replayer(sim.lattice, sim.nLefs);
 for (let c = sim.recordEventChunk(1000); ; c = sim.recordEventChunk(1000)) {
   replayer.push(c);
   if (c.stopped !== "recorder_full") break;
 }
 replayer.seek(250);
 const { leftPos, rightPos } = replayer.state();
+const branch = new Sim(createModel(replayer.world(), model.rates), { seed: 2, startTime: 250 });
 ```
 
 For history rather than live state, `recordUntil(t, { dt, events, keyframes })`
 records grid snapshots and/or event deltas as typed-array columns, and
-`sim.stream(tEnd, { dt } | { events: true })` returns a `ReadableStream` of
+`sim.stream(tEnd, { dt, maxSnapshots } | { events: true, maxRows })` returns a `ReadableStream` of
 chunks, computed only as it's read. Arrow lives in a separate entry point,
 `lefsim/arrow`, so live-only pages don't bundle it. It builds Arrow JS record
 batches with exactly the Python binding's schemas, and `toRecordBatches()` turns

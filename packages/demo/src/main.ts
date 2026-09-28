@@ -5,7 +5,7 @@
 import { init, iterate, Sim } from "lefsim";
 import { toRecordBatches } from "lefsim/arrow";
 
-import { BOUNDARIES, N_SITES, options, readRunInputs } from "./model.ts";
+import { BOUNDARIES, N_SITES, newSim, readRunInputs } from "./model.ts";
 import {
   $,
   colors,
@@ -73,7 +73,7 @@ function showSpeed() {
 function restart() {
   sim?.free();
   const { nLefs, seed } = readRunInputs(nLefsIn, seedIn);
-  sim = new Sim(options(nLefs, seed));
+  sim = newSim(nLefs, seed);
   summary.textContent =
     `${nLefs} loop extruders on a ${fmt.format(N_SITES)}-site lattice, split into five TADs ` +
     `by convergent CTCF pairs. Simulated in your browser.`;
@@ -104,7 +104,7 @@ function frame(now: number) {
   const report = sim.runUntil(sim.time + speed() * dt, { maxEvents: MAX_EVENTS_PER_FRAME });
   behind.hidden = report.stopped !== "reached_event_count";
 
-  rateWindow.push({ t: now, events: sim.eventCount });
+  rateWindow.push({ t: now, events: sim.nEvents });
   while (rateWindow.length > 2 && now - rateWindow[0]!.t > 1000) rateWindow.shift();
 
   draw(snapshotOf(sim.state()));
@@ -140,10 +140,10 @@ async function startBackground(nLefs: number, seed: number) {
   occSnapshots = 0;
   occTime = 0;
   drawOccupancy();
-  const bg = new Sim(options(nLefs, seed));
+  const bg = newSim(nLefs, seed);
   try {
     const batches = bg
-      .stream(Infinity, { dt: BG_DT, t0: BG_BURN_IN, chunkSize: BG_CHUNK })
+      .stream(Infinity, { dt: BG_DT, t0: BG_BURN_IN, maxSnapshots: BG_CHUNK })
       .pipeThrough(toRecordBatches());
     for await (const batch of iterate(batches)) {
       if (generation !== bgGeneration) break; // restarted: breaking cancels the stream
@@ -247,7 +247,7 @@ occCanvas.addEventListener("pointerleave", () => {
 
 function updateReadout(f: Frame) {
   rTime.textContent = fmt.format(f.time);
-  rEvents.textContent = fmtCompact.format(sim?.eventCount ?? 0);
+  rEvents.textContent = fmtCompact.format(sim?.nEvents ?? 0);
   if (rateWindow.length >= 2) {
     const a = rateWindow[0]!;
     const b = rateWindow[rateWindow.length - 1]!;

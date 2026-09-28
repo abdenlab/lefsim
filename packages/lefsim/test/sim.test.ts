@@ -1,9 +1,24 @@
 import { describe, expect, it } from "vitest";
 
 import fixture from "./fixtures/determinism_state.json";
-import { coreNames, DIRECTION, MOBILITY, ROW_KIND, Sim, SITE_KIND, type SimOptions } from "../src/index.ts";
+import modelFixture from "./fixtures/model.json";
+import {
+  coreNames,
+  createLattice,
+  createModel,
+  createWorld,
+  DIRECTION,
+  MOBILITY,
+  modelFromJson,
+  modelToJson,
+  populate,
+  ROW_KIND,
+  Sim,
+  SITE_KIND,
+} from "../src/index.ts";
+import { makeModel, makeSim, type Setup } from "./helpers.ts";
 
-const TADS: SimOptions = {
+const TADS: Setup = {
   nSites: 3000,
   ctcfs: [600, 1300, 1800, 2500].flatMap((b) => [
     { site: b, capturesFrom: "left" as const, strength: 0.8 },
@@ -13,7 +28,7 @@ const TADS: SimOptions = {
   rates: { step: 1, respawn: 0.002, respawnCaptured: 0.0004 },
 };
 
-const make = (seed = 1, extra: Partial<SimOptions> = {}) => new Sim({ ...TADS, seed, ...extra });
+const make = (seed = 1, extra: Partial<Setup> = {}) => makeSim({ ...TADS, seed, ...extra });
 
 /** A copy of the live state that outlives the next call into the sim. */
 function snapshot(sim: Sim) {
@@ -38,61 +53,81 @@ describe("names", () => {
   });
 });
 
-describe("construction", () => {
-  it("exposes sizes and defaults rates from the core", () => {
-    using sim = new Sim({ nSites: 100, nLefs: 3 });
-    expect([sim.nSites, sim.nLefs, sim.nLegs]).toEqual([100, 3, 6]);
-    expect(sim.rates).toEqual({ step: 1, respawn: 1e-3, respawnCaptured: 1e-4 });
-    expect(sim.time).toBe(0);
-    expect(sim.eventCount).toBe(0);
+describe("building a model", () => {
+  it("createLattice takes CTCFs as rows or columns, names or codes", () => {
+    const rows = createLattice(50, [{ site: 10, capturesFrom: "left", strength: 0.3 }, { site: 20, capturesFrom: "Right" as "right" }]); // names are case-insensitive
+    const cols = createLattice(50, { site: new Uint32Array([10, 20]), capturesFrom: [0, "right"], strength: [0.3, 1] });
+    expect(cols).toEqual(rows);
+    expect(Array.from(rows.ctcfs.capturesFrom)).toEqual([0, 1]);
+    expect(Array.from(createLattice(50, { site: [1, 2], capturesFrom: "left" }).ctcfs.strength)).toEqual([1, 1]);
   });
 
-  it("places explicit LEF sites first", () => {
-    using sim = new Sim({ nSites: 100, lefSites: [10, 90], nLefs: 2 });
-    const s = sim.state();
-    expect(Array.from(s.leftPos.subarray(0, 2))).toEqual([10, 90]);
-    expect(Array.from(s.rightPos.subarray(0, 2))).toEqual([10, 90]);
+  it("createWorld takes LEFs as rows or columns; mobility defaults to moving", () => {
+    const lattice = createLattice(100, [{ site: 60, capturesFrom: "left" }]);
+    const rows = createWorld(lattice, [{ leftPos: 10, rightPos: 12 }, { leftPos: 30, rightPos: 60, rightMobility: "captured" }]);
+    const cols = createWorld(lattice, { leftPos: [10, 30], rightPos: [12, 60], rightMobility: [0, 1] });
+    expect(cols).toEqual(rows);
+    expect(Array.from(rows.lefs.leftMobility)).toEqual([0, 0]);
   });
 
-  it("accepts CTCFs as rows or as columns", () => {
-    using rows = new Sim({
-      nSites: 50,
-      ctcfs: [{ site: 10, capturesFrom: "left", strength: 0.3 }, { site: 20, capturesFrom: "right" }],
-    });
-    using cols = new Sim({
-      nSites: 50,
-      ctcfs: { site: new Uint32Array([10, 20]), capturesFrom: ["left", "right"], strength: [0.3, 1] },
-    });
-    expect(cols.meta().ctcfs).toEqual(rows.meta().ctcfs);
-    expect(Array.from(rows.meta().ctcfs.capturesFrom)).toEqual([0, 1]);
+  it("populate places LEFs reproducibly, with its own seed", () => {
+    const lattice = createLattice(3000);
+    const a = populate(lattice, 20, { seed: 1 });
+    expect(a.lefs.leftPos.length).toBe(20);
+    expect(Array.from(a.lefs.leftPos)).toEqual(Array.from(a.lefs.rightPos));
+    expect(populate(lattice, 20, { seed: 1 })).toEqual(a);
+    expect(populate(lattice, 20, { seed: 2 })).not.toEqual(a);
   });
 
+  it("createModel fills missing rates with the core's defaults", () => {
+    const model = createModel(createWorld(createLattice(100)));
+    expect(model.rates).toEqual({ step: 1, respawn: 1e-3, respawnCaptured: 1e-4 });
+    expect(model.spawnRule).toBe("uniform_non_ctcf");
+  });
+
+  const lattice10 = () => createLattice(10, [{ site: 3, capturesFrom: "left" }]);
   it.each([
-    [{ nSites: 0 }, /nSites/],
-    [{ nSites: 1.5 }, /nSites/],
-    [{ nSites: 10, ctcfs: [{ site: -1, capturesFrom: "left" }] }, /non-negative integers/],
-    [{ nSites: 10, ctcfs: [{ site: 2.5, capturesFrom: "left" }] }, /non-negative integers/],
-    [{ nSites: 10, ctcfs: [{ site: 3, capturesFrom: "up" }] }, /"left" or "right"/],
-    [{ nSites: 10, ctcfs: [{ site: 10, capturesFrom: "left" }] }, /outside a lattice/],
-    [{ nSites: 10, ctcfs: [{ site: 3, capturesFrom: "left" }, { site: 3, capturesFrom: "left" }] }, /twice/],
-    [{ nSites: 10, ctcfs: [{ site: 3, capturesFrom: "left", strength: 1.5 }] }, /\[0, 1\]/],
-    [{ nSites: 10, ctcfs: { site: [3, 4], capturesFrom: ["left"] } }, /1 entries/],
-    [{ nSites: 10, lefSites: [10] }, /outside/],
-    [{ nSites: 10, nLefs: 6 }, /too many LEFs/],
-    [{ nSites: 10, nLefs: -1 }, /nLefs/],
-    [{ nSites: 10, seed: -1 }, /seed/],
-    [{ nSites: 10, seed: 1.5 }, /seed/],
-    [{ nSites: 10, seed: 2n ** 64n }, /seed/],
-    [{ nSites: 10, rates: { step: 0 } }, /step rate must be positive/],
-    [{ nSites: 10, rates: { respawn: Number.NaN } }, /respawn rate must be positive/],
-  ] as [SimOptions, RegExp][])("rejects %o", (options, message) => {
-    expect(() => new Sim(options)).toThrow(message);
+    [() => createLattice(0), /at least one site/],
+    [() => createLattice(1.5), /nSites/],
+    [() => createLattice(10, [{ site: -1, capturesFrom: "left" }]), /non-negative integers/],
+    [() => createLattice(10, [{ site: 2.5, capturesFrom: "left" }]), /non-negative integers/],
+    [() => createLattice(10, [{ site: 3, capturesFrom: "up" as "left" }]), /"left" or "right"/],
+    [() => createLattice(10, [{ site: 10, capturesFrom: "left" }]), /outside a lattice/],
+    [() => createLattice(10, [{ site: 3, capturesFrom: "left" }, { site: 3, capturesFrom: "left" }]), /twice/],
+    [() => createLattice(10, [{ site: 3, capturesFrom: "left", strength: 1.5 }]), /\[0, 1\]/],
+    [() => createLattice(10, { site: [3, 4], capturesFrom: ["left"] }), /1 entries/],
+    [() => createWorld(lattice10(), [{ leftPos: 10, rightPos: 10 }]), /outside/],
+    [() => createWorld(lattice10(), [{ leftPos: 5, rightPos: 4 }]), /right of the right leg/],
+    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 5 }, { leftPos: 5, rightPos: 6 }]), /already occupied/],
+    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "captured" }]), /not a CTCF/],
+    [() => createWorld(lattice10(), [{ leftPos: 3, rightPos: 5, leftMobility: "captured" }]), /can't be captured/],
+    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "stuck" }]), /"moving" or "captured" or "evicted"/],
+    [() => createWorld(lattice10(), { leftPos: [1, 2], rightPos: [3] }), /different lengths/],
+    [() => populate(lattice10(), 6), /too many LEFs/],
+    [() => populate(lattice10(), -1), /nLefs/],
+    [() => populate(lattice10(), 1, { seed: -1 }), /seed/],
+    [() => populate(lattice10(), 1, { seed: 1.5 }), /seed/],
+    [() => populate(lattice10(), 1, { seed: 2n ** 64n }), /seed/],
+    [() => createModel(createWorld(lattice10()), { step: 0 }), /step rate must be positive/],
+    [() => createModel(createWorld(lattice10()), { respawn: Number.NaN }), /respawn rate must be positive/],
+    [() => createModel(createWorld(lattice10()), {}, { spawnRule: "anywhere" as "uniform_non_ctcf" }), /unknown spawn rule/],
+    [() => new Sim(makeModel({ nSites: 10 }), { startTime: Number.POSITIVE_INFINITY }), /startTime/],
+  ] as [() => unknown, RegExp][])("rejects case %#", (build, message) => {
+    expect(build).toThrow(message);
+  });
+
+  it("new Sim checks the model too, so a hand-edited one can't slip through", () => {
+    const world = createWorld(createLattice(10), [{ leftPos: 1, rightPos: 2 }]);
+    world.lefs.leftPos[0] = 5; // now crossed
+    const model = { world, rates: { step: 1, respawn: 1, respawnCaptured: 1 }, spawnRule: "uniform_non_ctcf" } as const;
+    expect(() => new Sim(model)).toThrow(/right of the right leg/);
   });
 
   it("accepts bigint seeds, and number seeds equal to them", () => {
-    using a = make(0);
-    using b = new Sim({ ...TADS, seed: 0n });
-    using c = new Sim({ ...TADS, seed: 2n ** 64n - 1n });
+    const model = makeModel({ ...TADS, seed: 1 });
+    using a = new Sim(model, { seed: 0 });
+    using b = new Sim(model, { seed: 0n });
+    using c = new Sim(model, { seed: 2n ** 64n - 1n });
     a.runUntil(100);
     b.runUntil(100);
     c.runUntil(100);
@@ -101,10 +136,29 @@ describe("construction", () => {
   });
 });
 
+describe("JSON", () => {
+  it("reads and writes the same document as the other bindings", () => {
+    const model = modelFromJson(JSON.stringify(modelFixture));
+    expect(JSON.parse(modelToJson(model))).toEqual(modelFixture);
+    expect(modelFromJson(modelToJson(model, 2))).toEqual(model);
+  });
+
+  it("loads mobility-free LEF rows and checks what it loads", () => {
+    const doc = structuredClone(modelFixture) as typeof modelFixture;
+    doc.lefs = [{ left_pos: 10, right_pos: 12 }] as typeof doc.lefs;
+    expect(Array.from(modelFromJson(JSON.stringify(doc)).world.lefs.leftMobility)).toEqual([0]);
+    doc.version = 2;
+    expect(() => modelFromJson(JSON.stringify(doc))).toThrow(/unsupported/);
+    doc.version = 1;
+    doc.rates.step = -1;
+    expect(() => modelFromJson(JSON.stringify(doc))).toThrow(/step rate/);
+  });
+});
+
 describe("running", () => {
   it("reproduces the Python binding's state exactly (cross-language fixture)", () => {
     const { config, expected } = fixture;
-    using sim = new Sim({
+    using sim = makeSim({
       nSites: config.nSites,
       ctcfs: {
         site: config.ctcfSites,
@@ -116,7 +170,7 @@ describe("running", () => {
       rates: config.rates,
     });
     sim.runUntil(config.tEnd);
-    expect(sim.eventCount).toBe(expected.eventCount);
+    expect(sim.nEvents).toBe(expected.eventCount);
     expect(sim.nextEventTime).toBe(expected.nextEventTime);
     const { time, ...state } = snapshot(sim);
     expect(time).toBe(expected.time);
@@ -132,10 +186,10 @@ describe("running", () => {
     using sim = make();
     const first = sim.runUntil(100);
     expect(first).toMatchObject({ time: 100, stopped: "reached_time" });
-    expect(first.eventsFired).toBeGreaterThan(0);
+    expect(first.nEvents).toBeGreaterThan(0);
     const again = sim.runUntil(100);
-    expect(again).toEqual({ eventsFired: 0, time: 100, stopped: "reached_time" });
-    expect(sim.runUntil(50).eventsFired).toBe(0);
+    expect(again).toEqual({ nEvents: 0, time: 100, stopped: "reached_time" });
+    expect(sim.runUntil(50).nEvents).toBe(0);
     expect(sim.time).toBe(100);
   });
 
@@ -144,7 +198,7 @@ describe("running", () => {
     whole.runUntil(500);
     using split = make(2);
     for (const t of [123.4, 123.4, 300, 500]) split.runUntil(t);
-    expect(split.eventCount).toBe(whole.eventCount);
+    expect(split.nEvents).toBe(whole.nEvents);
     expect(snapshot(split)).toEqual(snapshot(whole));
   });
 
@@ -156,26 +210,26 @@ describe("running", () => {
     for (;;) {
       const r = capped.runUntil(400, { maxEvents: 97 });
       calls++;
-      expect(r.eventsFired).toBeLessThanOrEqual(97);
+      expect(r.nEvents).toBeLessThanOrEqual(97);
       if (r.stopped === "reached_time") break;
       expect(r.stopped).toBe("reached_event_count");
       expect(r.time).toBeLessThan(400);
     }
     expect(calls).toBeGreaterThan(10);
-    expect(capped.eventCount).toBe(whole.eventCount);
+    expect(capped.nEvents).toBe(whole.nEvents);
     expect(snapshot(capped)).toEqual(snapshot(whole));
   });
 
   it("runEvents fires exactly n events", () => {
     using sim = make();
-    expect(sim.runEvents(1234)).toMatchObject({ eventsFired: 1234, stopped: "reached_event_count" });
-    expect(sim.eventCount).toBe(1234);
+    expect(sim.runEvents(1234)).toMatchObject({ nEvents: 1234, stopped: "reached_event_count" });
+    expect(sim.nEvents).toBe(1234);
   });
 
   it("an empty sim is exhausted", () => {
-    using sim = new Sim({ nSites: 10 });
+    using sim = makeSim({ nSites: 10 });
     expect(sim.nextEventTime).toBeNull();
-    expect(sim.runEvents(5)).toEqual({ eventsFired: 0, time: 0, stopped: "exhausted" });
+    expect(sim.runEvents(5)).toEqual({ nEvents: 0, time: 0, stopped: "exhausted" });
     expect(sim.runUntil(3)).toMatchObject({ time: 3, stopped: "exhausted" });
   });
 
@@ -206,32 +260,59 @@ describe("live state", () => {
     const old = sim.state();
     const before = snapshot(sim);
     // Force memory to grow with a large allocation.
-    const big = new Sim({ nSites: 2_000_000, nLefs: 10 });
+    const big = makeSim({ nSites: 2_000_000, nLefs: 10 });
     expect(old.leftPos.length).toBe(0); // detached
     expect(snapshot(sim)).toEqual(before);
     big.free();
   });
 
   it("works with zero LEFs", () => {
-    using sim = new Sim({ nSites: 10 });
+    using sim = makeSim({ nSites: 10 });
     expect(sim.state().leftPos.length).toBe(0);
   });
 });
 
-describe("meta", () => {
-  it("describes the lattice, CTCFs and id mappings", () => {
+describe("state as a model", () => {
+  it("world() and model() are copies of the current state", () => {
     using sim = make(1, { nLefs: 4 });
-    const m = sim.meta();
-    expect(m.nSites).toBe(3000);
-    expect(m.rates).toEqual(TADS.rates);
-    expect(m.lattice.kind.length).toBe(3000);
-    expect(m.lattice.kind.reduce((a, k) => a + k, 0)).toBe(8);
-    expect(Array.from(m.ctcfs.site)).toEqual([600, 601, 1300, 1301, 1800, 1801, 2500, 2501]);
-    expect(Array.from(m.ctcfs.capturesFrom)).toEqual([0, 1, 0, 1, 0, 1, 0, 1]);
-    expect(Array.from(m.lefs.leftLegId)).toEqual([0, 2, 4, 6]);
-    expect(Array.from(m.lefs.rightLegId)).toEqual([1, 3, 5, 7]);
-    expect(Array.from(m.legs.lefId)).toEqual([0, 0, 1, 1, 2, 2, 3, 3]);
-    expect(Array.from(m.legs.facing)).toEqual([0, 1, 0, 1, 0, 1, 0, 1]);
+    sim.runUntil(500);
+    const world = sim.world();
+    const live = sim.state();
+    expect(Array.from(world.lefs.leftPos)).toEqual(Array.from(live.leftPos));
+    expect(world.lattice).toBe(sim.lattice);
+    const model = sim.model();
+    expect(model.rates).toEqual({ step: 1, respawn: 0.002, respawnCaptured: 0.0004 });
+    world.lefs.leftPos[0] = 2999; // a copy: changing it leaves the sim alone
+    expect(sim.state().leftPos[0]).toBe(live.leftPos[0]);
+    expect(sim.state().leftPos[0]).not.toBe(2999);
+    // Restarting from it is a valid run from that time.
+    using next = new Sim(model, { seed: 9, startTime: 500 });
+    expect(next.time).toBe(500);
+    expect(next.runUntil(600).nEvents).toBeGreaterThan(0);
+  });
+
+  it("clone() forks the run exactly", () => {
+    using sim = make(5);
+    sim.runUntil(300);
+    using fork = sim.clone();
+    sim.runUntil(900);
+    fork.runUntil(900);
+    expect(fork.nEvents).toBe(sim.nEvents);
+    expect(snapshot(fork)).toEqual(snapshot(sim));
+  });
+
+  it("step() fires one event and names it", () => {
+    using sim = make(6, { nLefs: 2 });
+    const seen = new Set<string>();
+    for (let i = 0; i < 3000; i++) {
+      const e = sim.step()!;
+      expect(e.time).toBe(sim.time);
+      expect(e.id).toBeLessThan(e.action === "Step" ? 4 : 2);
+      seen.add(e.action);
+    }
+    expect(seen).toEqual(new Set(["Step", "Respawn"]));
+    using empty = makeSim({ nSites: 10 });
+    expect(empty.step()).toBeNull();
   });
 });
 

@@ -8,11 +8,11 @@ import {
   Replayer,
   Sim,
   type EventChunk,
-  type SimOptions,
   type SnapshotChunk,
 } from "../src/index.ts";
+import { makeSim, type Setup } from "./helpers.ts";
 
-const OPTIONS: SimOptions = {
+const OPTIONS: Setup = {
   nSites: 200,
   ctcfs: [
     { site: 60, capturesFrom: "right", strength: 0.8 },
@@ -22,7 +22,7 @@ const OPTIONS: SimOptions = {
   nLefs: 8,
   rates: { step: 1, respawn: 0.02, respawnCaptured: 0.005 },
 };
-const make = (seed: number) => new Sim({ ...OPTIONS, seed });
+const make = (seed: number) => makeSim({ ...OPTIONS, seed });
 
 async function collect<T>(stream: ReadableStream<T>): Promise<T[]> {
   const out: T[] = [];
@@ -38,7 +38,7 @@ describe("Sim.stream", () => {
     using whole = make(1);
     const all = whole.recordUntil(300, { dt: 0.5 }).snapshots!;
     using sim = make(1);
-    const chunks = (await collect(sim.stream(300, { dt: 0.5, chunkSize: 40 }))) as SnapshotChunk[];
+    const chunks = (await collect(sim.stream(300, { dt: 0.5, maxSnapshots: 40 }))) as SnapshotChunk[];
     expect(chunks.length).toBeGreaterThan(10);
     expect(chunks.every((c) => c.time.length <= 40)).toBe(true);
     expect(flat(chunks, "time")).toEqual(Array.from(all.time));
@@ -52,15 +52,15 @@ describe("Sim.stream", () => {
     using whole = make(2);
     const all = whole.recordUntil(400, { dt: 25 }).snapshots!;
     using sim = make(2);
-    const chunks = (await collect(sim.stream(400, { dt: 25, chunkSize: 3, maxEvents: 20 }))) as SnapshotChunk[];
+    const chunks = (await collect(sim.stream(400, { dt: 25, maxSnapshots: 3, maxEvents: 20 }))) as SnapshotChunk[];
     expect(flat(chunks, "time")).toEqual(Array.from(all.time));
     expect(flat(chunks, "leftPos")).toEqual(Array.from(all.leftPos));
   });
 
   it("streams keyframed events that replay to the live state", async () => {
     using sim = make(3);
-    const chunks = (await collect(sim.stream(250, { events: true, chunkSize: 100 }))) as EventChunk[];
-    const replayer = new Replayer(sim.nLefs);
+    const chunks = (await collect(sim.stream(250, { events: true, maxRows: 100 }))) as EventChunk[];
+    const replayer = new Replayer(sim.lattice, sim.nLefs);
     for (const c of chunks) {
       for (let i = 0; i < sim.nLegs; i++) expect(c.kind[i]).toBe(KEYFRAME);
       replayer.push(c);
@@ -73,7 +73,7 @@ describe("Sim.stream", () => {
 
   it("computes chunks only when read (no read-ahead)", async () => {
     using sim = make(4);
-    const reader = sim.stream(500, { dt: 1, chunkSize: 10 }).getReader();
+    const reader = sim.stream(500, { dt: 1, maxSnapshots: 10 }).getReader();
     expect(sim.time).toBe(0); // nothing computed before the first read
     const first = (await reader.read()).value as SnapshotChunk;
     expect(sim.time).toBe(first.end);
@@ -86,20 +86,20 @@ describe("Sim.stream", () => {
 
   it("blocks driving calls while open, but not reads", async () => {
     using sim = make(5);
-    const stream = sim.stream(100, { dt: 1, chunkSize: 5 });
+    const stream = sim.stream(100, { dt: 1, maxSnapshots: 5 });
     expect(() => sim.runUntil(10)).toThrow(/being streamed/);
     expect(() => sim.recordUntil(10, { dt: 1 })).toThrow(/being streamed/);
     expect(() => sim.stream(10, { dt: 1 })).toThrow(/being streamed/);
     expect(sim.time).toBe(0);
     expect(sim.state().leftPos.length).toBe(8);
-    expect(sim.meta().nSites).toBe(200);
+    expect(sim.nSites).toBe(200);
     await stream.cancel();
     expect(sim.runUntil(10).time).toBe(10); // cancelling releases it
   });
 
   it("breaking out of iterate() cancels the stream", async () => {
     using sim = make(6);
-    for await (const chunk of iterate(sim.stream(1e6, { dt: 1, chunkSize: 10 }))) {
+    for await (const chunk of iterate(sim.stream(1e6, { dt: 1, maxSnapshots: 10 }))) {
       expect(chunk.time.length).toBe(10);
       break;
     }
@@ -108,7 +108,7 @@ describe("Sim.stream", () => {
 
   it("errors, clearly, if the Sim is freed mid-stream", async () => {
     const sim = make(7);
-    const reader = sim.stream(1e6, { dt: 1, chunkSize: 10 }).getReader();
+    const reader = sim.stream(1e6, { dt: 1, maxSnapshots: 10 }).getReader();
     await reader.read();
     sim.free();
     await expect(reader.read()).rejects.toThrow(/freed/);
@@ -117,9 +117,9 @@ describe("Sim.stream", () => {
   it.each([
     [{}, /exactly one/],
     [{ dt: 1, events: true }, /exactly one/],
-    [{ events: true, chunkSize: 17 }, /at least 18 with keyframes/],
-    [{ events: true, keyframes: false, chunkSize: 1 }, /at least 2/],
-    [{ dt: 1, chunkSize: 0 }, /positive/],
+    [{ events: true, maxRows: 17 }, /at least 18 with keyframes/],
+    [{ events: true, keyframes: false, maxRows: 1 }, /at least 2/],
+    [{ dt: 1, maxSnapshots: 0 }, /positive/],
   ])("rejects options %o", (options, message) => {
     using sim = make(8);
     expect(() => sim.stream(10, options as never)).toThrow(message);
@@ -130,13 +130,13 @@ describe("Sim.stream", () => {
 describe("toRecordBatches", () => {
   it("turns snapshot and event streams into Arrow record batches", async () => {
     using a = make(9);
-    const snaps = await collect(a.stream(100, { dt: 1, chunkSize: 30 }).pipeThrough(toRecordBatches({ layout: "leg" })));
+    const snaps = await collect(a.stream(100, { dt: 1, maxSnapshots: 30 }).pipeThrough(toRecordBatches({ layout: "leg" })));
     expect(snaps.every((b) => b instanceof RecordBatch)).toBe(true);
     expect(snaps.reduce((n, b) => n + b.numRows, 0)).toBe(101 * 16);
     expect(snaps[0]!.schema.metadata.get("lefsim.kind")).toBe("legs");
 
     using b = make(9);
-    const events = await collect(b.stream(100, { events: true, chunkSize: 200 }).pipeThrough(toRecordBatches()));
+    const events = await collect(b.stream(100, { events: true, maxRows: 200 }).pipeThrough(toRecordBatches()));
     expect(events[0]!.schema.metadata.get("lefsim.kind")).toBe("events");
     expect(events[0]!.getChild("action")!.get(0)).toBe("Keyframe");
   });

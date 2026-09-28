@@ -2,18 +2,48 @@
  * Stochastic simulation of loop-extrusion factors (LEFs) on a 1D lattice,
  * running in WebAssembly.
  *
- * Call {@link init} (or {@link initSync}) once, then create {@link Sim}s.
- * A `Sim` is one realization: a single forward-only clock, advanced in place
- * by {@link Sim.runUntil} (absolute time) or {@link Sim.runEvents}.
+ * Call {@link init} (or {@link initSync}) once. Describe a model with
+ * {@link createLattice}, {@link populate} or {@link createWorld}, and
+ * {@link createModel}; then run it with a {@link Sim}. A `Sim` is one
+ * realization: a single forward-only clock, advanced in place by
+ * {@link Sim.runUntil} (absolute time), {@link Sim.runEvents} or
+ * {@link Sim.step}.
  */
 
 import wasmInit, { initSync as wasmInitSync, names, WasmSim } from "lefsim-wasm";
 import type { InitInput } from "lefsim-wasm";
 
-import type { DeltaChunk, LiveState, Meta, Rates, SnapshotChunk, SnapshotColumns } from "./types.ts";
+import { lefArgs, modelArgs, seedBigInt } from "./model.ts";
+import { ROW_KIND } from "./types.ts";
+import type { DeltaChunk, Lattice, LiveState, Model, Rates, SnapshotChunk, SnapshotColumns, SpawnRule, StopReason, World } from "./types.ts";
 
 export { DIRECTION, KEYFRAME, MOBILITY, ROW_KIND, SITE_KIND } from "./types.ts";
-export type { DeltaChunk, LiveState, Meta, Mobility, Rates, SnapshotChunk, SnapshotColumns } from "./types.ts";
+export type {
+  Ctcfs,
+  DeltaChunk,
+  Lattice,
+  Lefs,
+  LiveState,
+  Mobility,
+  Model,
+  Rates,
+  SnapshotChunk,
+  SnapshotColumns,
+  SpawnRule,
+  StopReason,
+  World,
+} from "./types.ts";
+export {
+  createLattice,
+  createModel,
+  createWorld,
+  defaultRates,
+  modelFromJson,
+  modelToJson,
+  populate,
+  SPAWN_RULES,
+} from "./model.ts";
+export type { CtcfColumns, CtcfSpec, LefColumns, LefSpec, Side } from "./model.ts";
 
 // ------------------------------------------------------------------ setup
 
@@ -53,42 +83,24 @@ export function coreNames(): { mobility: string[]; direction: string[]; siteKind
 
 // ------------------------------------------------------------------ types
 
-export type Side = "left" | "right";
-
-/** A CTCF site. `capturesFrom` is its capture side; the opposite side evicts. */
-export interface CtcfSpec {
-  site: number;
-  capturesFrom: Side;
-  /** Probability the CTCF acts when a leg lands on it. Default 1. */
-  strength?: number;
-}
-
-/** CTCFs as columns, convenient for large (e.g. genome-scale) inputs. */
-export interface CtcfColumns {
-  site: ArrayLike<number>;
-  capturesFrom: ArrayLike<Side> | Side;
-  strength?: ArrayLike<number> | number;
-}
-
 export interface SimOptions {
-  nSites: number;
-  ctcfs?: CtcfSpec[] | CtcfColumns;
-  /** Explicit LEF sites; these LEFs get the first ids. */
-  lefSites?: ArrayLike<number>;
-  /** LEFs to place at random non-CTCF sites, after `lefSites`. */
-  nLefs?: number;
   /** Any integer in [0, 2^64). Default 0. */
   seed?: number | bigint;
-  /** Omitted rates use the core's defaults. */
-  rates?: Partial<Rates>;
+  /** The clock's start, e.g. to continue from a recorded state. Default 0. */
+  startTime?: number;
 }
 
-export type StopReason = "reached_time" | "reached_event_count" | "exhausted";
+/** What a run did: events fired by this call, the time reached, and why it stopped. */
+export interface RunReport {
+  nEvents: number;
+  time: number;
+  stopped: StopReason;
+}
 
 /** A recorded chunk of event deltas plus why recording stopped. */
 export interface EventChunk extends DeltaChunk {
   /** "recorder_full" means the chunk filled first: call again for the next. */
-  stopped: StopReason | "recorder_full";
+  stopped: StopReason;
 }
 
 /** What to record in {@link Sim.recordUntil} / {@link Sim.recordEvents}. */
@@ -111,68 +123,11 @@ export interface Recording extends RunReport {
   events: DeltaChunk | null;
 }
 
-export interface RunReport {
-  eventsFired: number;
+/** One fired event: its time, action, and the `leg_id` (a step) or `lef_id` (a respawn). */
+export interface FiredEvent {
   time: number;
-  stopped: StopReason;
-}
-
-// ------------------------------------------------------------------ validation
-
-const U32_MAX = 2 ** 32 - 1;
-
-// Typed arrays coerce silently (-1 → 4294967295, 1.5 → 1), so check first.
-function toU32Array(values: ArrayLike<number>, what: string): Uint32Array {
-  const out = new Uint32Array(values.length);
-  for (let i = 0; i < values.length; i++) {
-    const v = values[i]!;
-    if (!Number.isInteger(v) || v < 0 || v > U32_MAX) {
-      throw new RangeError(`${what} must be non-negative integers, got ${v}`);
-    }
-    out[i] = v;
-  }
-  return out;
-}
-
-function sideCode(side: unknown): number {
-  if (side === "left") return 0;
-  if (side === "right") return 1;
-  throw new RangeError(`capturesFrom must be "left" or "right", got ${JSON.stringify(side)}`);
-}
-
-function ctcfArrays(ctcfs: SimOptions["ctcfs"]): [Uint32Array, Uint8Array, Float64Array] {
-  if (ctcfs === undefined) return [new Uint32Array(), new Uint8Array(), new Float64Array()];
-  if (Array.isArray(ctcfs)) {
-    return [
-      toU32Array(ctcfs.map((c) => c.site), "CTCF sites"),
-      Uint8Array.from(ctcfs, (c) => sideCode(c.capturesFrom)),
-      Float64Array.from(ctcfs, (c) => c.strength ?? 1),
-    ];
-  }
-  const cols = ctcfs as CtcfColumns;
-  const n = cols.site.length;
-  const at = <T>(v: ArrayLike<T> | T, i: number, name: string): T => {
-    if (typeof v === "object" && v !== null && "length" in v) {
-      if (v.length !== n) throw new RangeError(`ctcfs.${name} has ${v.length} entries, site has ${n}`);
-      return v[i]!;
-    }
-    return v as T;
-  };
-  return [
-    toU32Array(cols.site, "CTCF sites"),
-    Uint8Array.from({ length: n }, (_, i) => sideCode(at(cols.capturesFrom, i, "capturesFrom"))),
-    Float64Array.from({ length: n }, (_, i) => at(cols.strength ?? 1, i, "strength")),
-  ];
-}
-
-function seedBigInt(seed: number | bigint | undefined): bigint {
-  if (seed === undefined) return 0n;
-  if (typeof seed === "number" && !Number.isSafeInteger(seed)) {
-    throw new RangeError(`seed must be an integer (use a bigint beyond 2^53), got ${seed}`);
-  }
-  const s = BigInt(seed);
-  if (s < 0n || s >= 2n ** 64n) throw new RangeError(`seed must be in [0, 2^64), got ${seed}`);
-  return s;
+  action: "Step" | "Respawn";
+  id: number;
 }
 
 /** Event columns from wasm lack `end`; it is the time after the call. */
@@ -185,6 +140,9 @@ function checkCount(n: number, what: string): number {
   if (!Number.isInteger(n) || n < 0) throw new RangeError(`${what} must be a non-negative integer, got ${n}`);
   return n;
 }
+
+/** Internal: `new Sim` wraps an existing wasm sim (for {@link Sim.clone}). */
+const FORK = Symbol("fork");
 
 export { Replayer } from "./replayer.ts";
 
@@ -215,42 +173,30 @@ export async function* iterate<T>(stream: ReadableStream<T>): AsyncGenerator<T, 
 // ------------------------------------------------------------------ Sim
 
 /**
- * A loop-extrusion simulation on a 1D lattice.
+ * A running simulation of a {@link Model}.
  *
- * LEFs are placed at construction: one at each of `lefSites`, then `nLefs`
- * more at random non-CTCF sites, numbered in that order (`lef_id`). Legs are
- * numbered `leg_id = 2 * lef_id + side`, where side 0 faces left and side 1
- * faces right.
+ * `seed` drives the whole run: the same model and seed give the same run,
+ * bit for bit, on every platform. LEFs keep their row numbers from the
+ * model's world (`lef_id`); legs are numbered `leg_id = 2 * lef_id + side`,
+ * where side 0 faces left and side 1 faces right.
  *
  * Holds WebAssembly memory: call {@link Sim.free} when done, or declare it
  * with `using`. A forgotten Sim is freed eventually by the garbage collector.
  */
 export class Sim implements Disposable {
   #inner: WasmSim | undefined;
+  readonly lattice: Lattice;
+  readonly spawnRule: SpawnRule;
   readonly nSites: number;
   readonly nLefs: number;
 
-  constructor(options: SimOptions) {
+  constructor(model: Model, options: SimOptions = {}) {
     wasmMemory();
-    const nSites = options.nSites;
-    if (!Number.isInteger(nSites) || nSites < 1 || nSites > U32_MAX) {
-      throw new RangeError(`nSites must be an integer in [1, 2^32), got ${nSites}`);
-    }
-    const [site, side, strength] = ctcfArrays(options.ctcfs);
-    const rates = options.rates ?? {};
-    this.#inner = new WasmSim(
-      nSites,
-      site,
-      side,
-      strength,
-      toU32Array(options.lefSites ?? [], "lefSites"),
-      checkCount(options.nLefs ?? 0, "nLefs"),
-      seedBigInt(options.seed),
-      rates.step,
-      rates.respawn,
-      rates.respawnCaptured,
-    );
-    this.nSites = nSites;
+    const fork = (options as { [FORK]?: WasmSim })[FORK];
+    this.#inner = fork ?? new WasmSim(...modelArgs(model), seedBigInt(options.seed), options.startTime ?? 0);
+    this.lattice = model.world.lattice;
+    this.spawnRule = model.spawnRule;
+    this.nSites = this.lattice.nSites;
     this.nLefs = this.#inner.n_lefs();
   }
 
@@ -278,8 +224,8 @@ export class Sim implements Disposable {
   }
 
   /** Total events fired so far. */
-  get eventCount(): number {
-    return this.#sim.event_count();
+  get nEvents(): number {
+    return this.#sim.n_events();
   }
 
   /** Time of the next event, or `null` if none remain. */
@@ -289,6 +235,35 @@ export class Sim implements Disposable {
 
   get rates(): Rates {
     return this.#sim.rates() as Rates;
+  }
+
+  /** The current state as a {@link World}. Arrays are copies, safe to keep. */
+  world(): World {
+    return { lattice: this.lattice, lefs: this.#sim.lefs() as World["lefs"] };
+  }
+
+  /**
+   * The current state as a {@link Model}: the world now, with this run's
+   * rates and spawn rule. `new Sim(sim.model(), { seed, startTime: sim.time })`
+   * continues from here with fresh randomness; {@link Sim.clone} continues
+   * exactly.
+   */
+  model(): Model {
+    return { world: this.world(), rates: this.rates, spawnRule: this.spawnRule };
+  }
+
+  /** An exact fork: a copy that continues the run as this one would. */
+  clone(): Sim {
+    const model = { world: { lattice: this.lattice }, spawnRule: this.spawnRule } as Model;
+    return new Sim(model, { [FORK]: this.#sim.fork() } as SimOptions);
+  }
+
+  /** Fire one event, or return `null` if none remain. */
+  step(): FiredEvent | null {
+    const fired = this.#driver.step() as [number, number, number] | null;
+    if (!fired) return null;
+    const [time, code, id] = fired;
+    return { time, action: ROW_KIND[code] as FiredEvent["action"], id };
   }
 
   /**
@@ -371,25 +346,26 @@ export class Sim implements Disposable {
    * demand: the sim advances only when the consumer reads, which gives
    * backpressure for free. Pass exactly one of:
    *
-   * - `dt` (optional `t0`): {@link SnapshotChunk}s of up to `chunkSize`
-   *   snapshots (default 1,000), each call firing at most `maxEvents`;
+   * - `dt` (optional `t0`): {@link SnapshotChunk}s of at most
+   *   `maxSnapshots` snapshots (default 1,000), each call firing at most
+   *   `maxEvents`;
    * - `events: true` (optional `keyframes`, default true):
-   *   {@link EventChunk}s of up to `chunkSize` rows (default 10,000).
+   *   {@link EventChunk}s of about `maxRows` rows (default 10,000).
    *
    * While the stream is open, calls that advance this Sim throw; read-only
-   * ones (`time`, `state()`, `meta()`) still work. Finishing or cancelling
+   * ones (`time`, `state()`, `world()`) still work. Finishing or cancelling
    * the stream releases it. Runs on the calling thread, one bounded chunk
    * per read. To read with `for await` everywhere (including Safari), use
    * {@link iterate}. For Arrow record batches, pipe it through
    * `toRecordBatches()` from `lefsim/arrow`.
    */
-  stream(tEnd: number, options: { dt: number; t0?: number; chunkSize?: number; maxEvents?: number }): ReadableStream<SnapshotChunk>;
-  stream(tEnd: number, options: { events: true; keyframes?: boolean; chunkSize?: number }): ReadableStream<EventChunk>;
+  stream(tEnd: number, options: { dt: number; t0?: number; maxSnapshots?: number; maxEvents?: number }): ReadableStream<SnapshotChunk>;
+  stream(tEnd: number, options: { events: true; keyframes?: boolean; maxRows?: number }): ReadableStream<EventChunk>;
   stream(
     tEnd: number,
     options:
-      | { dt: number; t0?: number; chunkSize?: number; maxEvents?: number }
-      | { events: true; keyframes?: boolean; chunkSize?: number },
+      | { dt: number; t0?: number; maxSnapshots?: number; maxEvents?: number }
+      | { events: true; keyframes?: boolean; maxRows?: number },
   ): ReadableStream<SnapshotChunk | EventChunk> {
     if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
     const isEvents = "events" in options && options.events === true;
@@ -398,15 +374,17 @@ export class Sim implements Disposable {
     void this.#driver; // throws if freed or already streaming
     let next: () => SnapshotChunk | EventChunk;
     if (isEvents) {
+      if ("maxSnapshots" in options) throw new RangeError("maxSnapshots applies to dt; use maxRows with events: true");
       const keyframes = options.keyframes ?? true;
-      const maxRows = checkCount(options.chunkSize ?? 10_000, "chunkSize");
+      const maxRows = checkCount(options.maxRows ?? 10_000, "maxRows");
       const min = keyframes ? this.nLegs + 2 : 2;
-      if (maxRows < min) throw new RangeError(`chunkSize must be at least ${min}${keyframes ? " with keyframes" : ""}, got ${maxRows}`);
+      if (maxRows < min) throw new RangeError(`maxRows must be at least ${min}${keyframes ? " with keyframes" : ""}, got ${maxRows}`);
       next = () => this.#sim.record_event_chunk(tEnd, maxRows, keyframes) as EventChunk;
     } else {
+      if ("maxRows" in options) throw new RangeError("maxRows applies to events: true; use maxSnapshots with dt");
       const { dt, t0 = 0, maxEvents = 250_000 } = options as { dt: number; t0?: number; maxEvents?: number };
-      const maxSnapshots = checkCount(options.chunkSize ?? 1_000, "chunkSize");
-      if (maxSnapshots < 1) throw new RangeError("chunkSize must be positive");
+      const maxSnapshots = checkCount((options as { maxSnapshots?: number }).maxSnapshots ?? 1_000, "maxSnapshots");
+      if (maxSnapshots < 1) throw new RangeError("maxSnapshots must be positive");
       checkCount(maxEvents, "maxEvents");
       next = () => this.#sim.record_snapshot_chunk(tEnd, dt, t0, maxSnapshots, maxEvents) as SnapshotChunk;
     }
@@ -445,7 +423,10 @@ export class Sim implements Disposable {
     );
   }
 
-  /** The current state of every LEF. See {@link LiveState} for the view contract. */
+  /**
+   * The current state of every LEF, as zero-copy views: see
+   * {@link LiveState} for the contract. {@link Sim.world} gives a copy.
+   */
   state(): LiveState {
     const sim = this.#sim;
     sim.sync_state();
@@ -458,11 +439,6 @@ export class Sim implements Disposable {
       leftMobility: new Uint8Array(buf, sim.left_mob_ptr(), n),
       rightMobility: new Uint8Array(buf, sim.right_mob_ptr(), n),
     };
-  }
-
-  /** Static tables describing the run. Arrays are copies, safe to keep. */
-  meta(): Meta {
-    return this.#sim.meta() as Meta;
   }
 
   /** Release the WebAssembly memory. Idempotent. */

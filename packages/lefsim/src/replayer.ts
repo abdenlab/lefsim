@@ -5,7 +5,7 @@
  * tell whether it's watching a local simulation or a recorded/streamed one.
  */
 
-import { KEYFRAME, type DeltaChunk, type LiveState } from "./types.ts";
+import { KEYFRAME, type DeltaChunk, type Lattice, type LiveState, type World } from "./types.ts";
 
 interface KeyframeRef {
   chunk: number;
@@ -25,6 +25,7 @@ interface KeyframeRef {
  * replayer can start partway into a stream (a late joiner).
  */
 export class Replayer {
+  readonly lattice: Lattice;
   readonly nLefs: number;
   #chunks: DeltaChunk[] = [];
   #keyframes: KeyframeRef[] = [];
@@ -37,8 +38,10 @@ export class Replayer {
   #leftMob: Uint8Array;
   #rightMob: Uint8Array;
 
-  constructor(nLefs: number) {
+  /** A replayer for a run on `lattice` with `nLefs` LEFs. */
+  constructor(lattice: Lattice, nLefs: number) {
     if (!Number.isInteger(nLefs) || nLefs < 0) throw new RangeError(`nLefs must be a non-negative integer, got ${nLefs}`);
+    this.lattice = lattice;
     this.nLefs = nLefs;
     this.#leftPos = new Uint32Array(nLefs);
     this.#rightPos = new Uint32Array(nLefs);
@@ -154,6 +157,32 @@ export class Replayer {
       leftMobility: this.#leftMob,
       rightMobility: this.#rightMob,
     };
+  }
+
+  /**
+   * The state at {@link Replayer.time} as a {@link World}, with copied
+   * arrays: to start a new run from, e.g.
+   * `new Sim(createModel(replayer.world(), rates), { seed, startTime: replayer.time })`.
+   * The replayer doesn't check it (it has no WebAssembly); `createModel`
+   * and `new Sim` do.
+   */
+  world(): World {
+    const s = this.state();
+    return {
+      lattice: this.lattice,
+      lefs: {
+        leftPos: s.leftPos.slice(),
+        rightPos: s.rightPos.slice(),
+        leftMobility: s.leftMobility.slice(),
+        rightMobility: s.rightMobility.slice(),
+      },
+    };
+  }
+
+  /** {@link Replayer.seek} to `t`, then {@link Replayer.world}. */
+  worldAt(t: number): World {
+    this.seek(t);
+    return this.world();
   }
 
   /**

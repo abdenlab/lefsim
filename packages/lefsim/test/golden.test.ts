@@ -7,6 +7,7 @@ import { expect, it } from "vitest";
 
 import { eventsToArrow, snapshotsToArrow } from "../src/arrow.ts";
 import { Sim } from "../src/index.ts";
+import { makeSim, type Setup } from "./helpers.ts";
 
 const RUST_GOLDEN = 0xe5a22c6618308528n;
 
@@ -21,7 +22,7 @@ const values = <T>(b: RecordBatch, name: string) => b.getChild(name)!.data[0]!.v
 
 it("reproduces the Rust golden fingerprint from Arrow JS columns", () => {
   const sites = Array.from({ length: 10 }, (_, k) => 25 + 50 * k);
-  using sim = new Sim({
+  using sim = makeSim({
     nSites: 500,
     ctcfs: sites.map((site) => ({ site, capturesFrom: site % 100 === 25 ? "right" : "left", strength: 0.7 })),
     nLefs: 20,
@@ -29,7 +30,7 @@ it("reproduces the Rust golden fingerprint from Arrow JS columns", () => {
     rates: { step: 1, respawn: 0.01, respawnCaptured: 0.002 },
   });
   const rec = sim.recordEvents(50_000, { dt: 5, events: true });
-  expect(rec.eventsFired).toBe(50_000);
+  expect(rec.nEvents).toBe(50_000);
   const events = eventsToArrow(rec.events!);
   const snaps = snapshotsToArrow(rec.snapshots!);
 

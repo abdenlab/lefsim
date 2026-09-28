@@ -1,7 +1,7 @@
 // The model both demo pages simulate: a 3,000-site lattice split into five
 // TADs by convergent CTCF pairs.
 
-import type { SimOptions } from "lefsim";
+import { createLattice, createModel, populate, Sim } from "lefsim";
 
 export const N_SITES = 3000;
 export const BOUNDARIES = [600, 1300, 1800, 2500];
@@ -11,8 +11,14 @@ export const CTCFS = BOUNDARIES.flatMap((b) => [
 ]);
 export const RATES = { step: 1, respawn: 0.002, respawnCaptured: 0.0004 };
 
-export function options(nLefs: number, seed: number): SimOptions {
-  return { nSites: N_SITES, ctcfs: CTCFS, nLefs, seed, rates: RATES };
+/**
+ * A new run of the model with `nLefs` LEFs: placed with `seed`, and run with
+ * the same seed. Call after `init()`.
+ */
+export function newSim(nLefs: number, seed: number): Sim {
+  const lattice = createLattice(N_SITES, CTCFS);
+  const model = createModel(populate(lattice, nLefs, { seed }), RATES);
+  return new Sim(model, { seed });
 }
 
 /** Clamp the LEF-count and seed inputs to valid values (and write them back). */

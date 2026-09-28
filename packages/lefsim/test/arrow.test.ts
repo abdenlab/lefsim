@@ -21,7 +21,8 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { deltaChunkFromArrow, eventsToArrow, latticeToArrow, lefsToArrow, snapshotsToArrow } from "../src/arrow.ts";
-import { KEYFRAME, Replayer, Sim, type SimOptions } from "../src/index.ts";
+import { createLattice, KEYFRAME, Replayer, type Side } from "../src/index.ts";
+import { makeSim, type Setup } from "./helpers.ts";
 import schemas from "./fixtures/schemas.json";
 import ipcInfo from "./fixtures/python_events.json";
 
@@ -50,7 +51,7 @@ function describe_(batch: RecordBatch) {
 }
 
 // The model the schema fixture was generated from (see make_fixtures.py).
-const SMALL: SimOptions = {
+const SMALL: Setup = {
   nSites: 200,
   ctcfs: [
     { site: 60, capturesFrom: "right" },
@@ -63,8 +64,8 @@ const SMALL: SimOptions = {
 // ------------------------------------------------------------------ tests
 
 describe("schema parity with the Python binding", () => {
-  using sim = new Sim(SMALL);
-  const lattice = latticeToArrow(sim.meta());
+  using sim = makeSim(SMALL);
+  const lattice = latticeToArrow(sim.lattice);
   const lefs = lefsToArrow(sim.state());
   const built = {
     snapshots_lef: snapshotsToArrow(sim.recordUntil(10, { dt: 1 }).snapshots!),
@@ -81,7 +82,7 @@ describe("schema parity with the Python binding", () => {
 
 describe("builders", () => {
   it("wrap the simulator's arrays without copying", () => {
-    using sim = new Sim({ ...SMALL, seed: 2 });
+    using sim = makeSim({ ...SMALL, seed: 2 });
     const s = sim.recordUntil(50, { dt: 1 }).snapshots!;
     const b = snapshotsToArrow(s);
     const left = b.getChild("left_pos")!.data[0]!.values as Uint32Array;
@@ -91,7 +92,7 @@ describe("builders", () => {
   });
 
   it("the leg layout is the lef layout unpivoted", () => {
-    using sim = new Sim({ ...SMALL, seed: 3 });
+    using sim = makeSim({ ...SMALL, seed: 3 });
     const s = sim.recordUntil(80, { dt: 2 }).snapshots!;
     const wide = snapshotsToArrow(s);
     const long = snapshotsToArrow(s, { layout: "leg" });
@@ -108,7 +109,7 @@ describe("builders", () => {
   });
 
   it("survive an Arrow IPC round trip", () => {
-    using sim = new Sim({ ...SMALL, seed: 4 });
+    using sim = makeSim({ ...SMALL, seed: 4 });
     const b = eventsToArrow(sim.recordUntil(100, { events: true, keyframes: true }).events!);
     const back = tableFromIPC(tableToIPC(new Table(b)));
     expect(back.schema.metadata.get("lefsim.kind")).toBe("events");
@@ -119,7 +120,7 @@ describe("builders", () => {
 
 describe("deltaChunkFromArrow", () => {
   it("inverts eventsToArrow without copying", () => {
-    using sim = new Sim({ ...SMALL, seed: 5 });
+    using sim = makeSim({ ...SMALL, seed: 5 });
     const ev = sim.recordUntil(100, { events: true, keyframes: true }).events!;
     const chunk = deltaChunkFromArrow(eventsToArrow(ev), { end: ev.end });
     expect(chunk.legId.buffer).toBe(ev.legId.buffer);
@@ -129,7 +130,7 @@ describe("deltaChunkFromArrow", () => {
   });
 
   it("defaults end to the last row's time", () => {
-    using sim = new Sim({ ...SMALL, seed: 5 });
+    using sim = makeSim({ ...SMALL, seed: 5 });
     const ev = sim.recordUntil(100, { events: true }).events!;
     expect(deltaChunkFromArrow(eventsToArrow(ev)).end).toBe(ev.time[ev.time.length - 1]);
   });
@@ -162,7 +163,12 @@ describe("Arrow IPC from the Python binding", () => {
     const reader = RecordBatchReader.from(bytes);
     const { config } = ipcInfo;
     const nLefs = config.nLefs;
-    const replayer = new Replayer(nLefs);
+    const lattice = createLattice(config.nSites, {
+      site: config.ctcfSites,
+      capturesFrom: config.ctcfCapturesFrom as Side[],
+      strength: config.ctcfStrength,
+    });
+    const replayer = new Replayer(lattice, nLefs);
     let batches = 0;
     for (const batch of reader) {
       const chunk = deltaChunkFromArrow(batch);
@@ -172,7 +178,7 @@ describe("Arrow IPC from the Python binding", () => {
     }
     expect(batches).toBe(ipcInfo.batches);
 
-    using sim = new Sim({
+    using sim = makeSim({
       nSites: config.nSites,
       ctcfs: { site: config.ctcfSites, capturesFrom: config.ctcfCapturesFrom as ("left" | "right")[], strength: config.ctcfStrength },
       nLefs,

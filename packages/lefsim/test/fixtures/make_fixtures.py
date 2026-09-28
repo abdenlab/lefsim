@@ -61,6 +61,15 @@ out.write_text(json.dumps({"config": config, "expected": expected}, indent=1) + 
 print("wrote", out)
 
 
+# ---------------------------------------------------------------- model JSON
+# The fixture run's model at t = 1000 (it has captured legs), as the JSON
+# document. The TS tests read it and must write the same document back.
+
+out = HERE / "model.json"
+out.write_text(sim.model().to_json(indent=1) + "\n")
+print("wrote", out)
+
+
 # ---------------------------------------------------------------- schemas
 # A neutral description of every table the Python binding emits, which the
 # TS Arrow builders must reproduce (names, types, nullability, dictionary

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { KEYFRAME, Sim, type SimOptions, type SnapshotColumns } from "../src/index.ts";
+import { KEYFRAME, Sim, type SnapshotColumns } from "../src/index.ts";
+import { makeSim, type Setup } from "./helpers.ts";
 
-const OPTIONS: SimOptions = {
+const OPTIONS: Setup = {
   nSites: 200,
   ctcfs: [
     { site: 60, capturesFrom: "right", strength: 0.8 },
@@ -12,7 +13,7 @@ const OPTIONS: SimOptions = {
   nLefs: 8,
   rates: { step: 1, respawn: 0.02, respawnCaptured: 0.005 },
 };
-const make = (seed: number) => new Sim({ ...OPTIONS, seed });
+const make = (seed: number) => makeSim({ ...OPTIONS, seed });
 
 /** Concatenate snapshot columns. */
 function concat(parts: SnapshotColumns[]): SnapshotColumns {
@@ -67,7 +68,7 @@ describe("recordUntil", () => {
     a.recordUntil(200, { dt: 0.3, events: true, keyframes: true });
     using b = make(3);
     b.runUntil(200);
-    expect(a.eventCount).toBe(b.eventCount);
+    expect(a.nEvents).toBe(b.nEvents);
     expect(Array.from(a.state().leftPos)).toEqual(Array.from(b.state().leftPos));
   });
 
@@ -99,7 +100,7 @@ describe("recordEvents", () => {
   it("fires exactly n events and only records settled grid points", () => {
     using sim = make(6);
     const rec = sim.recordEvents(500, { dt: 0.5, events: true });
-    expect(rec.eventsFired).toBe(500);
+    expect(rec.nEvents).toBe(500);
     expect(Array.from(rec.snapshots!.time).every((t) => t <= sim.time)).toBe(true);
     const rest = sim.recordUntil(100, { dt: 0.5 });
     using fresh = make(6);
