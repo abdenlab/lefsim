@@ -385,12 +385,15 @@ pnpm test            # vitest, against the real wasm build
 ```
 Cargo.toml              workspace
 crates/lefsim/          core crate
-  src/sim.rs            Sim, SimBuilder, batch drivers
-  src/record.rs         Recorder, EventRecorder, frames, SimMeta
-  src/action.rs         Action, Rates, scheduling and firing rules
-  src/engine/           event loop and indexed heap (internal)
-  src/world/            World, lattice, legs and LEFs
-  src/spawn.rs          SpawnRule, UniformNonCtcfSpawn
+  src/model/            the model (never depends on sim/):
+    world.rs              World: the state (lattice + legs and LEFs)
+    lattice.rs, entity.rs sites and CTCFs; legs, LEFs and their keys
+    action.rs             Action, Rates, scheduling and firing rules, CTCF landing
+    spawn.rs              SpawnRule, UniformNonCtcfSpawn
+  src/sim/              running and observing a model:
+    mod.rs                Sim, SimBuilder, batch drivers
+    record.rs             Recorder, EventRecorder, frames, SimMeta
+    engine.rs, heap.rs    event loop and indexed heap (internal)
   examples/single_lef.rs
   tests/
 crates/lefsim-py/       Python bindings

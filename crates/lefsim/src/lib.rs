@@ -37,31 +37,29 @@
 //!
 //! ## Module layout
 //!
-//! - [`sim`]: the [`Sim`] facade, its builder, and batch drivers.
-//! - [`record`]: recorders, frame buffers, and static run metadata.
-//! - [`world`]: world state and the static substrate it sits on.
-//!   - [`world::lattice`]: immutable lattice (sites, directions, CTCFs).
-//!   - [`world::entity`]: typed keys plus the [`world::Leg`] and
-//!     [`world::Lef`] structs.
-//! - [`action`]: action enum, scheduling, and firing logic.
-//! - [`spawn`]: spawn-site selection rules used by `Action::Respawn`.
-//! - [`engine`]: the priority-queue event loop (internal) and time types.
+//! The crate has two halves, and [`model`] never depends on [`sim`]:
+//!
+//! - [`model`]: the loop-extrusion model.
+//!   - [`model::world`]: the state: lattice plus entities.
+//!   - [`model::lattice`]: the immutable lattice (sites, directions, CTCFs).
+//!   - [`model::entity`]: typed keys plus the [`Leg`] and [`Lef`] structs.
+//!   - [`model::action`]: the dynamics: actions, their [`Rates`], scheduling
+//!     and firing, and how landing on a CTCF resolves.
+//!   - [`model::spawn`]: spawn-site rules used by `Action::Respawn`.
+//! - [`sim`]: running and observing a model.
+//!   - [`Sim`], its builder, and batch drivers.
+//!   - [`sim::record`]: recorders, frame buffers, and static run metadata.
+//!   - The event loop and its indexed heap (internal).
 
-pub mod action;
-pub mod engine;
-pub mod record;
+pub mod model;
 pub mod sim;
-pub mod spawn;
-pub mod world;
 
-pub use action::{Action, Rates};
-pub use engine::{Schedule, SimRng, Time};
-pub use record::{
+pub use model::{
+    Action, Direction, Lattice, Leg, Lef, LefKey, LegKey, Mobility, Position, Rates, Schedule,
+    SimRng, Site, SiteKind, SpawnRule, Time, UniformNonCtcfSpawn, World,
+};
+pub use sim::record::{
     EventColumns, EventFrames, EventRecorder, LefColumns, LefFrames, LefSnapshot, Observer,
     Recorder, SampleMode, SimMeta,
 };
 pub use sim::{BuildError, RunReport, Sim, SimBuilder, StopReason};
-pub use spawn::{SpawnRule, UniformNonCtcfSpawn};
-pub use world::{
-    Direction, Lattice, Leg, Lef, LefKey, LegKey, Mobility, Site, Position, SiteKind, World,
-};

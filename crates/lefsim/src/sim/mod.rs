@@ -16,17 +16,23 @@
 //! where side 0 is the left-facing leg and side 1 the right-facing one.
 //! Slotmap keys stay internal.
 
+mod engine;
+mod heap;
+pub mod record;
+
 use std::fmt;
 
 use rand::SeedableRng;
 use slotmap::SecondaryMap;
 
-use crate::action::{Action, Rates, Touched};
-use crate::engine::{Engine, SimRng, Time};
-use crate::record::sealed::Observe;
-use crate::record::{LefFrames, Observer, Recorder, SampleMode, SimMeta};
-use crate::spawn::{SpawnRule, UniformNonCtcfSpawn};
-use crate::world::{Lattice, LefKey, LegKey, Mobility, Position, World};
+use crate::model::action::Touched;
+use crate::model::{
+    Action, Lattice, LefKey, LegKey, Mobility, Position, Rates, SimRng, SpawnRule, Time,
+    UniformNonCtcfSpawn, World,
+};
+use engine::Engine;
+use record::sealed::Observe;
+use record::{LefFrames, Observer, Recorder, SampleMode, SimMeta};
 
 /// How an initial LEF is placed during [`SimBuilder::build`].
 #[derive(Copy, Clone, Debug)]
@@ -433,7 +439,7 @@ impl Sim {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::{Direction, Site};
+    use crate::model::{Direction, Site};
 
     fn two_ctcf_lattice() -> Lattice {
         let mut sites = vec![Site::plain(); 100];

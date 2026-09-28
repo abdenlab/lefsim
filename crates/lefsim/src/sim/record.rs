@@ -25,10 +25,8 @@
 //! Recording never touches the RNG: a run produces the same events whether
 //! or not anything is observing it.
 
-use crate::action::{Action, Rates};
-use crate::engine::Time;
-use crate::sim::Sim;
-use crate::world::SiteKind;
+use super::Sim;
+use crate::model::{Action, Rates, SiteKind, Time};
 
 // ===================================================================
 // Grid snapshots

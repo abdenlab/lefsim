@@ -1,40 +1,19 @@
 //! Priority-queue-driven simulation loop.
 //!
 //! Built around an indexed binary min-heap of actions keyed by event time
-//! (`heap::IndexedHeap`, a textbook Gibson-Bruck "next reaction method"
+//! (`super::heap::IndexedHeap`, a textbook Gibson-Bruck "next reaction method"
 //! structure). Rescheduling an action mutates its priority in place via a
 //! slotmap-keyed position lookup; every action stays in the heap for the
 //! simulation's lifetime. A `Schedule::Never` schedule is represented by
 //! `+∞` priority, which sits at the bottom of the heap without being
 //! removed.
 
-mod heap;
-
-use rand_pcg::Pcg64;
 use smallvec::SmallVec;
 
-use crate::action::{Action, Rates, Touched};
-use crate::spawn::SpawnRule;
-use crate::world::World;
+use crate::model::action::{Action, Rates, Touched};
+use crate::model::{Schedule, SimRng, SpawnRule, Time, World};
 
-use heap::{IndexedHeap, Priority};
-
-/// Continuous simulation clock. `f64` is plenty of precision for the
-/// time scales we care about.
-pub type Time = f64;
-
-/// Result returned by [`Action::schedule`]. Tells the engine when (or
-/// whether) to next fire the action.
-#[derive(Copy, Clone, Debug)]
-pub enum Schedule {
-    At(Time),
-    Never,
-}
-
-/// Concrete RNG type used throughout the simulation. Locked in so that
-/// signatures stay simple and seeded runs are reproducible. Trade off:
-/// callers wanting a different RNG must change this alias.
-pub type SimRng = Pcg64;
+use super::heap::{IndexedHeap, Priority};
 
 /// The event loop. Crate-internal: [`crate::Sim`] is the public driver.
 pub(crate) struct Engine {
@@ -160,8 +139,7 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spawn::UniformNonCtcfSpawn;
-    use crate::world::{Direction, Lattice, Site};
+    use crate::model::{Direction, Lattice, Site, UniformNonCtcfSpawn};
     use rand::SeedableRng;
 
     #[test]

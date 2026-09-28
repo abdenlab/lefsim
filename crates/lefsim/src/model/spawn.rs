@@ -2,8 +2,9 @@
 
 use rand::Rng;
 
-use crate::engine::SimRng;
-use crate::world::{Position, SiteKind, World};
+use super::lattice::{Position, SiteKind};
+use super::world::World;
+use super::SimRng;
 
 /// Strategy for picking the new spawn site when a LEF respawns.
 ///

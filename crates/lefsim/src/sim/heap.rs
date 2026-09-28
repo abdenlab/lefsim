@@ -8,13 +8,12 @@
 //! slotmap-backed position index — no hash table lookups, no stale
 //! entries to drain on pop.
 //!
-//! Internal to the engine module; not part of the public crate surface.
+//! Internal to the sim module; not part of the public crate surface.
 
 use slotmap::SecondaryMap;
 use std::cmp::Ordering;
 
-use crate::action::Action;
-use crate::world::{LefKey, LegKey};
+use crate::model::{Action, LefKey, LegKey};
 
 /// Heap priority. Smaller compares first (min-heap). Total order via
 /// [`f64::total_cmp`]; `Priority::NEVER` is `+∞` and acts as a sentinel

@@ -4,9 +4,11 @@ use rand::Rng;
 use rand::distributions::OpenClosed01;
 use smallvec::SmallVec;
 
-use crate::engine::{Schedule, SimRng, Time};
-use crate::spawn::SpawnRule;
-use crate::world::{Direction, LefKey, LegKey, Mobility, World, resolve_mobility};
+use super::entity::{LefKey, LegKey, Mobility};
+use super::lattice::{Direction, SiteKind};
+use super::spawn::SpawnRule;
+use super::world::World;
+use super::{Schedule, SimRng, Time};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Rates {
@@ -303,4 +305,131 @@ fn sample_exponential(rng: &mut SimRng, rate: f64) -> Time {
     // the only transcendental in the simulation; everything else is exact
     // IEEE arithmetic or integer bit manipulation.
     -libm::log(u) / rate
+}
+
+// ----- landing on a site -----
+
+/// Stochastic resolution of a leg's mobility *at the moment it lands at a site*.
+///
+/// Takes `arrived_from` — the side of the destination cell from which the
+/// leg arrived — rather than the leg's facing. The caller decides how to
+/// derive that from its step model; in the current forward-only stepping
+/// model, `arrived_from == leg.facing.opposite()`, but a model with
+/// back-stepping or independent step direction would derive it differently.
+///
+/// # Invariant
+///
+/// **Only call this once per actual landing.** Capture and eviction are
+/// modeled as events that fire *on the act of stepping onto a site* — not
+/// as facts derivable from position. Calling this function on a leg that
+/// hasn't moved would give it repeated, independent chances of being
+/// captured/evicted, which is physically wrong: a leg standing still on a
+/// CTCF that already failed to capture it must not get fresh rolls each
+/// time the scheduler revisits it.
+///
+/// Concretely: never call from any `schedule_*` function or any other
+/// non-mutating context. The correct call sites are exactly:
+///
+/// - `fire_step` — leg stepped to a new cell
+/// - `fire_respawn` — LEF placed its legs at the spawn cell
+/// - [`World::spawn_lef`] — initial placement at simulation start
+///
+/// # Semantics
+///
+/// - `Plain` sites: always returns `Moving`.
+/// - `Ctcf { captures_from, strength }`:
+///   - With probability `strength`: capture if `arrived_from == captures_from`,
+///     otherwise evict.
+///   - With probability `1 - strength`: pass through (`Moving`).
+pub(crate) fn resolve_mobility(
+    site: SiteKind,
+    arrived_from: Direction,
+    rng: &mut SimRng,
+) -> Mobility {
+    match site {
+        SiteKind::Plain => Mobility::Moving,
+        SiteKind::Ctcf { captures_from, strength } => {
+            if !rng.gen_bool(strength) {
+                Mobility::Moving
+            } else if arrived_from == captures_from {
+                Mobility::Captured
+            } else {
+                Mobility::Evicted
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::SeedableRng;
+
+    #[test]
+    fn plain_site_always_moving() {
+        let mut rng = SimRng::seed_from_u64(0);
+        assert_eq!(
+            resolve_mobility(SiteKind::Plain, Direction::Right, &mut rng),
+            Mobility::Moving
+        );
+        assert_eq!(
+            resolve_mobility(SiteKind::Plain, Direction::Left, &mut rng),
+            Mobility::Moving
+        );
+    }
+
+    #[test]
+    fn strength_1_captures_leg_arriving_on_capture_side() {
+        let mut rng = SimRng::seed_from_u64(0);
+        // CTCF's capture side is its right side. A leg that arrived from
+        // the right should be captured.
+        let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: 1.0 };
+        assert_eq!(
+            resolve_mobility(site, Direction::Right, &mut rng),
+            Mobility::Captured
+        );
+    }
+
+    #[test]
+    fn strength_1_evicts_leg_arriving_on_other_side() {
+        let mut rng = SimRng::seed_from_u64(0);
+        // CTCF's capture side is its right side; the left side evicts.
+        let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: 1.0 };
+        assert_eq!(
+            resolve_mobility(site, Direction::Left, &mut rng),
+            Mobility::Evicted
+        );
+    }
+
+    #[test]
+    fn strength_0_always_passes_through() {
+        let mut rng = SimRng::seed_from_u64(0);
+        let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: 0.0 };
+        for _ in 0..50 {
+            assert_eq!(resolve_mobility(site, Direction::Right, &mut rng), Mobility::Moving);
+            assert_eq!(resolve_mobility(site, Direction::Left, &mut rng), Mobility::Moving);
+        }
+    }
+
+    #[test]
+    fn capture_fraction_tracks_strength() {
+        let mut rng = SimRng::seed_from_u64(42);
+        let p = 0.3;
+        let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: p };
+        // Arrive from the capture side so the outcome on success is Captured.
+        let n = 50_000;
+        let mut captured = 0usize;
+        for _ in 0..n {
+            if resolve_mobility(site, Direction::Right, &mut rng) == Mobility::Captured {
+                captured += 1;
+            }
+        }
+        let frac = captured as f64 / n as f64;
+        // ~4 sigma for a Bernoulli(p) sample mean.
+        let sigma = (p * (1.0 - p) / n as f64).sqrt();
+        assert!(
+            (frac - p).abs() < 4.0 * sigma,
+            "capture fraction {frac} differs from p={p} by more than 4σ ({sigma:.4})"
+        );
+    }
 }
