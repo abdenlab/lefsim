@@ -40,6 +40,16 @@ impl Mobility {
             Mobility::Evicted => 2,
         }
     }
+
+    /// The inverse of [`Mobility::code`].
+    pub fn from_code(code: u8) -> Option<Self> {
+        match code {
+            0 => Some(Mobility::Moving),
+            1 => Some(Mobility::Captured),
+            2 => Some(Mobility::Evicted),
+            _ => None,
+        }
+    }
 }
 
 /// A single LEF leg. Two legs make a LEF.

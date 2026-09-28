@@ -287,6 +287,25 @@ only at settled times, never partway through an eviction and its immediate
 respawn, so they never show a transient `Evicted` leg. For the same reason a
 bounded batch may run past its cap by the rows of such a chain (typically two).
 
+**Replaying.** A `Replayer` rebuilds the state at any recorded time from
+keyframed batches, with no simulation:
+
+```rust
+let mut replayer = Replayer::new(lattice, n_lefs);
+replayer.push(batch, report.time)?; // each batch, with the time it runs through
+replayer.seek(250.0)?; // any direction; forward with advance_to(t) is cheaper
+let states = replayer.lef_states()?; // the state at t = 250
+let frames = replayer.snapshots(SampleMode::every_dt(1.0), 400.0); // decode to a grid
+let world = replayer.world()?; // start a new run from here
+```
+
+`snapshots` gives the same frames a `Recorder` on that grid would have
+recorded. A run started from `replayer.world()` (with
+`Sim::with_start_time`) continues the original faithfully in distribution,
+though not event for event: that would need the original RNG and event queue.
+Rows before the first keyframe are skipped, so a replayer can join a stream
+partway through, and `trim_before(t)` drops batches it no longer needs.
+
 **Reproducibility.** A seed fixes the whole run, bit for bit, across platforms,
 including wasm32. `tests/determinism.rs` pins a golden hash of a long run.
 
@@ -431,6 +450,7 @@ crates/lefsim/          core crate
   src/sim/              running and observing a model:
     mod.rs                Sim, its constructors, batch drivers
     record.rs             Recorder, EventRecorder, frames
+    replay.rs             Replayer
     engine.rs, heap.rs    event loop and indexed heap (internal)
   examples/single_lef.rs
   tests/

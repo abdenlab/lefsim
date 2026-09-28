@@ -55,6 +55,7 @@
 //! - [`sim`]: running and observing a model.
 //!   - [`Sim`], its constructors, and batch drivers.
 //!   - [`sim::record`]: recorders and frame buffers.
+//!   - [`Replayer`]: rebuilds states from a keyframed event log.
 //!   - The event loop and its indexed heap (internal).
 
 pub mod model;
@@ -66,7 +67,7 @@ pub use model::{
     SpawnError, SpawnRule, Time, World, WorldError, populate,
 };
 pub use sim::record::{
-    EventColumns, EventFrames, EventRecorder, LefColumns, LefFrames, LefSnapshot, Observer,
-    Recorder, SampleMode,
+    ColumnLengthError, EventColumns, EventFrames, EventRecorder, LefColumns, LefFrames, LefSnapshot,
+    Observer, Recorder, SampleMode,
 };
-pub use sim::{RunReport, Sim, StopReason};
+pub use sim::{ReplayError, Replayer, RunReport, Sim, StopReason};

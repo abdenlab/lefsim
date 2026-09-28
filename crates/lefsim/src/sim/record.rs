@@ -187,6 +187,19 @@ impl LefFrames {
         }
     }
 
+    /// Append a snapshot from per-leg states indexed by `leg_id`.
+    pub(crate) fn push_legs(&mut self, time: Time, legs: &[(u32, u8)]) {
+        assert_eq!(legs.len(), 2 * self.n_lefs, "one state per leg");
+        self.time.push(time);
+        for pair in legs.chunks_exact(2) {
+            let [(lp, lm), (rp, rm)] = [pair[0], pair[1]];
+            self.left_pos.push(lp);
+            self.right_pos.push(rp);
+            self.left_mob.push(lm);
+            self.right_mob.push(rm);
+        }
+    }
+
     fn push_snapshot(&mut self, time: Time, sim: &Sim) {
         assert_eq!(self.n_lefs, sim.n_lefs(), "recorder built for a different sim");
         self.time.push(time);
@@ -341,6 +354,31 @@ pub struct EventColumns {
     pub pos: Vec<u32>,
     pub mob: Vec<u8>,
     pub kind: Vec<u8>,
+}
+
+/// The columns of an [`EventColumns`] have different lengths.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ColumnLengthError;
+
+impl std::fmt::Display for ColumnLengthError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "event columns have different lengths")
+    }
+}
+
+impl std::error::Error for ColumnLengthError {}
+
+/// Event frames from columns, e.g. read back from Arrow. Only the lengths
+/// are checked here; a [`Replayer`](crate::Replayer) checks the values.
+impl TryFrom<EventColumns> for EventFrames {
+    type Error = ColumnLengthError;
+    fn try_from(c: EventColumns) -> Result<Self, Self::Error> {
+        let n = c.time.len();
+        if [c.leg_id.len(), c.pos.len(), c.mob.len(), c.kind.len()].iter().any(|&m| m != n) {
+            return Err(ColumnLengthError);
+        }
+        Ok(EventFrames { time: c.time, leg_id: c.leg_id, pos: c.pos, mob: c.mob, kind: c.kind })
+    }
 }
 
 impl EventFrames {

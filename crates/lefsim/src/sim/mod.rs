@@ -19,6 +19,9 @@
 mod engine;
 mod heap;
 pub mod record;
+mod replay;
+
+pub use replay::{ReplayError, Replayer};
 
 use std::sync::Arc;
 
