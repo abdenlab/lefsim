@@ -15,7 +15,7 @@ pub struct Rates {
     /// Step rate of a moving, unblocked leg.
     pub step: f64,
     /// Respawn rate when both legs are simply moving.
-    pub respawn_default: f64,
+    pub respawn: f64,
     /// Respawn rate when at least one leg is captured (longer lifetime).
     pub respawn_captured: f64,
     // Eviction is treated as an immediate respawn (dt = 0); no rate field.
@@ -27,7 +27,7 @@ impl Default for Rates {
     fn default() -> Self {
         Rates {
             step: 1.0,
-            respawn_default: 1e-3,
+            respawn: 1e-3,
             respawn_captured: 1e-4,
         }
     }
@@ -174,7 +174,7 @@ fn schedule_respawn(
         (Evicted, _) | (_, Evicted) => return Schedule::At(now),
         // Either captured -> longer lifetime.
         (Captured, _) | (_, Captured) => rates.respawn_captured,
-        _ => rates.respawn_default,
+        _ => rates.respawn,
     };
     Schedule::At(now + sample_exponential(rng, rate))
 }

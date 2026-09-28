@@ -191,7 +191,7 @@ impl WasmSim {
         let defaults = Rates::default();
         let rates = Rates {
             step: positive_rate("step rate", step_rate, defaults.step)?,
-            respawn_default: positive_rate("respawn rate", respawn_rate, defaults.respawn_default)?,
+            respawn: positive_rate("respawn rate", respawn_rate, defaults.respawn)?,
             respawn_captured: positive_rate(
                 "captured respawn rate",
                 respawn_rate_captured,
@@ -413,7 +413,7 @@ impl WasmSim {
         let r = self.sim.rates();
         let obj = Object::new();
         set(&obj, "step", r.step);
-        set(&obj, "respawn", r.respawn_default);
+        set(&obj, "respawn", r.respawn);
         set(&obj, "respawnCaptured", r.respawn_captured);
         obj
     }

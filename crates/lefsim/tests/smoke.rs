@@ -16,7 +16,7 @@ fn lef_extrudes_outward_on_empty_lattice() {
             // Effectively never within the test horizon (~1e9 expected
             // wait), but a respawn will still fire once step actions are
             // exhausted at the boundaries.
-            respawn_default: 1e-9,
+            respawn: 1e-9,
             respawn_captured: 1e-9,
         })
         .lef_at(100)
@@ -50,7 +50,7 @@ fn right_facing_leg_captured_at_compatible_ctcf() {
         .seed(11)
         .rates(Rates {
             step: 1.0,
-            respawn_default: 1e-12,
+            respawn: 1e-12,
             respawn_captured: 1e-12,
         })
         .lef_at(10)
@@ -80,7 +80,7 @@ fn eviction_triggers_immediate_respawn() {
         .seed(13)
         .rates(Rates {
             step: 1.0,
-            respawn_default: 1e-12,
+            respawn: 1e-12,
             respawn_captured: 1e-12,
         })
         .lef_at(10)

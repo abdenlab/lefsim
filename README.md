@@ -123,7 +123,7 @@ Arenas:
   - either leg `Evicted` → `At(now)` (immediate).
   - either leg `Captured` → exponential wait at `rates.respawn_captured` (longer
     lifetime while paused at a boundary).
-  - otherwise → `rates.respawn_default`.
+  - otherwise → `rates.respawn`.
 
 #### Firing rules
 

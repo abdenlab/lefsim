@@ -341,7 +341,7 @@ impl PySim {
         let defaults = Rates::default();
         let rates = Rates {
             step: positive_rate("step_rate", step_rate, defaults.step)?,
-            respawn_default: positive_rate("respawn_rate", respawn_rate, defaults.respawn_default)?,
+            respawn: positive_rate("respawn_rate", respawn_rate, defaults.respawn)?,
             respawn_captured: positive_rate(
                 "respawn_rate_captured",
                 respawn_rate_captured,
@@ -402,7 +402,7 @@ impl PySim {
         let r = self.sim()?.rates();
         let d = PyDict::new(py);
         d.set_item("step_rate", r.step)?;
-        d.set_item("respawn_rate", r.respawn_default)?;
+        d.set_item("respawn_rate", r.respawn)?;
         d.set_item("respawn_rate_captured", r.respawn_captured)?;
         Ok(d)
     }

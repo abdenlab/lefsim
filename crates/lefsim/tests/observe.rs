@@ -17,7 +17,7 @@ fn lattice(strength: f64) -> Lattice {
 fn rates() -> Rates {
     Rates {
         step: 1.0,
-        respawn_default: 0.02,
+        respawn: 0.02,
         respawn_captured: 0.005,
     }
 }

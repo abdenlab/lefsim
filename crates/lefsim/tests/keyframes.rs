@@ -16,7 +16,7 @@ fn lattice(strength: f64) -> Lattice {
 fn build(seed: u64, strength: f64) -> Sim {
     Sim::builder(lattice(strength))
         .seed(seed)
-        .rates(Rates { step: 1.0, respawn_default: 0.02, respawn_captured: 0.005 })
+        .rates(Rates { step: 1.0, respawn: 0.02, respawn_captured: 0.005 })
         .lefs(8)
         .build()
         .unwrap()

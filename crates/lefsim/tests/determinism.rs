@@ -22,7 +22,7 @@ fn fingerprint() -> u64 {
     }
     let mut sim = Sim::builder(Lattice::new(sites).unwrap())
         .seed(0x5EED)
-        .rates(Rates { step: 1.0, respawn_default: 0.01, respawn_captured: 0.002 })
+        .rates(Rates { step: 1.0, respawn: 0.01, respawn_captured: 0.002 })
         .lefs(20)
         .build()
         .unwrap();
