@@ -16,7 +16,7 @@
 
 use js_sys::{Float64Array, Object, Reflect, Uint32Array, Uint8Array};
 use lefsim::{
-    Ctcf, Direction, EventFrames, EventRecorder, Lattice, LefFrames, Mobility, Model, Rates, Recorder, RunReport,
+    Ctcf, Direction, EventFrames, EventRecorder, Lattice, LefFrames, LefStates, Mobility, Model, Rates, Recorder, RunReport,
     SampleMode, SpawnRule, StopReason,
 };
 use wasm_bindgen::prelude::*;
@@ -66,18 +66,13 @@ fn positive_rate(name: &str, value: Option<f64>, default: f64) -> Result<f64, Js
 }
 
 /// Contiguous per-LEF copies of the live state, for zero-copy JS views.
-struct StateBuffers {
-    left_pos: Vec<u32>,
-    right_pos: Vec<u32>,
-    left_mob: Vec<u8>,
-    right_mob: Vec<u8>,
-}
-
 /// A simulation. See the `lefsim` TypeScript package for the documented API.
 #[wasm_bindgen]
 pub struct WasmSim {
     sim: lefsim::Sim,
-    state: StateBuffers,
+    /// The world's LEF table as of the last `sync_state`. Refilled in place,
+    /// so its buffers (and the views JS builds on them) don't move.
+    state: LefStates,
     /// The most recent grid recorder, kept so that consecutive recording
     /// calls on the same grid continue it instead of repeating points.
     grid: Option<Recorder>,
@@ -94,14 +89,14 @@ enum Drive {
 /// `{time, leftPos, rightPos, leftMobility, rightMobility, nLefs}`: one
 /// `time` per snapshot, `nLefs` entries per snapshot in the other columns.
 fn snapshot_columns(frames: LefFrames) -> Object {
-    let c = frames.into_columns();
+    let (n_lefs, time, lefs) = frames.into_parts();
     let out = Object::new();
-    set(&out, "time", Float64Array::from(&c.time[..]));
-    set(&out, "leftPos", Uint32Array::from(&c.left_pos[..]));
-    set(&out, "rightPos", Uint32Array::from(&c.right_pos[..]));
-    set(&out, "leftMobility", Uint8Array::from(&c.left_mob[..]));
-    set(&out, "rightMobility", Uint8Array::from(&c.right_mob[..]));
-    set(&out, "nLefs", c.n_lefs as u32);
+    set(&out, "time", Float64Array::from(&time[..]));
+    set(&out, "leftPos", Uint32Array::from(&lefs.left_pos[..]));
+    set(&out, "rightPos", Uint32Array::from(&lefs.right_pos[..]));
+    set(&out, "leftMobility", Uint8Array::from(Mobility::as_codes(&lefs.left_mobility)));
+    set(&out, "rightMobility", Uint8Array::from(Mobility::as_codes(&lefs.right_mobility)));
+    set(&out, "nLefs", n_lefs as u32);
     out
 }
 
@@ -111,7 +106,7 @@ fn event_columns(frames: EventFrames) -> Object {
     set(&out, "time", Float64Array::from(frames.time()));
     set(&out, "legId", Uint32Array::from(frames.leg_id()));
     set(&out, "pos", Uint32Array::from(frames.pos()));
-    set(&out, "mobility", Uint8Array::from(frames.mob()));
+    set(&out, "mobility", Uint8Array::from(Mobility::as_codes(frames.mob())));
     set(&out, "kind", Uint8Array::from(frames.kind()));
     out
 }
@@ -201,13 +196,7 @@ impl WasmSim {
         let model = Model::new(world, rates, SpawnRule::UniformNonCtcf).map_err(|e| JsError::new(&e.to_string()))?;
         let sim = lefsim::Sim::new(model, seed);
 
-        let n = sim.n_lefs();
-        let state = StateBuffers {
-            left_pos: vec![0; n],
-            right_pos: vec![0; n],
-            left_mob: vec![0; n],
-            right_mob: vec![0; n],
-        };
+        let state = sim.world().lef_states();
         Ok(WasmSim { sim, state, grid: None })
     }
 
@@ -415,16 +404,8 @@ impl WasmSim {
     /// Copy every LEF's current leg positions and mobility codes into the
     /// state buffers, indexed by `lef_id`.
     pub fn sync_state(&mut self) {
-        let s = &mut self.state;
-        for i in 0..s.left_pos.len() {
-            let lef = i as u32;
-            let (l, r) = self.sim.lef_positions(lef);
-            let (lm, rm) = self.sim.lef_mobilities(lef);
-            s.left_pos[i] = l;
-            s.right_pos[i] = r;
-            s.left_mob[i] = lm.code();
-            s.right_mob[i] = rm.code();
-        }
+        self.state.clear();
+        self.sim.world().push_lef_states(&mut self.state);
     }
 
     pub fn left_pos_ptr(&self) -> *const u32 {
@@ -436,11 +417,11 @@ impl WasmSim {
     }
 
     pub fn left_mob_ptr(&self) -> *const u8 {
-        self.state.left_mob.as_ptr()
+        Mobility::as_codes(&self.state.left_mobility).as_ptr()
     }
 
     pub fn right_mob_ptr(&self) -> *const u8 {
-        self.state.right_mob.as_ptr()
+        Mobility::as_codes(&self.state.right_mobility).as_ptr()
     }
 
     // ----- static metadata -----

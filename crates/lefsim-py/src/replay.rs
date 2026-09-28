@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyType;
 use pyo3_arrow::input::AnyRecordBatch;
 
-use crate::arrow::{code_values, f64_values, snapshots_batch, u32_values};
+use crate::arrow::{code_values, f64_values, frames_batch, state_batch, u32_values};
 use crate::batch::PyBatch;
 use crate::model::{PyLattice, PyWorld, arrow_error, value_error};
 use crate::sim::{grid_mode, parse_layout};
@@ -22,7 +22,10 @@ fn event_columns(batch: &RecordBatch) -> PyResult<EventColumns> {
         time: f64_values(batch, "time")?,
         leg_id: u32_values(batch, "leg_id")?,
         pos: u32_values(batch, "pos")?,
-        mob: code_values(batch, "mobility", &Mobility::NAMES)?,
+        mob: code_values(batch, "mobility", &Mobility::NAMES)?
+            .into_iter()
+            .map(|c| Mobility::from_code(c).expect("checked"))
+            .collect(),
         kind: code_values(batch, "action", &EventFrames::KIND_NAMES)?,
     })
 }
@@ -204,20 +207,12 @@ impl PyReplayer {
     }
 
     /// The state at `time` as a one-snapshot Batch, like `Sim.state()`.
-    #[pyo3(signature = (*, layout = "wide"))]
+    #[pyo3(signature = (*, layout = "lef"))]
     fn state(&self, layout: &str) -> PyResult<PyBatch> {
         let layout = parse_layout(layout)?;
-        let lefs = self.0.lef_states().map_err(replay_error)?;
-        let codes = |m: &[Mobility]| m.iter().map(|m| m.code()).collect();
-        let cols = lefsim::LefColumns {
-            n_lefs: lefs.len(),
-            time: vec![self.0.time()],
-            left_mob: codes(&lefs.left_mobility),
-            right_mob: codes(&lefs.right_mobility),
-            left_pos: lefs.left_pos,
-            right_pos: lefs.right_pos,
-        };
-        Ok(PyBatch(snapshots_batch(cols, layout).map_err(arrow_error)?))
+        let lefs = self.0.lef_states().map_err(replay_error)?.clone();
+        let batch = state_batch(Some(vec![self.0.time()]), self.0.n_lefs(), lefs, layout);
+        Ok(PyBatch(batch.map_err(arrow_error)?))
     }
 
     /// The state at `time` as a `World`.
@@ -236,7 +231,7 @@ impl PyReplayer {
     /// `Sim.record_until(dt=...)` records. Without `t_start`, starts from
     /// the current time (or the first keyframe), so consecutive calls on the
     /// same grid continue it.
-    #[pyo3(signature = (dt, *, t0 = 0.0, t_start = None, t_end = None, layout = "wide"))]
+    #[pyo3(signature = (dt, *, t0 = 0.0, t_start = None, t_end = None, layout = "lef"))]
     fn snapshots(
         &mut self,
         dt: f64,
@@ -255,7 +250,7 @@ impl PyReplayer {
             return Err(value_error("t_end is NaN"));
         }
         let frames = self.0.snapshots(mode, t_end);
-        Ok(PyBatch(snapshots_batch(frames.into_columns(), layout).map_err(arrow_error)?))
+        Ok(PyBatch(frames_batch(frames, layout).map_err(arrow_error)?))
     }
 
     /// Drop data no longer needed to seek to `t` or later.

@@ -70,7 +70,7 @@ fn forward_replay_matches_the_live_run() {
     assert_eq!((r.start(), r.end()), (Some(0.0), 400.0));
     for (t, expected) in times.iter().zip(reference(1, &times)) {
         assert_eq!(r.advance_to(*t), *t);
-        assert_eq!(r.lef_states().unwrap(), expected, "t={t}");
+        assert_eq!(r.lef_states().unwrap(), &expected, "t={t}");
     }
 }
 
@@ -83,7 +83,7 @@ fn seeking_in_any_order_matches_the_live_run() {
     let n = times.len();
     for i in (0..n).map(|i| (i * 37) % n) {
         assert_eq!(r.seek(times[i]).unwrap(), times[i]);
-        assert_eq!(r.lef_states().unwrap(), expected[i], "t={}", times[i]);
+        assert_eq!(r.lef_states().unwrap(), &expected[i], "t={}", times[i]);
     }
 }
 
@@ -103,7 +103,7 @@ fn a_late_joiner_starts_at_its_first_keyframe() {
     let times = grid(first, 400.0, 1.3);
     for (t, expected) in times.iter().zip(reference(3, &times)) {
         r.advance_to(*t);
-        assert_eq!(r.lef_states().unwrap(), expected, "t={t}");
+        assert_eq!(r.lef_states().unwrap(), &expected, "t={t}");
     }
 }
 
@@ -117,7 +117,7 @@ fn replay_waits_at_the_end_of_the_data_while_buffering() {
         r.push(chunk.clone(), *end).unwrap();
     }
     assert_eq!(r.advance_to(end + 50.0), end + 50.0);
-    assert_eq!(r.lef_states().unwrap(), reference(4, &[end + 50.0])[0]);
+    assert_eq!(r.lef_states().unwrap(), &reference(4, &[end + 50.0])[0]);
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn trimming_drops_old_chunks_but_keeps_the_future_reachable() {
     let expected = reference(5, &times);
     for (t, e) in times.iter().zip(&expected).rev() {
         r.seek(*t).unwrap();
-        assert_eq!(&r.lef_states().unwrap(), e, "t={t}");
+        assert_eq!(r.lef_states().unwrap(), e, "t={t}");
     }
 }
 
@@ -188,9 +188,6 @@ fn bad_chunks_are_rejected_whole() {
     let mut c = cols(first);
     c.leg_id[20] = 16;
     assert_eq!(push(&mut r, c, end), Err(ReplayError::LegOutOfRange { leg_id: 16, n_legs: 16 }));
-    let mut c = cols(first);
-    c.mob[20] = 7;
-    assert_eq!(push(&mut r, c, end), Err(ReplayError::BadMobility { code: 7 }));
     let mut c = cols(first);
     c.kind[20] = 9;
     assert_eq!(push(&mut r, c, end), Err(ReplayError::BadKind { code: 9 }));

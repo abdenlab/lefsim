@@ -211,8 +211,8 @@ document (and so do `World`, `Lattice`, `Rates` and `LefStates` on their own):
   "format": "lefsim.model", "version": 1,
   "lattice": { "n_sites": 100,
                "ctcfs": [{ "site": 30, "captures_from": "right", "strength": 0.8 }] },
-  "lefs": { "left_pos": [10], "right_pos": [12],
-            "left_mobility": ["moving"], "right_mobility": ["moving"] },
+  "lefs": [{ "left_pos": 10, "right_pos": 12,
+              "left_mobility": "moving", "right_mobility": "moving" }],
   "rates": { "step": 1.0, "respawn": 0.001, "respawn_captured": 0.0001 },
   "spawn": { "rule": "uniform_non_ctcf" }
 }
@@ -234,10 +234,11 @@ events. State is piecewise-constant in between, so it can be sampled exactly at
 any time without interpolation. Two recorders are fed by the `*_with` drivers:
 
 - `Recorder` takes **snapshots** of every LEF on a regular time grid
-  (`SampleMode::every_dt(dt)`). Frames are stored wide (left and right leg
-  together per LEF, since the loop is the observable) and rectangular: `time`
-  has one entry per snapshot, and each other column has `n_lefs` entries per
-  snapshot, so it reshapes to an `(n_snapshots, n_lefs)` array.
+  (`SampleMode::every_dt(dt)`). A snapshot is the world's LEF table
+  (`LefStates`: left and right leg together per LEF, since the loop is the
+  observable), and `LefFrames` stacks them: `time` has one entry per
+  snapshot, and each table column has `n_lefs` entries per snapshot, so it
+  reshapes to an `(n_snapshots, n_lefs)` array.
 - `EventRecorder` logs **deltas**: one row `(time, leg_id, pos, mob, kind)` per
   leg changed by each event. Lossless and compact; replay it over a base
   snapshot to reconstruct any state.
@@ -345,7 +346,9 @@ also pickle. `copy.copy(sim)` forks a run: the copy continues exactly as the
 original would.
 
 Add `keyframes=True` (with `events=True`) to open each event batch with the full
-state. Pass `layout="long"` for one row per leg instead of per LEF. Runs release the
+state. Snapshots, `sim.state()` and `world.to_arrow()` are all the same LEF table
+(snapshots and states add `time`); pass `layout="leg"` for one row per leg instead,
+the same row shape as the event log (`time, leg_id, lef_id, pos, mobility`). Runs release the
 GIL and respond to Ctrl-C. `record_snapshot_chunk` and `record_event_chunk`
 record in bounded pieces. For runs too large to hold in memory,
 `sim.stream(t_end, dt=...)` turns the simulation into a lazy Arrow stream that

@@ -30,7 +30,7 @@ use slotmap::SecondaryMap;
 
 use crate::model::action::Touched;
 use crate::model::{
-    self, Action, LefKey, LegKey, Mobility, Model, ModelError, Position, Rates, SimRng, Spawn,
+    self, Action, LefKey, LegKey, Model, ModelError, Rates, SimRng, Spawn,
     SpawnRule, Time, World,
 };
 use engine::Engine;
@@ -65,7 +65,6 @@ pub struct Sim {
     rng: SimRng,
     spawn: SpawnSource,
     touched: Touched,
-    leg_order: Vec<LegKey>,
     lef_ids: SecondaryMap<LefKey, u32>,
     leg_ids: SecondaryMap<LegKey, u32>,
     events: u64,
@@ -130,7 +129,6 @@ impl Sim {
     fn start(world: World, rates: Rates, spawn: SpawnSource, seed: u64, start_time: Time) -> Self {
         assert!(start_time.is_finite(), "start time must be finite, got {start_time}");
         let n_lefs = world.n_lefs();
-        let mut leg_order = Vec::with_capacity(2 * n_lefs);
         let mut lef_ids = SecondaryMap::with_capacity(n_lefs);
         let mut leg_ids = SecondaryMap::with_capacity(2 * n_lefs);
         for (lef_id, &lef_k) in world.lef_order.iter().enumerate() {
@@ -139,7 +137,6 @@ impl Sim {
             lef_ids.insert(lef_k, lef_id);
             leg_ids.insert(left, 2 * lef_id);
             leg_ids.insert(right, 2 * lef_id + 1);
-            leg_order.extend([left, right]);
         }
 
         let mut rng = SimRng::seed_from_u64(seed);
@@ -151,7 +148,6 @@ impl Sim {
             rng,
             spawn,
             touched: Touched::default(),
-            leg_order,
             lef_ids,
             leg_ids,
             events: 0,
@@ -188,7 +184,7 @@ impl Sim {
     }
 
     pub fn n_legs(&self) -> usize {
-        self.leg_order.len()
+        2 * self.n_lefs()
     }
 
     /// The current state, read-only.
@@ -224,35 +220,6 @@ impl Sim {
     /// Dense id of a leg key belonging to this sim.
     pub fn leg_id(&self, key: LegKey) -> Option<u32> {
         self.leg_ids.get(key).copied()
-    }
-
-    /// `(left, right)` leg positions of a LEF. Panics if `lef_id` is out of range.
-    pub fn lef_positions(&self, lef_id: u32) -> (Position, Position) {
-        let [left, right] = self.lef_legs(lef_id);
-        (self.world.legs[left].pos, self.world.legs[right].pos)
-    }
-
-    /// `(left, right)` leg mobilities of a LEF. Panics if `lef_id` is out of range.
-    pub fn lef_mobilities(&self, lef_id: u32) -> (Mobility, Mobility) {
-        let [left, right] = self.lef_legs(lef_id);
-        (self.world.legs[left].mobility, self.world.legs[right].mobility)
-    }
-
-    fn lef_legs(&self, lef_id: u32) -> [LegKey; 2] {
-        self.world.lefs[self.world.lef_order[lef_id as usize]].legs
-    }
-
-    /// `[(pos, mobility); 2]` for the left and right legs of a LEF.
-    pub(crate) fn lef_state(&self, lef_id: u32) -> [(Position, Mobility); 2] {
-        self.lef_legs(lef_id).map(|leg| {
-            let leg = &self.world.legs[leg];
-            (leg.pos, leg.mobility)
-        })
-    }
-
-    /// Leg keys indexed by `leg_id`.
-    pub(crate) fn leg_keys(&self) -> &[LegKey] {
-        &self.leg_order
     }
 
     /// A [`Recorder`] sized for this sim.
@@ -391,7 +358,13 @@ impl Sim {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Direction, Lattice, Site};
+    use crate::model::{Direction, Lattice, Mobility, Position, Site};
+
+    /// `(left, right)` leg positions of LEF `i`.
+    fn positions(sim: &Sim, i: usize) -> (Position, Position) {
+        let ((l, _), (r, _)) = sim.world().lef_state(i).unwrap();
+        (l, r)
+    }
 
     fn two_ctcf_lattice() -> Lattice {
         let mut sites = vec![Site::plain(); 100];
@@ -420,9 +393,9 @@ mod tests {
         let sim = Sim::new(model_at(&[10, 50, 20]), 0);
         assert_eq!(sim.n_lefs(), 3);
         assert_eq!(sim.n_legs(), 6);
-        assert_eq!(sim.lef_positions(0), (10, 10));
-        assert_eq!(sim.lef_positions(1), (50, 50));
-        assert_eq!(sim.lef_positions(2), (20, 20));
+        assert_eq!(positions(&sim, 0), (10, 10));
+        assert_eq!(positions(&sim, 1), (50, 50));
+        assert_eq!(positions(&sim, 2), (20, 20));
         for (i, &lef_k) in sim.world.lef_order.iter().enumerate() {
             assert_eq!(sim.lef_id(lef_k), Some(i as u32));
             let [left, right] = sim.world.lefs[lef_k].legs;
@@ -503,7 +476,7 @@ mod tests {
         let mut sim = Sim::with_spawn(one, Rates::default(), Fixed(12), 0).unwrap();
         assert_eq!(sim.model(), None);
         while !matches!(sim.step(), Some((_, Action::Respawn { .. }))) {}
-        assert_eq!(sim.lef_positions(0), (12, 12));
+        assert_eq!(positions(&sim, 0), (12, 12));
         let _fork = sim.clone(); // shares the rule
 
         let two = model_at(&[40, 60]).world().clone();

@@ -16,12 +16,19 @@ use super::SimRng;
 /// The state of one leg: where it is and whether it can move.
 pub type LegState = (Position, Mobility);
 
-/// The LEF state table, as plain data: one row per LEF, in `lef_id` order,
-/// each column stored as its own `Vec`. Row `i` is LEF `i`: its left-facing
-/// leg (`leg_id = 2i`) and right-facing leg (`leg_id = 2i + 1`).
+/// The LEF table, as plain data: one row per LEF, each column stored as its
+/// own `Vec`. In a world's table (see [`World::lef_states`]) row `i` is LEF
+/// `i`: its left-facing leg (`leg_id = 2i`) and right-facing leg
+/// (`leg_id = 2i + 1`). Recorded snapshots stack such tables (see
+/// [`LefFrames`](crate::LefFrames)).
+///
+/// Serialized (with the `serde` feature) as a list of rows.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[cfg_attr(
+    feature = "serde",
+    serde(into = "Vec<super::serial::LefRow>", from = "Vec<super::serial::LefRow>")
+)]
 pub struct LefStates {
     pub left_pos: Vec<Position>,
     pub right_pos: Vec<Position>,
@@ -32,6 +39,40 @@ pub struct LefStates {
 impl LefStates {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// An empty table with room for `n` rows.
+    pub fn with_capacity(n: usize) -> Self {
+        LefStates {
+            left_pos: Vec::with_capacity(n),
+            right_pos: Vec::with_capacity(n),
+            left_mobility: Vec::with_capacity(n),
+            right_mobility: Vec::with_capacity(n),
+        }
+    }
+
+    /// Ensure room for `n` more rows.
+    pub fn reserve(&mut self, n: usize) {
+        self.left_pos.reserve(n);
+        self.right_pos.reserve(n);
+        self.left_mobility.reserve(n);
+        self.right_mobility.reserve(n);
+    }
+
+    /// Append all rows of `other`.
+    pub fn extend_from(&mut self, other: &LefStates) {
+        self.left_pos.extend_from_slice(&other.left_pos);
+        self.right_pos.extend_from_slice(&other.right_pos);
+        self.left_mobility.extend_from_slice(&other.left_mobility);
+        self.right_mobility.extend_from_slice(&other.right_mobility);
+    }
+
+    /// Drop all rows, keeping allocated capacity.
+    pub fn clear(&mut self) {
+        self.left_pos.clear();
+        self.right_pos.clear();
+        self.left_mobility.clear();
+        self.right_mobility.clear();
     }
 
     pub fn len(&self) -> usize {
@@ -58,7 +99,7 @@ impl LefStates {
         ))
     }
 
-    fn columns_agree(&self) -> bool {
+    pub(crate) fn columns_agree(&self) -> bool {
         let n = self.left_pos.len();
         self.right_pos.len() == n && self.left_mobility.len() == n && self.right_mobility.len() == n
     }
@@ -204,14 +245,21 @@ impl World {
         Some(((l.pos, l.mobility), (r.pos, r.mobility)))
     }
 
-    /// The whole LEF state table, in `lef_id` order.
+    /// The whole LEF table, in `lef_id` order.
     pub fn lef_states(&self) -> LefStates {
-        let mut states = LefStates::new();
-        for i in 0..self.n_lefs() {
-            let (left, right) = self.lef_state(i).expect("in range");
-            states.push(left, right);
-        }
+        let mut states = LefStates::with_capacity(self.n_lefs());
+        self.push_lef_states(&mut states);
         states
+    }
+
+    /// Append the LEF table, in `lef_id` order, to `out`: how snapshots are
+    /// recorded without allocating.
+    pub fn push_lef_states(&self, out: &mut LefStates) {
+        for &lef in &self.lef_order {
+            let [l, r] = self.lefs[lef].legs;
+            let (l, r) = (&self.legs[l], &self.legs[r]);
+            out.push((l.pos, l.mobility), (r.pos, r.mobility));
+        }
     }
 
     /// Check a would-be LEF against the lattice and the LEFs already here.

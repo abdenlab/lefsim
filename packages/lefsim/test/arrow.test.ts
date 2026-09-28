@@ -67,8 +67,8 @@ describe("schema parity with the Python binding", () => {
   const lattice = latticeToArrow(sim.meta());
   const lefs = lefsToArrow(sim.state());
   const built = {
-    snapshots_wide: snapshotsToArrow(sim.recordUntil(10, { dt: 1 }).snapshots!),
-    snapshots_long: snapshotsToArrow(sim.recordUntil(20, { dt: 1 }).snapshots!, { layout: "long" }),
+    snapshots_lef: snapshotsToArrow(sim.recordUntil(10, { dt: 1 }).snapshots!),
+    snapshots_leg: snapshotsToArrow(sim.recordUntil(20, { dt: 1 }).snapshots!, { layout: "leg" }),
     events: eventsToArrow(sim.recordUntil(30, { events: true, keyframes: true }).events!),
     lattice,
     lefs,
@@ -90,11 +90,11 @@ describe("builders", () => {
     expect(b.getChild("left_mobility")!.get(0)).toBe("Moving");
   });
 
-  it("long is wide unpivoted", () => {
+  it("the leg layout is the lef layout unpivoted", () => {
     using sim = new Sim({ ...SMALL, seed: 3 });
     const s = sim.recordUntil(80, { dt: 2 }).snapshots!;
     const wide = snapshotsToArrow(s);
-    const long = snapshotsToArrow(s, { layout: "long" });
+    const long = snapshotsToArrow(s, { layout: "leg" });
     expect(long.numRows).toBe(2 * wide.numRows);
     for (let row = 0; row < wide.numRows; row++) {
       const l = 2 * row;
@@ -102,7 +102,7 @@ describe("builders", () => {
       expect(long.getChild("lef_id")!.get(l)).toBe(wide.getChild("lef_id")!.get(row));
       expect(long.getChild("pos")!.get(l)).toBe(wide.getChild("left_pos")!.get(row));
       expect(long.getChild("pos")!.get(l + 1)).toBe(wide.getChild("right_pos")!.get(row));
-      expect(long.getChild("facing")!.get(l + 1)).toBe("Right");
+      expect(long.getChild("leg_id")!.get(l + 1)).toBe(2 * wide.getChild("lef_id")!.get(row)! + 1);
       expect(long.getChild("mobility")!.get(l + 1)).toBe(wide.getChild("right_mobility")!.get(row));
     }
   });

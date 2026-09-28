@@ -92,8 +92,8 @@ small = lefsim.Sim(lefsim.Model(lefsim.populate(small_lattice, 4, seed=1)), seed
 schemas = {
     "lattice": describe(small_lattice.to_arrow()),
     "lefs": describe(small.world().to_arrow()),
-    "snapshots_wide": describe(small.record_until(10.0, dt=1.0).snapshots),
-    "snapshots_long": describe(small.record_until(20.0, dt=1.0, layout="long").snapshots),
+    "snapshots_lef": describe(small.record_until(10.0, dt=1.0).snapshots),
+    "snapshots_leg": describe(small.record_until(20.0, dt=1.0, layout="leg").snapshots),
     "events": describe(small.record_until(30.0, events=True, keyframes=True).events),
 }
 out = HERE / "schemas.json"

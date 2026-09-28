@@ -35,10 +35,9 @@ fn build_with_strength(seed: u64, strength: f64) -> Sim {
 type LefState = (Position, Position, u8, u8);
 
 fn state(sim: &Sim) -> Vec<LefState> {
-    (0..sim.n_lefs() as u32)
+    (0..sim.n_lefs())
         .map(|i| {
-            let (l, r) = sim.lef_positions(i);
-            let (lm, rm) = sim.lef_mobilities(i);
+            let ((l, lm), (r, rm)) = sim.world().lef_state(i).unwrap();
             (l, r, lm.code(), rm.code())
         })
         .collect()
@@ -51,8 +50,8 @@ fn snapshot_state(frames: &LefFrames, s: usize) -> Vec<LefState> {
             (
                 snap.left_pos[i],
                 snap.right_pos[i],
-                snap.left_mob[i],
-                snap.right_mob[i],
+                snap.left_mobility[i].code(),
+                snap.right_mobility[i].code(),
             )
         })
         .collect()
@@ -180,13 +179,13 @@ fn snapshots_never_show_the_evicted_state() {
     let mut ev = EventRecorder::new();
     sim.run_until_with(500.0, &mut (&mut rec, &mut ev));
 
-    let evicted = Mobility::Evicted.code();
+    let evicted = Mobility::Evicted;
     let evictions = ev.frames().mob().iter().filter(|&&m| m == evicted).count();
     assert!(evictions > 5, "want evictions to exercise this, got {evictions}");
 
     let frames = rec.frames();
-    assert!(!frames.left_mob().contains(&evicted));
-    assert!(!frames.right_mob().contains(&evicted));
+    assert!(!frames.lefs().left_mobility.contains(&evicted));
+    assert!(!frames.lefs().right_mobility.contains(&evicted));
 }
 
 /// A grid point landing exactly on an eviction time must record the state
@@ -196,7 +195,7 @@ fn grid_point_on_an_eviction_sees_the_respawn() {
     let mut probe = build_with_strength(7, 1.0);
     let mut ev = EventRecorder::new();
     probe.run_until_with(500.0, &mut ev);
-    let evicted = Mobility::Evicted.code();
+    let evicted = Mobility::Evicted;
     let row = ev
         .frames()
         .mob()
@@ -212,8 +211,8 @@ fn grid_point_on_an_eviction_sees_the_respawn() {
     assert_eq!(frames.n_snapshots(), 2);
     let snap = frames.snapshot(1);
     assert_eq!(snap.time, t_evict);
-    assert_ne!(snap.left_mob[lef], evicted);
-    assert_ne!(snap.right_mob[lef], evicted);
+    assert_ne!(snap.left_mobility[lef], evicted);
+    assert_ne!(snap.right_mobility[lef], evicted);
     // A just-respawned LEF has both legs on its spawn site.
     assert_eq!(snap.left_pos[lef], snap.right_pos[lef]);
 }
@@ -236,9 +235,9 @@ fn replaying_deltas_reconstructs_snapshots() {
             let leg = deltas.leg_id()[row] as usize;
             let lef = &mut replay[leg / 2];
             if leg.is_multiple_of(2) {
-                (lef.0, lef.2) = (deltas.pos()[row], deltas.mob()[row]);
+                (lef.0, lef.2) = (deltas.pos()[row], deltas.mob()[row].code());
             } else {
-                (lef.1, lef.3) = (deltas.pos()[row], deltas.mob()[row]);
+                (lef.1, lef.3) = (deltas.pos()[row], deltas.mob()[row].code());
             }
             row += 1;
         }

@@ -16,29 +16,39 @@ new_key_type! {
 }
 
 /// Per-leg intrinsic mobility status, set by the most recent CTCF interaction.
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+///
+/// Stored as one byte, its [`Mobility::code`], so mobility columns hand off
+/// to Arrow or JS as bytes without copying (see [`Mobility::into_codes`]).
+#[derive(Copy, Clone, Eq, PartialEq, Debug, bytemuck::NoUninit)]
+#[repr(u8)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum Mobility {
     /// Free to step in `facing` direction (subject to extrinsic blocking).
-    Moving,
+    Moving = 0,
     /// Pinned by a same-orientation CTCF.
-    Captured,
+    Captured = 1,
     /// Knocked off by an opposite-orientation CTCF; awaits immediate respawn.
-    Evicted,
+    Evicted = 2,
 }
 
 impl Mobility {
     /// Names indexed by [`Mobility::code`].
     pub const NAMES: [&str; 3] = ["Moving", "Captured", "Evicted"];
 
-    /// Stable `u8` encoding used in recorded frames.
+    /// Stable `u8` encoding: the index into [`Mobility::NAMES`].
     pub fn code(self) -> u8 {
-        match self {
-            Mobility::Moving => 0,
-            Mobility::Captured => 1,
-            Mobility::Evicted => 2,
-        }
+        self as u8
+    }
+
+    /// A mobility column as its codes, without copying.
+    pub fn as_codes(column: &[Mobility]) -> &[u8] {
+        bytemuck::cast_slice(column)
+    }
+
+    /// A mobility column as its codes, reusing the allocation.
+    pub fn into_codes(column: Vec<Mobility>) -> Vec<u8> {
+        bytemuck::allocation::cast_vec(column)
     }
 
     /// The inverse of [`Mobility::code`].

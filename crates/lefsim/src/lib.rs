@@ -67,7 +67,7 @@ pub use model::{
     SpawnError, SpawnRule, Time, World, WorldError, populate,
 };
 pub use sim::record::{
-    ColumnLengthError, EventColumns, EventFrames, EventRecorder, LefColumns, LefFrames, LefSnapshot,
+    ColumnLengthError, EventColumns, EventFrames, EventRecorder, LefFrames, LefSnapshot,
     Observer, Recorder, SampleMode,
 };
 pub use sim::{ReplayError, Replayer, RunReport, Sim, StopReason};

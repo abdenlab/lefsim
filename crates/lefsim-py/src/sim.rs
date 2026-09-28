@@ -4,7 +4,7 @@ use lefsim::{Action, EventRecorder, Observer, Recorder, RunReport, SampleMode, S
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-use crate::arrow::{Layout, events_batch, snapshots_batch};
+use crate::arrow::{Layout, events_batch, frames_batch, state_batch};
 use crate::batch::PyBatch;
 use crate::model::{PyModel, PyRates, PyWorld, arrow_error, value_error};
 use crate::stream::{PyStream, SimReader};
@@ -14,7 +14,7 @@ pub const EVENTS_PER_CHUNK: u64 = 250_000;
 
 pub fn parse_layout(layout: &str) -> PyResult<Layout> {
     Layout::parse(layout)
-        .ok_or_else(|| value_error(format!("layout must be 'wide' or 'long', got {layout:?}")))
+        .ok_or_else(|| value_error(format!("layout must be 'lef' or 'leg', got {layout:?}")))
 }
 
 pub fn grid_mode(dt: f64, t0: f64) -> PyResult<SampleMode> {
@@ -241,8 +241,8 @@ impl PySim {
 
         let snapshots = match grid.as_mut() {
             Some(rec) => {
-                let frames = rec.take_frames().into_columns();
-                Some(Py::new(py, PyBatch(snapshots_batch(frames, what.layout).map_err(arrow_error)?))?)
+                let batch = frames_batch(rec.take_frames(), what.layout).map_err(arrow_error)?;
+                Some(Py::new(py, PyBatch(batch))?)
             }
             None => None,
         };
@@ -343,13 +343,12 @@ impl PySim {
     }
 
     /// The current state as a one-snapshot Batch, without advancing.
-    #[pyo3(signature = (*, layout = "wide"))]
+    #[pyo3(signature = (*, layout = "lef"))]
     fn state(&self, layout: &str) -> PyResult<PyBatch> {
         let layout = parse_layout(layout)?;
         let sim = self.sim()?;
-        let mut rec = sim.recorder(SampleMode::Manual);
-        rec.capture(sim);
-        Ok(PyBatch(snapshots_batch(rec.take_frames().into_columns(), layout).map_err(arrow_error)?))
+        let batch = state_batch(Some(vec![sim.time()]), sim.n_lefs(), sim.world().lef_states(), layout);
+        Ok(PyBatch(batch.map_err(arrow_error)?))
     }
 
     fn __repr__(&self) -> String {
@@ -407,7 +406,7 @@ impl PySim {
     /// `Keyframe` row per leg holding the full state). Consecutive calls on
     /// the same grid continue it seamlessly. Releases the GIL while running;
     /// Ctrl-C interrupts.
-    #[pyo3(signature = (t_end, *, dt = None, t0 = 0.0, events = false, keyframes = false, layout = "wide"))]
+    #[pyo3(signature = (t_end, *, dt = None, t0 = 0.0, events = false, keyframes = false, layout = "lef"))]
     #[allow(clippy::too_many_arguments)]
     fn record_until(
         &mut self,
@@ -426,7 +425,7 @@ impl PySim {
 
     /// Fire up to `n` events, recording as in `record_until`; snapshots
     /// cover grid points up to the current time.
-    #[pyo3(signature = (n, *, dt = None, t0 = 0.0, events = false, keyframes = false, layout = "wide"))]
+    #[pyo3(signature = (n, *, dt = None, t0 = 0.0, events = false, keyframes = false, layout = "lef"))]
     #[allow(clippy::too_many_arguments)]
     fn record_events(
         &mut self,
@@ -445,7 +444,7 @@ impl PySim {
     /// Run toward `t_end`, taking at most `max_snapshots` grid snapshots.
     /// `stopped` is "recorder_full" when the chunk filled first: call again
     /// for the next one. Consecutive chunks tile the grid exactly.
-    #[pyo3(signature = (t_end, *, dt, t0 = 0.0, max_snapshots, layout = "wide"))]
+    #[pyo3(signature = (t_end, *, dt, t0 = 0.0, max_snapshots, layout = "lef"))]
     fn record_snapshot_chunk(
         &mut self,
         py: Python<'_>,
@@ -483,7 +482,7 @@ impl PySim {
         keyframes: bool,
     ) -> PyResult<PyRecording> {
         check_time("t_end", t_end)?;
-        let what = Record { grid: None, events: Some((Some((max_rows, "max_rows")), keyframes)), layout: Layout::Wide };
+        let what = Record { grid: None, events: Some((Some((max_rows, "max_rows")), keyframes)), layout: Layout::Lef };
         self.record(py, t_end, None, what)
     }
 
@@ -503,7 +502,7 @@ impl PySim {
     /// The Sim is moved into the stream and can't be used afterwards; copy
     /// it first (`copy.copy(sim)`) to keep going from here.
     #[pyo3(signature = (
-        t_end, *, dt = None, t0 = 0.0, events = false, keyframes = false, layout = "wide",
+        t_end, *, dt = None, t0 = 0.0, events = false, keyframes = false, layout = "lef",
         chunk_size = 10_000,
     ))]
     #[allow(clippy::too_many_arguments)]

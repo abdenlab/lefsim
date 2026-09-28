@@ -24,10 +24,10 @@ fn build(seed: u64, strength: f64) -> Sim {
 type LegState = Vec<(u32, u8)>;
 
 fn leg_state(sim: &Sim) -> LegState {
-    (0..sim.n_lefs() as u32)
+    let lefs = sim.world().lef_states();
+    (0..lefs.len())
         .flat_map(|i| {
-            let (l, r) = sim.lef_positions(i);
-            let (lm, rm) = sim.lef_mobilities(i);
+            let ((l, lm), (r, rm)) = lefs.get(i).unwrap();
             [(l, lm.code()), (r, rm.code())]
         })
         .collect()
@@ -64,7 +64,7 @@ fn keyframed_batches(sim: &mut Sim, t_end: Time, max_rows: usize) -> Vec<EventFr
 
 /// Rows `lo..hi` of a batch as `(time, leg_id, pos, mob, kind)`.
 fn rows(f: &EventFrames) -> impl Iterator<Item = (Time, u32, u32, u8, u8)> + '_ {
-    (0..f.n_rows()).map(|i| (f.time()[i], f.leg_id()[i], f.pos()[i], f.mob()[i], f.kind()[i]))
+    (0..f.n_rows()).map(|i| (f.time()[i], f.leg_id()[i], f.pos()[i], f.mob()[i].code(), f.kind()[i]))
 }
 
 #[test]

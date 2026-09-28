@@ -7,12 +7,52 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{Ctcf, Lattice, LatticeError, LefStates, Model, Rates, SpawnRule, World, WorldError};
+use super::{
+    Ctcf, Lattice, LatticeError, LefStates, Mobility, Model, Position, Rates, SpawnRule, World,
+    WorldError,
+};
 
 /// The `format` field of a model document.
 pub(super) const MODEL_FORMAT: &str = "lefsim.model";
 /// The current `version` of the model document.
 pub(super) const MODEL_VERSION: u32 = 1;
+
+/// One row of a [`LefStates`] table. Mobility defaults to moving.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct LefRow {
+    left_pos: Position,
+    right_pos: Position,
+    #[serde(default = "moving")]
+    left_mobility: Mobility,
+    #[serde(default = "moving")]
+    right_mobility: Mobility,
+}
+
+fn moving() -> Mobility {
+    Mobility::Moving
+}
+
+impl From<Vec<LefRow>> for LefStates {
+    fn from(rows: Vec<LefRow>) -> Self {
+        let mut lefs = LefStates::with_capacity(rows.len());
+        for r in rows {
+            lefs.push((r.left_pos, r.left_mobility), (r.right_pos, r.right_mobility));
+        }
+        lefs
+    }
+}
+
+impl From<LefStates> for Vec<LefRow> {
+    fn from(lefs: LefStates) -> Self {
+        (0..lefs.len())
+            .map(|i| {
+                let ((left_pos, left_mobility), (right_pos, right_mobility)) = lefs.get(i).expect("in range");
+                LefRow { left_pos, right_pos, left_mobility, right_mobility }
+            })
+            .collect()
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -126,12 +166,10 @@ mod tests {
                     { "site": 70, "captures_from": "left", "strength": 1.0 },
                 ],
             },
-            "lefs": {
-                "left_pos": [10, 30],
-                "right_pos": [12, 70],
-                "left_mobility": ["moving", "captured"],
-                "right_mobility": ["moving", "captured"],
-            },
+            "lefs": [
+                { "left_pos": 10, "right_pos": 12, "left_mobility": "moving", "right_mobility": "moving" },
+                { "left_pos": 30, "right_pos": 70, "left_mobility": "captured", "right_mobility": "captured" },
+            ],
             "rates": { "step": 1.0, "respawn": 0.002, "respawn_captured": 0.0004 },
             "spawn": { "rule": "uniform_non_ctcf" },
         })
@@ -167,6 +205,14 @@ mod tests {
         assert_eq!(serde_json::from_str::<World>(&text).unwrap(), world);
         let lattice: Lattice = serde_json::from_value(json!({ "n_sites": 5 })).unwrap();
         assert_eq!(lattice, Lattice::plain(5).unwrap());
+
+        // Mobility may be left out: LEFs load as moving.
+        let short: World = serde_json::from_value(json!({
+            "lattice": { "n_sites": 5 },
+            "lefs": [{ "left_pos": 1, "right_pos": 3 }],
+        }))
+        .unwrap();
+        assert_eq!(short.lef_state(0), Some(((1, Mobility::Moving), (3, Mobility::Moving))));
     }
 
     /// Each edit breaks the document; loading must say why.
@@ -177,8 +223,8 @@ mod tests {
             ("/version", json!(2), "unsupported"),
             ("/lattice/n_sites", json!(0), "at least one site"),
             ("/lattice/ctcfs/0/strength", json!(1.5), "[0, 1]"),
-            ("/lefs/right_pos/0", json!(30), "already occupied"),
-            ("/lefs/left_mobility/0", json!("captured"), "not a CTCF"),
+            ("/lefs/0/right_pos", json!(30), "already occupied"),
+            ("/lefs/0/left_mobility", json!("captured"), "not a CTCF"),
             ("/rates/step", json!(-1.0), "step rate"),
             ("/spawn/rule", json!("anywhere"), "unknown variant"),
         ];
@@ -190,9 +236,9 @@ mod tests {
         }
 
         let mut doc = document();
-        doc["lefs"]["left_pos"] = json!([10]);
+        doc["lefs"][0].as_object_mut().unwrap().remove("right_pos");
         let err = serde_json::from_value::<Model>(doc).unwrap_err().to_string();
-        assert!(err.contains("different lengths"), "{err}");
+        assert!(err.contains("missing field `right_pos`"), "{err}");
 
         let mut doc = document();
         doc["rates"]["setp"] = json!(1.0);

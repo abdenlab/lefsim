@@ -26,7 +26,7 @@
 //! or not anything is observing it.
 
 use super::Sim;
-use crate::model::{Action, Time};
+use crate::model::{Action, LefStates, Mobility, Position, Time};
 
 // ===================================================================
 // Grid snapshots
@@ -48,41 +48,28 @@ impl SampleMode {
     }
 }
 
-/// Snapshots of every LEF, stored wide and snapshot-major.
+/// Snapshots of every LEF: the world's LEF table at each sampled time,
+/// stacked.
 ///
-/// For snapshot `s` and LEF `i`, the per-LEF columns hold the value at index
-/// `s * n_lefs + i`, so each column reshapes to an `(n_snapshots, n_lefs)`
-/// array without copying. Mobility columns hold [`Mobility::code`](crate::Mobility::code) values.
+/// `time` has one entry per snapshot; [`LefFrames::lefs`] has `n_lefs` rows
+/// per snapshot, snapshot-major, so row `s * n_lefs + i` is LEF `i` in
+/// snapshot `s` and each column reshapes to an `(n_snapshots, n_lefs)` array
+/// without copying.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LefFrames {
     n_lefs: usize,
-    time: Vec<f64>,
-    left_pos: Vec<u32>,
-    right_pos: Vec<u32>,
-    left_mob: Vec<u8>,
-    right_mob: Vec<u8>,
-}
-
-/// Owned columns of a [`LefFrames`], for handing buffers to Arrow or JS
-/// without copying.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct LefColumns {
-    pub n_lefs: usize,
-    pub time: Vec<f64>,
-    pub left_pos: Vec<u32>,
-    pub right_pos: Vec<u32>,
-    pub left_mob: Vec<u8>,
-    pub right_mob: Vec<u8>,
+    time: Vec<Time>,
+    lefs: LefStates,
 }
 
 /// One snapshot borrowed from a [`LefFrames`]. Slices are indexed by `lef_id`.
 #[derive(Copy, Clone, Debug)]
 pub struct LefSnapshot<'a> {
-    pub time: f64,
-    pub left_pos: &'a [u32],
-    pub right_pos: &'a [u32],
-    pub left_mob: &'a [u8],
-    pub right_mob: &'a [u8],
+    pub time: Time,
+    pub left_pos: &'a [Position],
+    pub right_pos: &'a [Position],
+    pub left_mobility: &'a [Mobility],
+    pub right_mobility: &'a [Mobility],
 }
 
 impl LefFrames {
@@ -92,25 +79,17 @@ impl LefFrames {
 
     /// Empty frames with room for `n_snapshots` snapshots.
     pub fn with_capacity(n_lefs: usize, n_snapshots: usize) -> Self {
-        let rows = n_lefs * n_snapshots;
         LefFrames {
             n_lefs,
             time: Vec::with_capacity(n_snapshots),
-            left_pos: Vec::with_capacity(rows),
-            right_pos: Vec::with_capacity(rows),
-            left_mob: Vec::with_capacity(rows),
-            right_mob: Vec::with_capacity(rows),
+            lefs: LefStates::with_capacity(n_lefs * n_snapshots),
         }
     }
 
     /// Ensure room for `n_snapshots` more snapshots.
     pub fn reserve(&mut self, n_snapshots: usize) {
-        let rows = self.n_lefs * n_snapshots;
         self.time.reserve(n_snapshots);
-        self.left_pos.reserve(rows);
-        self.right_pos.reserve(rows);
-        self.left_mob.reserve(rows);
-        self.right_mob.reserve(rows);
+        self.lefs.reserve(self.n_lefs * n_snapshots);
     }
 
     pub fn n_lefs(&self) -> usize {
@@ -125,24 +104,14 @@ impl LefFrames {
         self.time.is_empty()
     }
 
-    pub fn time(&self) -> &[f64] {
+    /// One entry per snapshot.
+    pub fn time(&self) -> &[Time] {
         &self.time
     }
 
-    pub fn left_pos(&self) -> &[u32] {
-        &self.left_pos
-    }
-
-    pub fn right_pos(&self) -> &[u32] {
-        &self.right_pos
-    }
-
-    pub fn left_mob(&self) -> &[u8] {
-        &self.left_mob
-    }
-
-    pub fn right_mob(&self) -> &[u8] {
-        &self.right_mob
+    /// The stacked LEF tables: `n_lefs` rows per snapshot.
+    pub fn lefs(&self) -> &LefStates {
+        &self.lefs
     }
 
     /// Snapshot `s`. Panics if `s >= n_snapshots()`.
@@ -150,66 +119,45 @@ impl LefFrames {
         let rows = s * self.n_lefs..(s + 1) * self.n_lefs;
         LefSnapshot {
             time: self.time[s],
-            left_pos: &self.left_pos[rows.clone()],
-            right_pos: &self.right_pos[rows.clone()],
-            left_mob: &self.left_mob[rows.clone()],
-            right_mob: &self.right_mob[rows],
+            left_pos: &self.lefs.left_pos[rows.clone()],
+            right_pos: &self.lefs.right_pos[rows.clone()],
+            left_mobility: &self.lefs.left_mobility[rows.clone()],
+            right_mobility: &self.lefs.right_mobility[rows],
         }
+    }
+
+    /// Append a snapshot: `lefs` (one row per LEF) at `time`. Panics if
+    /// `lefs` doesn't have `n_lefs` rows.
+    pub fn push(&mut self, time: Time, lefs: &LefStates) {
+        assert_eq!(lefs.len(), self.n_lefs, "a snapshot has one row per LEF");
+        self.time.push(time);
+        self.lefs.extend_from(lefs);
     }
 
     /// Append all snapshots of `other`. Panics if `n_lefs` differs.
     pub fn extend_from(&mut self, other: &LefFrames) {
         assert_eq!(self.n_lefs, other.n_lefs, "n_lefs mismatch");
         self.time.extend_from_slice(&other.time);
-        self.left_pos.extend_from_slice(&other.left_pos);
-        self.right_pos.extend_from_slice(&other.right_pos);
-        self.left_mob.extend_from_slice(&other.left_mob);
-        self.right_mob.extend_from_slice(&other.right_mob);
+        self.lefs.extend_from(&other.lefs);
     }
 
     /// Drop all snapshots, keeping allocated capacity.
     pub fn clear(&mut self) {
         self.time.clear();
-        self.left_pos.clear();
-        self.right_pos.clear();
-        self.left_mob.clear();
-        self.right_mob.clear();
+        self.lefs.clear();
     }
 
-    pub fn into_columns(self) -> LefColumns {
-        LefColumns {
-            n_lefs: self.n_lefs,
-            time: self.time,
-            left_pos: self.left_pos,
-            right_pos: self.right_pos,
-            left_mob: self.left_mob,
-            right_mob: self.right_mob,
-        }
+    /// The parts `(n_lefs, time, lefs)`, for handing buffers to Arrow or JS
+    /// without copying.
+    pub fn into_parts(self) -> (usize, Vec<Time>, LefStates) {
+        (self.n_lefs, self.time, self.lefs)
     }
 
-    /// Append a snapshot from per-leg states indexed by `leg_id`.
-    pub(crate) fn push_legs(&mut self, time: Time, legs: &[(u32, u8)]) {
-        assert_eq!(legs.len(), 2 * self.n_lefs, "one state per leg");
-        self.time.push(time);
-        for pair in legs.chunks_exact(2) {
-            let [(lp, lm), (rp, rm)] = [pair[0], pair[1]];
-            self.left_pos.push(lp);
-            self.right_pos.push(rp);
-            self.left_mob.push(lm);
-            self.right_mob.push(rm);
-        }
-    }
-
-    fn push_snapshot(&mut self, time: Time, sim: &Sim) {
+    /// Append the sim's current LEF table at `time`.
+    fn push_world(&mut self, time: Time, sim: &Sim) {
         assert_eq!(self.n_lefs, sim.n_lefs(), "recorder built for a different sim");
         self.time.push(time);
-        for lef_id in 0..self.n_lefs as u32 {
-            let [(lp, lm), (rp, rm)] = sim.lef_state(lef_id);
-            self.left_pos.push(lp);
-            self.right_pos.push(rp);
-            self.left_mob.push(lm.code());
-            self.right_mob.push(rm.code());
-        }
+        sim.world().push_lef_states(&mut self.lefs);
     }
 }
 
@@ -312,7 +260,7 @@ impl Recorder {
         if self.is_full() {
             return false;
         }
-        self.frames.push_snapshot(sim.time(), sim);
+        self.frames.push_world(sim.time(), sim);
         true
     }
 
@@ -335,14 +283,14 @@ impl Recorder {
 /// each batch also opens with one `Keyframe` row per leg.
 ///
 /// `kind` holds codes into [`EventFrames::KIND_NAMES`] (for events these
-/// equal [`Action::code`]); `mob` holds [`Mobility::code`](crate::Mobility::code).
+/// equal [`Action::code`]).
 /// Rows carry absolute values, so replaying them is an idempotent overwrite.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EventFrames {
     time: Vec<f64>,
     leg_id: Vec<u32>,
     pos: Vec<u32>,
-    mob: Vec<u8>,
+    mob: Vec<Mobility>,
     kind: Vec<u8>,
 }
 
@@ -352,7 +300,7 @@ pub struct EventColumns {
     pub time: Vec<f64>,
     pub leg_id: Vec<u32>,
     pub pos: Vec<u32>,
-    pub mob: Vec<u8>,
+    pub mob: Vec<Mobility>,
     pub kind: Vec<u8>,
 }
 
@@ -433,7 +381,7 @@ impl EventFrames {
         &self.pos
     }
 
-    pub fn mob(&self) -> &[u8] {
+    pub fn mob(&self) -> &[Mobility] {
         &self.mob
     }
 
@@ -479,7 +427,7 @@ impl EventFrames {
             self.time.push(time);
             self.leg_id.push(sim.leg_id(leg).expect("leg belongs to this sim"));
             self.pos.push(state.pos);
-            self.mob.push(state.mobility.code());
+            self.mob.push(state.mobility);
             self.kind.push(action.code());
         }
     }
@@ -487,13 +435,16 @@ impl EventFrames {
     /// One `Keyframe` row per leg, in `leg_id` order, with its current state.
     fn push_keyframe(&mut self, time: Time, sim: &Sim, n_legs: usize) {
         assert_eq!(n_legs, sim.n_legs(), "event recorder built for a different sim");
-        for (id, &leg) in sim.leg_keys().iter().enumerate() {
-            let state = &sim.world().legs[leg];
-            self.time.push(time);
-            self.leg_id.push(id as u32);
-            self.pos.push(state.pos);
-            self.mob.push(state.mobility.code());
-            self.kind.push(Self::KEYFRAME);
+        let lefs = sim.world().lef_states();
+        let legs = lefs.left_pos.iter().zip(&lefs.left_mobility).zip(lefs.right_pos.iter().zip(&lefs.right_mobility));
+        for (lef_id, (left, right)) in legs.enumerate() {
+            for (side, (&pos, &mob)) in [left, right].into_iter().enumerate() {
+                self.time.push(time);
+                self.leg_id.push((2 * lef_id + side) as u32);
+                self.pos.push(pos);
+                self.mob.push(mob);
+                self.kind.push(Self::KEYFRAME);
+            }
         }
     }
 }
@@ -653,7 +604,7 @@ pub(crate) mod sealed {
                     if self.is_full() {
                         return false;
                     }
-                    self.frames.push_snapshot(g, sim);
+                    self.frames.push_world(g, sim);
                 }
                 self.next_k += 1;
             }

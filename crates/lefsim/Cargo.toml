@@ -9,6 +9,7 @@ smallvec.workspace = true
 rand.workspace = true
 rand_pcg.workspace = true
 libm.workspace = true
+bytemuck.workspace = true
 serde = { workspace = true, optional = true }
 
 [features]

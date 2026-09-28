@@ -23,3 +23,5 @@ arrow-schema = "59"
 arrow-cast = { version = "59", default-features = false }
 serde_json.workspace = true
 serde.workspace = true
+# serde <-> Python objects; must match the pyo3 version.
+pythonize = "0.29"

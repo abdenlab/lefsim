@@ -41,18 +41,19 @@ fn fingerprint() -> u64 {
         eat(&e.time()[i].to_bits().to_le_bytes());
         eat(&e.leg_id()[i].to_le_bytes());
         eat(&e.pos()[i].to_le_bytes());
-        eat(&[e.mob()[i], e.kind()[i]]);
+        eat(&[e.mob()[i].code(), e.kind()[i]]);
     }
     let f = rec.frames();
     for &t in f.time() {
         eat(&t.to_bits().to_le_bytes());
     }
-    for (&l, &r) in f.left_pos().iter().zip(f.right_pos()) {
+    let lefs = f.lefs();
+    for (&l, &r) in lefs.left_pos.iter().zip(&lefs.right_pos) {
         eat(&l.to_le_bytes());
         eat(&r.to_le_bytes());
     }
-    eat(f.left_mob());
-    eat(f.right_mob());
+    eat(Mobility::as_codes(&lefs.left_mobility));
+    eat(Mobility::as_codes(&lefs.right_mobility));
     h
 }
 

@@ -37,7 +37,7 @@ import {
   type SnapshotColumns,
 } from "./types.ts";
 
-export type Layout = "wide" | "long";
+export type Layout = "lef" | "leg";
 
 // ------------------------------------------------------------------ columns
 
@@ -65,17 +65,18 @@ function batch(columns: [string, Data][], kind: string, extra: Record<string, st
 /**
  * Grid snapshots as a record batch.
  *
- * - `"wide"` (default): one row per LEF per snapshot; columns `time, lef_id,
- *   left_pos, right_pos, left_mobility, right_mobility`.
- * - `"long"`: one row per leg per snapshot; columns `time, leg_id, lef_id,
- *   facing, pos, mobility`.
+ * - `"lef"` (default): one row per LEF per snapshot, the world's LEF table
+ *   plus `time`: `time, lef_id, left_pos, right_pos, left_mobility,
+ *   right_mobility`.
+ * - `"leg"`: one row per leg per snapshot, in the event log's row shape:
+ *   `time, leg_id, lef_id, pos, mobility`.
  */
 export function snapshotsToArrow(cols: SnapshotColumns, options: { layout?: Layout } = {}): RecordBatch {
-  const layout = options.layout ?? "wide";
+  const layout = options.layout ?? "lef";
   const { nLefs } = cols;
   const nSnap = cols.time.length;
-  const meta = { layout, n_lefs: String(nLefs) };
-  if (layout === "wide") {
+  const meta = { n_lefs: String(nLefs) };
+  if (layout === "lef") {
     const n = nSnap * nLefs;
     const time = new Float64Array(n);
     const lefId = new Uint32Array(n);
@@ -92,18 +93,17 @@ export function snapshotsToArrow(cols: SnapshotColumns, options: { layout?: Layo
         ["left_mobility", dict(cols.leftMobility, MOBILITY)],
         ["right_mobility", dict(cols.rightMobility, MOBILITY)],
       ],
-      "snapshots",
+      "lefs",
       meta,
     );
   }
-  if (layout !== "long") throw new RangeError(`layout must be "wide" or "long", got ${JSON.stringify(layout)}`);
+  if (layout !== "leg") throw new RangeError(`layout must be "lef" or "leg", got ${JSON.stringify(layout)}`);
   // Rows ordered by snapshot, then leg_id = 2 * lef_id + side.
   const perSnap = 2 * nLefs;
   const n = nSnap * perSnap;
   const time = new Float64Array(n);
   const legId = new Uint32Array(n);
   const lefId = new Uint32Array(n);
-  const facing = new Uint8Array(n);
   const pos = new Uint32Array(n);
   const mob = new Uint8Array(n);
   for (let s = 0; s < nSnap; s++) {
@@ -114,7 +114,6 @@ export function snapshotsToArrow(cols: SnapshotColumns, options: { layout?: Layo
       time[row] = cols.time[s]!;
       legId[row] = r;
       lefId[row] = r >> 1;
-      facing[row] = right; // Direction codes: 0 = Left, 1 = Right
       pos[row] = right ? cols.rightPos[src]! : cols.leftPos[src]!;
       mob[row] = right ? cols.rightMobility[src]! : cols.leftMobility[src]!;
     }
@@ -124,11 +123,10 @@ export function snapshotsToArrow(cols: SnapshotColumns, options: { layout?: Layo
       ["time", f64(time)],
       ["leg_id", u32(legId)],
       ["lef_id", u32(lefId)],
-      ["facing", dict(facing, DIRECTION)],
       ["pos", u32(pos)],
       ["mobility", dict(mob, MOBILITY)],
     ],
-    "snapshots",
+    "legs",
     meta,
   );
 }

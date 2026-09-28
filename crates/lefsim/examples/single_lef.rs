@@ -33,12 +33,11 @@ fn describe(sim: &Sim, action: Action) -> String {
 fn main() {
     // Event by event.
     let mut sim = build();
-    let (l, r) = sim.lef_positions(0);
+    let ((l, _), (r, _)) = sim.world().lef_state(0).unwrap();
     println!("t=0.0000  init             pos=({l}, {r})");
     for _ in 0..200 {
         let Some((t, action)) = sim.step() else { break };
-        let (l, r) = sim.lef_positions(0);
-        let (lm, rm) = sim.lef_mobilities(0);
+        let ((l, lm), (r, rm)) = sim.world().lef_state(0).unwrap();
         println!(
             "t={t:>8.4}  {:15}  pos=({l}, {r})  mob=({lm:?}, {rm:?})",
             describe(&sim, action)
@@ -56,14 +55,13 @@ fn main() {
     );
     for s in 0..frames.n_snapshots() {
         let snap = frames.snapshot(s);
-        let name = |code: u8| Mobility::NAMES[code as usize];
         println!(
-            "t={:>6.1}  pos=({}, {})  mob=({}, {})",
+            "t={:>6.1}  pos=({}, {})  mob=({:?}, {:?})",
             snap.time,
             snap.left_pos[0],
             snap.right_pos[0],
-            name(snap.left_mob[0]),
-            name(snap.right_mob[0]),
+            snap.left_mobility[0],
+            snap.right_mobility[0],
         );
     }
 }

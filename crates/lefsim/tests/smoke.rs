@@ -2,6 +2,12 @@
 
 use lefsim::*;
 
+/// `(left, right)` positions and mobilities of LEF 0.
+fn lef0(sim: &Sim) -> ((Position, Position), (Mobility, Mobility)) {
+    let ((l, lm), (r, rm)) = sim.world().lef_state(0).unwrap();
+    ((l, r), (lm, rm))
+}
+
 /// A sim with one moving LEF with both legs at `pos`.
 fn one_lef(lattice: Lattice, pos: Position, rates: Rates, seed: u64) -> Sim {
     let mut world = World::new(lattice);
@@ -30,12 +36,12 @@ fn lef_extrudes_outward_on_empty_lattice() {
         7,
     );
 
-    let (mut leftmost, mut rightmost) = sim.lef_positions(0);
+    let (mut leftmost, mut rightmost) = lef0(&sim).0;
     for _ in 0..400 {
         if sim.step().is_none() {
             break;
         }
-        let (l, r) = sim.lef_positions(0);
+        let (l, r) = lef0(&sim).0;
         leftmost = leftmost.min(l);
         rightmost = rightmost.max(r);
         if leftmost < 100 && rightmost > 100 {
@@ -66,12 +72,12 @@ fn right_facing_leg_captured_at_compatible_ctcf() {
 
     for _ in 0..2000 {
         sim.step().expect("queue should not exhaust within horizon");
-        if sim.lef_positions(0).1 == 20 {
+        if lef0(&sim).0.1 == 20 {
             break;
         }
     }
-    assert_eq!(sim.lef_positions(0).1, 20, "right leg should reach CTCF");
-    assert_eq!(sim.lef_mobilities(0).1, Mobility::Captured);
+    assert_eq!(lef0(&sim).0.1, 20, "right leg should reach CTCF");
+    assert_eq!(lef0(&sim).1.1, Mobility::Captured);
 }
 
 /// Eviction (a leg arriving at the *non-capture* side of a CTCF) should
@@ -97,13 +103,13 @@ fn eviction_triggers_immediate_respawn() {
     for _ in 0..2000 {
         sim.step().expect("queue exhausted before reaching CTCF");
 
-        if sim.lef_mobilities(0).1 == Mobility::Evicted {
+        if lef0(&sim).1.1 == Mobility::Evicted {
             // The very next event must be this LEF's respawn at dt = 0.
             let pre_clock = sim.time();
             let (next_t, next_a) = sim.step().expect("respawn should be queued immediately");
             assert_eq!(next_t, pre_clock, "respawn dt should be 0");
             assert!(matches!(next_a, Action::Respawn { lef } if sim.lef_id(lef) == Some(0)));
-            let (a, b) = sim.lef_positions(0);
+            let (a, b) = lef0(&sim).0;
             assert_eq!(a, b, "both legs should share the new spawn site");
             assert_ne!(a, 20, "should not respawn on the CTCF");
             return;

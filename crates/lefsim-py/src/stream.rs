@@ -15,7 +15,7 @@ use pyo3::types::PyCapsule;
 use pyo3_arrow::error::PyArrowResult;
 use pyo3_arrow::ffi::{ArrayReader, to_schema_pycapsule, to_stream_pycapsule};
 
-use crate::arrow::{Layout, events_batch, events_schema, snapshots_batch, snapshots_schema};
+use crate::arrow::{Layout, events_batch, events_schema, frames_batch, state_schema};
 use crate::batch::{PyBatch, batch_field};
 use crate::sim::EVENTS_PER_CHUNK;
 
@@ -41,7 +41,7 @@ pub struct SimReader {
 
 impl SimReader {
     pub fn snapshots(sim: lefsim::Sim, t_end: Time, rec: Recorder, layout: Layout) -> Self {
-        let schema = snapshots_schema(layout, sim.n_lefs());
+        let schema = state_schema(layout, true, sim.n_lefs());
         SimReader { sim, t_end, grid: Some(rec), events: None, layout, schema, done: false }
     }
 
@@ -51,7 +51,7 @@ impl SimReader {
             t_end,
             grid: None,
             events: Some(rec),
-            layout: Layout::Wide,
+            layout: Layout::Lef,
             schema: events_schema(),
             done: false,
         }
@@ -63,7 +63,7 @@ impl SimReader {
 
     fn take_batch(&mut self) -> Result<RecordBatch, ArrowError> {
         match (&mut self.grid, &mut self.events) {
-            (Some(rec), _) => snapshots_batch(rec.take_frames().into_columns(), self.layout),
+            (Some(rec), _) => frames_batch(rec.take_frames(), self.layout),
             (None, Some(ev)) => events_batch(ev.take_frames()),
             (None, None) => unreachable!("a reader always has a recorder"),
         }

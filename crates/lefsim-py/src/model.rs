@@ -13,7 +13,7 @@ use pyo3_arrow::input::AnyRecordBatch;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::arrow::{ColumnError, code_values, lattice_batch, lefs_batch, u32_values};
+use crate::arrow::{ColumnError, Layout, code_values, lattice_batch, state_batch, u32_values};
 use crate::batch::PyBatch;
 
 pub fn value_error(msg: impl Into<String>) -> PyErr {
@@ -95,6 +95,14 @@ fn from_json<T: DeserializeOwned>(s: &str) -> PyResult<T> {
     serde_json::from_str(s).map_err(|e| value_error(e.to_string()))
 }
 
+fn to_dict<'py, T: Serialize>(py: Python<'py>, value: &T) -> PyResult<Bound<'py, PyAny>> {
+    pythonize::pythonize(py, value).map_err(|e| value_error(e.to_string()))
+}
+
+fn from_dict<T: DeserializeOwned>(obj: &Bound<'_, PyAny>) -> PyResult<T> {
+    pythonize::depythonize(obj).map_err(|e| value_error(e.to_string()))
+}
+
 /// `__reduce__` through JSON: `(cls.from_json, (json,))`.
 fn reduce<'py, T: Serialize>(
     slf: &Bound<'py, PyAny>,
@@ -164,6 +172,17 @@ impl PyLattice {
     /// `lefsim.n_sites` in the schema metadata.
     fn to_arrow(&self) -> PyResult<PyBatch> {
         Ok(PyBatch(lattice_batch(&self.0).map_err(arrow_error)?))
+    }
+
+    /// As plain Python data (dicts, lists, numbers and strings), in the same
+    /// shape as the JSON.
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        to_dict(py, &self.0)
+    }
+
+    #[classmethod]
+    fn from_dict(_cls: &Bound<'_, PyType>, d: &Bound<'_, PyAny>) -> PyResult<Self> {
+        Ok(PyLattice(from_dict(d)?))
     }
 
     #[pyo3(signature = (*, indent = None))]
@@ -295,7 +314,19 @@ impl PyWorld {
     /// The LEF table: `lef_id`, `left_pos`, `right_pos`, `left_mobility`,
     /// `right_mobility`.
     fn to_arrow(&self) -> PyResult<PyBatch> {
-        Ok(PyBatch(lefs_batch(&self.0.lef_states()).map_err(arrow_error)?))
+        let batch = state_batch(None, self.0.n_lefs(), self.0.lef_states(), Layout::Lef);
+        Ok(PyBatch(batch.map_err(arrow_error)?))
+    }
+
+    /// As plain Python data (dicts, lists, numbers and strings), in the same
+    /// shape as the JSON.
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        to_dict(py, &self.0)
+    }
+
+    #[classmethod]
+    fn from_dict(_cls: &Bound<'_, PyType>, d: &Bound<'_, PyAny>) -> PyResult<Self> {
+        Ok(PyWorld(from_dict(d)?))
     }
 
     #[pyo3(signature = (*, indent = None))]
@@ -366,6 +397,17 @@ impl PyRates {
         self.0.respawn_captured
     }
 
+    /// As plain Python data (dicts, lists, numbers and strings), in the same
+    /// shape as the JSON.
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        to_dict(py, &self.0)
+    }
+
+    #[classmethod]
+    fn from_dict(_cls: &Bound<'_, PyType>, d: &Bound<'_, PyAny>) -> PyResult<Self> {
+        Ok(PyRates(from_dict(d)?))
+    }
+
     #[pyo3(signature = (*, indent = None))]
     fn to_json(&self, indent: Option<usize>) -> PyResult<String> {
         to_json(&self.0, indent)
@@ -430,6 +472,17 @@ impl PyModel {
     #[getter]
     fn spawn(&self) -> &'static str {
         rule_name(self.0.spawn())
+    }
+
+    /// As plain Python data (dicts, lists, numbers and strings), in the same
+    /// shape as the JSON.
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        to_dict(py, &self.0)
+    }
+
+    #[classmethod]
+    fn from_dict(_cls: &Bound<'_, PyType>, d: &Bound<'_, PyAny>) -> PyResult<Self> {
+        Ok(PyModel(from_dict(d)?))
     }
 
     #[pyo3(signature = (*, indent = None))]

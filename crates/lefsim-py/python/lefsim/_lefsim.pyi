@@ -3,7 +3,7 @@ from typing import Any, Literal, Optional, Union
 
 __version__: str
 
-Layout = Literal["wide", "long"]
+Layout = Literal["lef", "leg"]
 Stopped = Literal["reached_time", "reached_event_count", "exhausted", "recorder_full"]
 SpawnRuleName = Literal["uniform_non_ctcf"]
 
@@ -53,6 +53,10 @@ class Lattice:
     def to_arrow(self) -> Batch:
         """The CTCF table (``site``, ``captures_from``, ``strength``), with
         ``lefsim.n_sites`` in the schema metadata."""
+    def to_dict(self) -> Any:
+        """As plain Python data, in the same shape as the JSON."""
+    @classmethod
+    def from_dict(cls, d: Any) -> "Lattice": ...
     def to_json(self, *, indent: Optional[int] = None) -> str: ...
     @classmethod
     def from_json(cls, s: str) -> "Lattice": ...
@@ -75,6 +79,10 @@ class World:
     def to_arrow(self) -> Batch:
         """The LEF table: ``lef_id``, ``left_pos``, ``right_pos``,
         ``left_mobility``, ``right_mobility``."""
+    def to_dict(self) -> Any:
+        """As plain Python data, in the same shape as the JSON."""
+    @classmethod
+    def from_dict(cls, d: Any) -> "World": ...
     def to_json(self, *, indent: Optional[int] = None) -> str: ...
     @classmethod
     def from_json(cls, s: str) -> "World": ...
@@ -101,6 +109,10 @@ class Rates:
     @property
     def respawn_captured(self) -> float:
         """Respawn rate of a LEF with at least one captured leg."""
+    def to_dict(self) -> Any:
+        """As plain Python data, in the same shape as the JSON."""
+    @classmethod
+    def from_dict(cls, d: Any) -> "Rates": ...
     def to_json(self, *, indent: Optional[int] = None) -> str: ...
     @classmethod
     def from_json(cls, s: str) -> "Rates": ...
@@ -121,6 +133,10 @@ class Model:
     def rates(self) -> Rates: ...
     @property
     def spawn(self) -> SpawnRuleName: ...
+    def to_dict(self) -> Any:
+        """As plain Python data, in the same shape as the JSON."""
+    @classmethod
+    def from_dict(cls, d: Any) -> "Model": ...
     def to_json(self, *, indent: Optional[int] = None) -> str: ...
     @classmethod
     def from_json(cls, s: str) -> "Model": ...
@@ -180,7 +196,7 @@ class Sim:
         """The current state as a ``Model``."""
     def world(self) -> World:
         """The current state as a ``World``."""
-    def state(self, *, layout: Layout = "wide") -> Batch:
+    def state(self, *, layout: Layout = "lef") -> Batch:
         """The current state as a one-snapshot Batch."""
     def __copy__(self) -> "Sim": ...
     def __deepcopy__(self, memo: Any) -> "Sim": ...
@@ -196,7 +212,7 @@ class Sim:
         t0: float = 0.0,
         events: bool = False,
         keyframes: bool = False,
-        layout: Layout = "wide",
+        layout: Layout = "lef",
     ) -> Recording: ...
     def record_events(
         self,
@@ -206,10 +222,10 @@ class Sim:
         t0: float = 0.0,
         events: bool = False,
         keyframes: bool = False,
-        layout: Layout = "wide",
+        layout: Layout = "lef",
     ) -> Recording: ...
     def record_snapshot_chunk(
-        self, t_end: float, *, dt: float, t0: float = 0.0, max_snapshots: int, layout: Layout = "wide"
+        self, t_end: float, *, dt: float, t0: float = 0.0, max_snapshots: int, layout: Layout = "lef"
     ) -> Recording: ...
     def record_event_chunk(self, t_end: float, *, max_rows: int, keyframes: bool = True) -> Recording: ...
     def stream(
@@ -220,7 +236,7 @@ class Sim:
         t0: float = 0.0,
         events: bool = False,
         keyframes: bool = False,
-        layout: Layout = "wide",
+        layout: Layout = "lef",
         chunk_size: int = 10_000,
     ) -> Stream:
         """Move this Sim into a lazy Arrow stream (pass ``dt`` or ``events=True``)."""
@@ -254,7 +270,7 @@ class Replayer:
     def end(self) -> float: ...
     def advance_to(self, t: float) -> float: ...
     def seek(self, t: float) -> float: ...
-    def state(self, *, layout: Layout = "wide") -> Batch: ...
+    def state(self, *, layout: Layout = "lef") -> Batch: ...
     def world(self) -> World: ...
     def world_at(self, t: float) -> World: ...
     def snapshots(
@@ -264,7 +280,7 @@ class Replayer:
         t0: float = 0.0,
         t_start: Optional[float] = None,
         t_end: Optional[float] = None,
-        layout: Layout = "wide",
+        layout: Layout = "lef",
     ) -> Batch:
         """Decode to the grid ``t0 + k * dt`` from ``t_start`` (default: the
         current time) through ``t_end`` (default: the end of the log)."""

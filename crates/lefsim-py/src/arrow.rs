@@ -12,30 +12,23 @@ use arrow_array::types::{Float64Type, UInt32Type, UInt8Type};
 use arrow_array::{ArrayRef, DictionaryArray, PrimitiveArray, RecordBatch, StringArray};
 use arrow_buffer::ScalarBuffer;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef};
-use lefsim::{Direction, EventFrames, Lattice, LefColumns, LefStates, Mobility};
+use lefsim::{Direction, EventFrames, Lattice, LefFrames, LefStates, Mobility};
 
-/// Row layout of grid snapshots.
+/// What one row of a snapshot table is.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Layout {
-    /// One row per LEF per snapshot, left and right legs side by side.
-    Wide,
-    /// One row per leg per snapshot.
-    Long,
+    /// One row per LEF per snapshot: the world's LEF table plus `time`.
+    Lef,
+    /// One row per leg per snapshot, in the event log's row shape.
+    Leg,
 }
 
 impl Layout {
     pub fn parse(s: &str) -> Option<Self> {
         match s {
-            "wide" => Some(Layout::Wide),
-            "long" => Some(Layout::Long),
+            "lef" => Some(Layout::Lef),
+            "leg" => Some(Layout::Leg),
             _ => None,
-        }
-    }
-
-    fn name(self) -> &'static str {
-        match self {
-            Layout::Wide => "wide",
-            Layout::Long => "long",
         }
     }
 }
@@ -84,112 +77,124 @@ fn schema(fields: Vec<Field>, kind: &str, extra: &[(&str, String)]) -> SchemaRef
     Arc::new(Schema::new_with_metadata(fields, metadata))
 }
 
-// ----- snapshots -----
+// ----- the two row shapes -----
+//
+// Every table of simulation state is the world's LEF table (one row per
+// LEF) or its per-leg unpivot (one row per leg), optionally with `time`:
+// `World.to_arrow()` and `Sim.state()` are LEF tables, snapshots are
+// stacked LEF or leg tables, and the event log is leg rows plus `action`.
 
-pub fn snapshots_schema(layout: Layout, n_lefs: usize) -> SchemaRef {
-    let fields = match layout {
-        Layout::Wide => vec![
-            field("time", DataType::Float64),
-            field("lef_id", DataType::UInt32),
-            field("left_pos", DataType::UInt32),
-            field("right_pos", DataType::UInt32),
-            field("left_mobility", dict_type()),
-            field("right_mobility", dict_type()),
-        ],
-        Layout::Long => vec![
-            field("time", DataType::Float64),
-            field("leg_id", DataType::UInt32),
-            field("lef_id", DataType::UInt32),
-            field("facing", dict_type()),
-            field("pos", DataType::UInt32),
-            field("mobility", dict_type()),
-        ],
-    };
-    schema(
-        fields,
-        "snapshots",
-        &[
-            ("layout", layout.name().to_string()),
-            ("n_lefs", n_lefs.to_string()),
-        ],
-    )
+fn lef_fields(with_time: bool) -> Vec<Field> {
+    let mut fields = Vec::new();
+    if with_time {
+        fields.push(field("time", DataType::Float64));
+    }
+    fields.extend([
+        field("lef_id", DataType::UInt32),
+        field("left_pos", DataType::UInt32),
+        field("right_pos", DataType::UInt32),
+        field("left_mobility", dict_type()),
+        field("right_mobility", dict_type()),
+    ]);
+    fields
 }
 
-pub fn snapshots_batch(c: LefColumns, layout: Layout) -> Result<RecordBatch, ArrowError> {
-    let n_lefs = c.n_lefs;
-    let n_snapshots = c.time.len();
-    let schema = snapshots_schema(layout, n_lefs);
+fn leg_fields() -> Vec<Field> {
+    vec![
+        field("time", DataType::Float64),
+        field("leg_id", DataType::UInt32),
+        field("lef_id", DataType::UInt32),
+        field("pos", DataType::UInt32),
+        field("mobility", dict_type()),
+    ]
+}
+
+/// The schema of a LEF table (with `time` for snapshots) or of leg rows.
+pub fn state_schema(layout: Layout, with_time: bool, n_lefs: usize) -> SchemaRef {
+    let n = [("n_lefs", n_lefs.to_string())];
+    match layout {
+        Layout::Lef => schema(lef_fields(with_time), "lefs", &n),
+        Layout::Leg => schema(leg_fields(), "legs", &n),
+    }
+}
+
+/// Stacked LEF tables, one per entry of `time` (or a single table without
+/// a `time` column), in either layout. Leg rows always carry `time`: pass
+/// `None` only with `Layout::Lef`.
+pub fn state_batch(
+    time: Option<Vec<f64>>,
+    n_lefs: usize,
+    lefs: LefStates,
+    layout: Layout,
+) -> Result<RecordBatch, ArrowError> {
+    let n_tables = time.as_ref().map_or(1, |t| t.len());
+    let schema = state_schema(layout, time.is_some(), n_lefs);
+    let LefStates { left_pos, right_pos, left_mobility, right_mobility } = lefs;
     let columns = match layout {
-        Layout::Wide => {
-            let n_rows = n_snapshots * n_lefs;
-            let time = exact(n_rows, c.time.iter().flat_map(|&t| std::iter::repeat_n(t, n_lefs)));
-            let lef_id = exact(n_rows, (0..n_snapshots).flat_map(|_| 0..n_lefs as u32));
-            vec![
-                f64_col(time),
-                u32_col(lef_id),
-                u32_col(c.left_pos),
-                u32_col(c.right_pos),
-                dict_col(c.left_mob, &Mobility::NAMES),
-                dict_col(c.right_mob, &Mobility::NAMES),
-            ]
+        Layout::Lef => {
+            let n_rows = n_tables * n_lefs;
+            let mut columns = Vec::with_capacity(6);
+            if let Some(time) = time {
+                columns.push(f64_col(exact(n_rows, time.iter().flat_map(|&t| std::iter::repeat_n(t, n_lefs)))));
+            }
+            columns.extend([
+                u32_col(exact(n_rows, (0..n_tables).flat_map(|_| 0..n_lefs as u32))),
+                u32_col(left_pos),
+                u32_col(right_pos),
+                dict_col(Mobility::into_codes(left_mobility), &Mobility::NAMES),
+                dict_col(Mobility::into_codes(right_mobility), &Mobility::NAMES),
+            ]);
+            columns
         }
-        Layout::Long => {
+        Layout::Leg => {
             // Rows ordered by snapshot, then leg_id = 2 * lef_id + side.
-            let n_rows = 2 * c.left_pos.len();
-            let time =
-                exact(n_rows, c.time.iter().flat_map(|&t| std::iter::repeat_n(t, 2 * n_lefs)));
-            let leg_id = exact(n_rows, (0..n_snapshots).flat_map(|_| 0..2 * n_lefs as u32));
-            let lef_id = (0..n_rows as u32).map(|row| (row / 2) % n_lefs.max(1) as u32).collect();
-            let facing = (0..n_rows)
-                .map(|row| if row % 2 == 0 { Direction::Left } else { Direction::Right })
-                .map(Direction::code)
-                .collect();
-            let pos = exact(n_rows, c.left_pos.iter().zip(&c.right_pos).flat_map(|(&a, &b)| [a, b]));
-            let mob = exact(n_rows, c.left_mob.iter().zip(&c.right_mob).flat_map(|(&a, &b)| [a, b]));
-            vec![
-                f64_col(time),
-                u32_col(leg_id),
-                u32_col(lef_id),
-                dict_col(facing, &Direction::NAMES),
-                u32_col(pos),
-                dict_col(mob, &Mobility::NAMES),
-            ]
+            let time = time.expect("callers pass time for leg rows");
+            let n_rows = 2 * n_tables * n_lefs;
+            let pos = exact(n_rows, left_pos.iter().zip(&right_pos).flat_map(|(&a, &b)| [a, b]));
+            let mob = exact(n_rows, left_mobility.iter().zip(&right_mobility).flat_map(|(&a, &b)| [a, b]));
+            leg_columns(
+                exact(n_rows, time.iter().flat_map(|&t| std::iter::repeat_n(t, 2 * n_lefs))),
+                exact(n_rows, (0..n_tables).flat_map(|_| 0..2 * n_lefs as u32)),
+                pos,
+                mob,
+            )
         }
     };
     RecordBatch::try_new(schema, columns)
 }
 
+/// Snapshot frames as a batch in `layout`.
+pub fn frames_batch(frames: LefFrames, layout: Layout) -> Result<RecordBatch, ArrowError> {
+    let (n_lefs, time, lefs) = frames.into_parts();
+    state_batch(Some(time), n_lefs, lefs, layout)
+}
+
+/// The leg-row columns: `time, leg_id, lef_id, pos, mobility`.
+fn leg_columns(time: Vec<f64>, leg_id: Vec<u32>, pos: Vec<u32>, mob: Vec<Mobility>) -> Vec<ArrayRef> {
+    let lef_id = leg_id.iter().map(|&leg| leg / 2).collect();
+    vec![
+        f64_col(time),
+        u32_col(leg_id),
+        u32_col(lef_id),
+        u32_col(pos),
+        dict_col(Mobility::into_codes(mob), &Mobility::NAMES),
+    ]
+}
+
 // ----- event deltas -----
 
 pub fn events_schema() -> SchemaRef {
-    schema(
-        vec![
-            field("time", DataType::Float64),
-            field("leg_id", DataType::UInt32),
-            field("lef_id", DataType::UInt32),
-            field("pos", DataType::UInt32),
-            field("mobility", dict_type()),
-            field("action", dict_type()),
-        ],
-        "events",
-        &[],
-    )
+    let mut fields = leg_fields();
+    fields.push(field("action", dict_type()));
+    schema(fields, "events", &[])
 }
 
+/// The event log: leg rows plus `action`.
 pub fn events_batch(frames: EventFrames) -> Result<RecordBatch, ArrowError> {
     let c = frames.into_columns();
-    let lef_id = c.leg_id.iter().map(|&leg| leg / 2).collect();
-    RecordBatch::try_new(
-        events_schema(),
-        vec![
-            f64_col(c.time),
-            u32_col(c.leg_id),
-            u32_col(lef_id),
-            u32_col(c.pos),
-            dict_col(c.mob, &Mobility::NAMES),
-            dict_col(c.kind, &EventFrames::KIND_NAMES),
-        ],
-    )
+    let mut columns = leg_columns(c.time, c.leg_id, c.pos, c.mob);
+    columns.push(dict_col(c.kind, &EventFrames::KIND_NAMES));
+    RecordBatch::try_new(events_schema(), columns)
 }
 
 // ----- model tables -----
@@ -212,31 +217,6 @@ pub fn lattice_batch(lattice: &Lattice) -> Result<RecordBatch, ArrowError> {
             u32_col(ctcfs.iter().map(|c| c.site).collect()),
             dict_col(ctcfs.iter().map(|c| c.captures_from.code()).collect(), &Direction::NAMES),
             f64_col(ctcfs.iter().map(|c| c.strength).collect()),
-        ],
-    )
-}
-
-/// The LEF state table: one row per LEF, in `lef_id` order.
-pub fn lefs_batch(lefs: &LefStates) -> Result<RecordBatch, ArrowError> {
-    let codes = |m: &[Mobility]| m.iter().map(|m| m.code()).collect();
-    RecordBatch::try_new(
-        schema(
-            vec![
-                field("lef_id", DataType::UInt32),
-                field("left_pos", DataType::UInt32),
-                field("right_pos", DataType::UInt32),
-                field("left_mobility", dict_type()),
-                field("right_mobility", dict_type()),
-            ],
-            "lefs",
-            &[("n_lefs", lefs.len().to_string())],
-        ),
-        vec![
-            u32_col((0..lefs.len() as u32).collect()),
-            u32_col(lefs.left_pos.clone()),
-            u32_col(lefs.right_pos.clone()),
-            dict_col(codes(&lefs.left_mobility), &Mobility::NAMES),
-            dict_col(codes(&lefs.right_mobility), &Mobility::NAMES),
         ],
     )
 }

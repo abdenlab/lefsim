@@ -1,8 +1,8 @@
 {
  "lattice": {
   "metadata": {
-   "lefsim.n_sites": "200",
-   "lefsim.kind": "lattice"
+   "lefsim.kind": "lattice",
+   "lefsim.n_sites": "200"
   },
   "fields": [
    {
@@ -74,11 +74,10 @@
    }
   ]
  },
- "snapshots_wide": {
+ "snapshots_lef": {
   "metadata": {
    "lefsim.n_lefs": "4",
-   "lefsim.layout": "wide",
-   "lefsim.kind": "snapshots"
+   "lefsim.kind": "lefs"
   },
   "fields": [
    {
@@ -127,10 +126,9 @@
    }
   ]
  },
- "snapshots_long": {
+ "snapshots_leg": {
   "metadata": {
-   "lefsim.kind": "snapshots",
-   "lefsim.layout": "long",
+   "lefsim.kind": "legs",
    "lefsim.n_lefs": "4"
   },
   "fields": [
@@ -151,15 +149,6 @@
     "type": "uint32",
     "nullable": false,
     "dictionary": null
-   },
-   {
-    "name": "facing",
-    "type": "dict<uint8,utf8>",
-    "nullable": false,
-    "dictionary": [
-     "Left",
-     "Right"
-    ]
    },
    {
     "name": "pos",

@@ -43,8 +43,8 @@ pub enum Schedule {
 ///   "format": "lefsim.model", "version": 1,
 ///   "lattice": { "n_sites": 100,
 ///                "ctcfs": [{ "site": 30, "captures_from": "right", "strength": 0.8 }] },
-///   "lefs": { "left_pos": [10], "right_pos": [12],
-///             "left_mobility": ["moving"], "right_mobility": ["moving"] },
+///   "lefs": [{ "left_pos": 10, "right_pos": 12,
+///               "left_mobility": "moving", "right_mobility": "moving" }],
 ///   "rates": { "step": 1.0, "respawn": 0.001, "respawn_captured": 0.0001 },
 ///   "spawn": { "rule": "uniform_non_ctcf" }
 /// }

@@ -4,7 +4,7 @@
 //! The Rust twin of the TS `Replayer` in `packages/lefsim`, with the same
 //! semantics.
 
-use crate::model::{Lattice, LefStates, Mobility, Position, Time, World, WorldError};
+use crate::model::{Lattice, LefStates, Mobility, Time, World, WorldError};
 
 use super::record::{EventFrames, LefFrames, SampleMode};
 
@@ -44,8 +44,8 @@ pub struct Replayer {
     time: Time,
     end: Time,
     ready: bool,
-    /// `(pos, mobility code)` per leg, indexed by `leg_id`.
-    legs: Vec<(Position, u8)>,
+    /// The LEF table at `time`.
+    lefs: LefStates,
     /// The grid of the last `snapshots` call and its next index, so the
     /// next call on the same grid continues it. Cleared by a seek.
     grid: Option<(SampleMode, u64)>,
@@ -59,7 +59,6 @@ pub enum ReplayError {
     /// A chunk's `end` must be a number no earlier than its last row.
     BadEnd { end: Time, last_row: Time },
     LegOutOfRange { leg_id: u32, n_legs: usize },
-    BadMobility { code: u8 },
     BadKind { code: u8 },
     /// A keyframe has one row per leg, in `leg_id` order, at one time.
     BadKeyframe { time: Time, rows: usize, n_legs: usize },
@@ -84,7 +83,6 @@ impl std::fmt::Display for ReplayError {
             ReplayError::LegOutOfRange { leg_id, n_legs } => {
                 write!(f, "leg id {leg_id} is out of range for {n_legs} legs")
             }
-            ReplayError::BadMobility { code } => write!(f, "invalid mobility code {code}"),
             ReplayError::BadKind { code } => write!(f, "invalid row kind code {code}"),
             ReplayError::BadKeyframe { time, rows, n_legs } => write!(
                 f,
@@ -118,7 +116,12 @@ impl Replayer {
             time: Time::NEG_INFINITY,
             end: Time::NEG_INFINITY,
             ready: false,
-            legs: vec![(0, 0); 2 * n_lefs],
+            lefs: LefStates {
+                left_pos: vec![0; n_lefs],
+                right_pos: vec![0; n_lefs],
+                left_mobility: vec![Mobility::Moving; n_lefs],
+                right_mobility: vec![Mobility::Moving; n_lefs],
+            },
             grid: None,
         }
     }
@@ -157,7 +160,7 @@ impl Replayer {
     /// error, nothing is pushed.
     pub fn push(&mut self, chunk: EventFrames, end: Time) -> Result<(), ReplayError> {
         let n_legs = 2 * self.n_lefs;
-        let (time, leg_id, mob, kind) = (chunk.time(), chunk.leg_id(), chunk.mob(), chunk.kind());
+        let (time, leg_id, kind) = (chunk.time(), chunk.leg_id(), chunk.kind());
         let mut previous = self.last_row_time();
         for row in 0..chunk.n_rows() {
             if time[row].is_nan() || time[row] < previous {
@@ -166,9 +169,6 @@ impl Replayer {
             previous = time[row];
             if leg_id[row] as usize >= n_legs {
                 return Err(ReplayError::LegOutOfRange { leg_id: leg_id[row], n_legs });
-            }
-            if Mobility::from_code(mob[row]).is_none() {
-                return Err(ReplayError::BadMobility { code: mob[row] });
             }
             if kind[row] as usize >= EventFrames::KIND_NAMES.len() {
                 return Err(ReplayError::BadKind { code: kind[row] });
@@ -244,25 +244,18 @@ impl Replayer {
         Ok(target)
     }
 
-    /// The LEF state table at [`Replayer::time`].
-    pub fn lef_states(&self) -> Result<LefStates, ReplayError> {
+    /// The LEF table at [`Replayer::time`].
+    pub fn lef_states(&self) -> Result<&LefStates, ReplayError> {
         if !self.ready {
             return Err(ReplayError::NotReady);
         }
-        let mut states = LefStates::new();
-        for pair in self.legs.chunks_exact(2) {
-            let leg = |(pos, code): (Position, u8)| {
-                (pos, Mobility::from_code(code).expect("checked on push"))
-            };
-            states.push(leg(pair[0]), leg(pair[1]));
-        }
-        Ok(states)
+        Ok(&self.lefs)
     }
 
     /// The state at [`Replayer::time`] as a [`World`]: start a new run from
     /// it with [`Sim::with_start_time`](crate::Sim::with_start_time).
     pub fn world(&self) -> Result<World, ReplayError> {
-        World::from_lef_states(self.lattice.clone(), &self.lef_states()?)
+        World::from_lef_states(self.lattice.clone(), self.lef_states()?)
             .map_err(ReplayError::World)
     }
 
@@ -303,7 +296,7 @@ impl Replayer {
         let last = t_end.min(self.end);
         while point(k) <= last {
             self.advance_to(point(k));
-            frames.push_legs(point(k), &self.legs);
+            frames.push(point(k), &self.lefs);
             k += 1;
         }
         self.grid = Some((mode, k));
@@ -348,7 +341,12 @@ impl Replayer {
         while let Some(chunk) = self.chunks.get(c) {
             let n = chunk.n_rows();
             while row < n && chunk.time()[row] <= t {
-                self.legs[chunk.leg_id()[row] as usize] = (chunk.pos()[row], chunk.mob()[row]);
+                let (lef, pos, mob) = (chunk.leg_id()[row] as usize / 2, chunk.pos()[row], chunk.mob()[row]);
+                if chunk.leg_id()[row] % 2 == 0 {
+                    (self.lefs.left_pos[lef], self.lefs.left_mobility[lef]) = (pos, mob);
+                } else {
+                    (self.lefs.right_pos[lef], self.lefs.right_mobility[lef]) = (pos, mob);
+                }
                 row += 1;
             }
             if row < n {

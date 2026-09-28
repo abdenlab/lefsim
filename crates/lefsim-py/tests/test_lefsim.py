@@ -234,16 +234,17 @@ def test_model_json_round_trip_and_shape():
     assert doc["lattice"]["ctcfs"][0] == {"site": 60, "captures_from": "right", "strength": 0.8}
     assert doc["rates"] == {"step": 1.0, "respawn": 0.02, "respawn_captured": 0.005}
     assert doc["spawn"] == {"rule": "uniform_non_ctcf"}
+    rows = table(model.world.to_arrow()).drop_columns(["lef_id"]).to_pylist()
+    assert doc["lefs"] == [{k: v.lower() if isinstance(v, str) else v for k, v in r.items()} for r in rows]
     assert lefsim.Model.from_json(model.to_json()) == model
+
+    # Mobility may be left out when loading.
+    doc["lefs"] = [{"left_pos": 10, "right_pos": 12}]
+    assert lefs(lefsim.Model.from_json(json.dumps(doc)).world)["left_mobility"] == ["Moving"]
 
     # Loading validates: a left-facing leg captured by the CTCF at 140,
     # which captures from the left, is rejected.
-    doc["lefs"] = {
-        "left_pos": [140],
-        "right_pos": [150],
-        "left_mobility": ["captured"],
-        "right_mobility": ["moving"],
-    }
+    doc["lefs"] = [{"left_pos": 140, "right_pos": 150, "left_mobility": "captured"}]
     with pytest.raises(ValueError, match="can't be captured"):
         lefsim.Model.from_json(json.dumps(doc))
 
@@ -253,9 +254,19 @@ def test_model_json_round_trip_and_shape():
     [make_lattice(), lefsim.populate(make_lattice(), 4, seed=2), RATES, make_model()],
     ids=["Lattice", "World", "Rates", "Model"],
 )
-def test_model_types_pickle_and_json(obj):
+def test_model_types_pickle_json_and_dicts(obj):
     assert pickle.loads(pickle.dumps(obj)) == obj
     assert type(obj).from_json(obj.to_json()) == obj
+    d = obj.to_dict()
+    assert d == json.loads(obj.to_json())
+    assert type(obj).from_dict(d) == obj
+
+
+def test_from_dict_validates():
+    d = make_model().to_dict()
+    d["rates"]["step"] = -1.0
+    with pytest.raises(ValueError, match="step rate"):
+        lefsim.Model.from_dict(d)
 
 
 # ---------------------------------------------------------------- sim
@@ -493,14 +504,15 @@ def test_recording_argument_errors(call, match):
 # ---------------------------------------------------------------- layouts
 
 
-def test_long_layout_is_wide_unpivoted():
+def test_leg_layout_is_the_lef_layout_unpivoted():
     wide = table(make_sim(seed=7).record_until(30.0, dt=1.0).snapshots)
-    long = table(make_sim(seed=7).record_until(30.0, dt=1.0, layout="long").snapshots)
-    assert long.column_names == ["time", "leg_id", "lef_id", "facing", "pos", "mobility"]
+    long = table(make_sim(seed=7).record_until(30.0, dt=1.0, layout="leg").snapshots)
+    assert long.column_names == ["time", "leg_id", "lef_id", "pos", "mobility"]
     assert long.num_rows == 2 * wide.num_rows
 
-    left = long.filter(pa.compute.equal(long["facing"].cast(pa.string()), "Left"))
-    right = long.filter(pa.compute.equal(long["facing"].cast(pa.string()), "Right"))
+    is_left = pa.compute.equal(pa.compute.bit_wise_and(long["leg_id"], 1), 0)
+    left = long.filter(is_left)
+    right = long.filter(pa.compute.invert(is_left))
     assert left["pos"].equals(wide["left_pos"])
     assert right["pos"].equals(wide["right_pos"])
     assert left["lef_id"].equals(wide["lef_id"])
@@ -541,13 +553,27 @@ def test_categoricals_carry_names():
 
 def test_batch_metadata_and_repr():
     batch = make_sim(n_lefs=3).record_until(1.0, dt=1.0).snapshots
-    assert batch.metadata == {
-        "lefsim.kind": "snapshots",
-        "lefsim.layout": "wide",
-        "lefsim.n_lefs": "3",
-    }
+    assert batch.metadata == {"lefsim.kind": "lefs", "lefsim.n_lefs": "3"}
     assert len(batch) == batch.num_rows == 6
-    assert "snapshots" in repr(batch)
+    assert "lefs" in repr(batch)
+    leg = make_sim(n_lefs=3).record_until(1.0, dt=1.0, layout="leg").snapshots
+    assert leg.metadata == {"lefsim.kind": "legs", "lefsim.n_lefs": "3"}
+
+
+def test_one_schema_for_every_lef_table():
+    """World tables, states and snapshots are the same table (snapshots and
+    states add `time`), and leg rows share the event log's columns."""
+    sim = make_sim(n_lefs=3)
+    sim.run_until(5.0)
+    world = table(sim.world().to_arrow())
+    state = table(sim.state())
+    snaps = table(sim.record_until(7.0, dt=1.0).snapshots)
+    assert state.schema == snaps.schema
+    assert state.drop_columns(["time"]).schema.remove_metadata() == world.schema.remove_metadata()
+    assert state.drop_columns(["time"]).equals(world)
+    legs = table(sim.record_until(9.0, dt=1.0, layout="leg").snapshots)
+    events = table(sim.record_until(11.0, events=True).events)
+    assert events.drop_columns(["action"]).schema.remove_metadata() == legs.schema.remove_metadata()
 
 
 def test_wide_columns_reshape_to_snapshot_by_lef():
@@ -752,7 +778,7 @@ def test_replayer_state_and_late_join():
     sim = make_sim(seed=17)
     sim.run_until(250.0)
     assert table(r.state()).equals(table(sim.state()))
-    assert table(r.state(layout="long")).equals(table(sim.state(layout="long")))
+    assert table(r.state(layout="leg")).equals(table(sim.state(layout="leg")))
 
 
 def test_replayer_trim_before():

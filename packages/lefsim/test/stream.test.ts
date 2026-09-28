@@ -130,10 +130,10 @@ describe("Sim.stream", () => {
 describe("toRecordBatches", () => {
   it("turns snapshot and event streams into Arrow record batches", async () => {
     using a = make(9);
-    const snaps = await collect(a.stream(100, { dt: 1, chunkSize: 30 }).pipeThrough(toRecordBatches({ layout: "long" })));
+    const snaps = await collect(a.stream(100, { dt: 1, chunkSize: 30 }).pipeThrough(toRecordBatches({ layout: "leg" })));
     expect(snaps.every((b) => b instanceof RecordBatch)).toBe(true);
     expect(snaps.reduce((n, b) => n + b.numRows, 0)).toBe(101 * 16);
-    expect(snaps[0]!.schema.metadata.get("lefsim.layout")).toBe("long");
+    expect(snaps[0]!.schema.metadata.get("lefsim.kind")).toBe("legs");
 
     using b = make(9);
     const events = await collect(b.stream(100, { events: true, chunkSize: 200 }).pipeThrough(toRecordBatches()));
