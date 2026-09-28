@@ -128,11 +128,15 @@ Arenas:
 #### Firing rules
 
 When `Respawn` is fired, the LEF's legs are lifted off their current sites, a
-new spawn site is chosen by the `SpawnRule`, and both legs are placed there
-facing outward. `SpawnRule` is a small trait. The crate ships
-`UniformNonCtcfSpawn`, which rejection-samples until it lands on an unoccupied
-`Plain` site. Models that need a nonuniform or precomputed-free-list rule
-implement the trait.
+new spawn site is chosen by the spawn rule, and both legs are placed there
+facing outward. A spawn rule implements the small `Spawn` trait: `sample`
+picks a site, and `check` says whether the rule can always find one for a
+given lattice and number of LEFs. The built-in rules are the `SpawnRule`
+enum; for now that's `SpawnRule::UniformNonCtcf`, which rejection-samples
+until it lands on an unoccupied `Plain` site (and needs 2n − 1 plain sites
+for n LEFs). Models that need a nonuniform or precomputed-free-list rule
+implement the trait. The free function `populate` uses a rule to place the
+starting LEFs, exactly as respawns would.
 
 On each `Step` or `Respawn` fire, the mobility of the leg(s) is reassessed using
 a `resolve_mobility(site, arrived_from, rng)` function. `arrived_from` is the
@@ -389,7 +393,7 @@ crates/lefsim/          core crate
     world.rs              World: the state (lattice + legs and LEFs)
     lattice.rs, entity.rs sites and CTCFs; legs, LEFs and their keys
     action.rs             Action, Rates, scheduling and firing rules, CTCF landing
-    spawn.rs              SpawnRule, UniformNonCtcfSpawn
+    spawn.rs              Spawn, SpawnRule, populate
   src/sim/              running and observing a model:
     mod.rs                Sim, SimBuilder, batch drivers
     record.rs             Recorder, EventRecorder, frames, SimMeta

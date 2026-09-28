@@ -1,6 +1,6 @@
 //! The loop-extrusion model: its state (the [`World`]: lattice and
 //! entities), its parameters ([`Rates`]), and its dynamics (the [`Action`]s
-//! and the [`SpawnRule`]).
+//! and the [`Spawn`] rules).
 //!
 //! Nothing here depends on [`crate::sim`], which runs and observes a model.
 
@@ -13,7 +13,7 @@ pub mod world;
 pub use action::{Action, Rates};
 pub use entity::{Leg, Lef, LefKey, LegKey, Mobility};
 pub use lattice::{Ctcf, Direction, Lattice, LatticeError, Position, Site, SiteKind};
-pub use spawn::{SpawnRule, UniformNonCtcfSpawn};
+pub use spawn::{populate, Spawn, SpawnError, SpawnRule};
 pub use world::{LefStates, LegState, World, WorldError};
 
 use rand_pcg::Pcg64;

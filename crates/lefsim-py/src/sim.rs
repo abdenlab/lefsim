@@ -325,7 +325,7 @@ impl PySim {
             sites[site as usize] = Site::ctcf(parse_direction(&captures_from[i])?, p);
         }
 
-        // UniformNonCtcfSpawn rejection-samples a free non-CTCF site, so it
+        // The uniform spawn rule rejection-samples a free non-CTCF site, so it
         // would spin forever if there were none. Each LEF covers at most two
         // sites, so this bound guarantees a free one at every respawn.
         let total_lefs = lef_sites.len() + n_lefs;

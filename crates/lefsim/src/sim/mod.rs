@@ -1,6 +1,6 @@
 //! The [`Sim`] facade: one object that owns a whole run.
 //!
-//! A run needs a [`World`], an engine, an RNG, a [`SpawnRule`], and a
+//! A run needs a [`World`], an engine, an RNG, a spawn rule, and a
 //! touched-entity buffer, all threaded through every step in the right order.
 //! `Sim` owns them together so callers (and FFI bindings) wrap a single,
 //! concrete, `Send` type.
@@ -27,8 +27,8 @@ use slotmap::SecondaryMap;
 
 use crate::model::action::Touched;
 use crate::model::{
-    Action, Lattice, LefKey, LegKey, Mobility, Position, Rates, SimRng, SpawnRule, Time,
-    UniformNonCtcfSpawn, World,
+    Action, Lattice, LefKey, LegKey, Mobility, Position, Rates, SimRng, Spawn, SpawnRule, Time,
+    World,
 };
 use engine::Engine;
 use record::sealed::Observe;
@@ -46,18 +46,18 @@ pub struct SimBuilder {
     lattice: Lattice,
     rates: Rates,
     seed: u64,
-    spawn: Box<dyn SpawnRule + Send + Sync>,
+    spawn: Box<dyn Spawn + Send + Sync>,
     initial: Vec<InitialLef>,
 }
 
 impl SimBuilder {
-    /// Defaults: seed 0, [`Rates::default`], [`UniformNonCtcfSpawn`], no LEFs.
+    /// Defaults: seed 0, [`Rates::default`], [`SpawnRule::UniformNonCtcf`], no LEFs.
     pub fn new(lattice: Lattice) -> Self {
         SimBuilder {
             lattice,
             rates: Rates::default(),
             seed: 0,
-            spawn: Box::new(UniformNonCtcfSpawn),
+            spawn: Box::new(SpawnRule::UniformNonCtcf),
             initial: Vec::new(),
         }
     }
@@ -77,7 +77,7 @@ impl SimBuilder {
     /// `Send + Sync` keeps [`Sim`] `Send + Sync`, which FFI wrappers need
     /// (e.g. a pyo3 `#[pyclass]`). Spawn rules take `&self`, so stateless or
     /// immutable rules satisfy this for free.
-    pub fn spawn_rule<S: SpawnRule + Send + Sync + 'static>(mut self, rule: S) -> Self {
+    pub fn spawn_rule<S: Spawn + Send + Sync + 'static>(mut self, rule: S) -> Self {
         self.spawn = Box::new(rule);
         self
     }
@@ -173,7 +173,7 @@ pub struct Sim {
     world: World,
     engine: Engine,
     rng: SimRng,
-    spawn: Box<dyn SpawnRule + Send + Sync>,
+    spawn: Box<dyn Spawn + Send + Sync>,
     touched: Touched,
     lef_order: Vec<LefKey>,
     leg_order: Vec<LegKey>,
@@ -502,7 +502,7 @@ mod tests {
 
         for _ in 0..5000 {
             let a = sim.step();
-            let b = engine.step(&mut world, &UniformNonCtcfSpawn, &mut rng, &mut touched);
+            let b = engine.step(&mut world, &SpawnRule::UniformNonCtcf, &mut rng, &mut touched);
             assert_eq!(a.map(|(t, _)| t), b.map(|(t, _)| t));
         }
         for (i, &lef_k) in sim.lef_order.iter().enumerate() {

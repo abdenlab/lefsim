@@ -8,7 +8,7 @@
 use slotmap::SlotMap;
 use smallvec::SmallVec;
 
-use super::action::resolve_mobility;
+use super::action::land_lef;
 use super::entity::{Leg, Lef, LefKey, LegKey, Mobility};
 use super::lattice::{Direction, Lattice, Position, SiteKind};
 use super::SimRng;
@@ -315,14 +315,7 @@ impl World {
         pos: Position,
         rng: &mut SimRng,
     ) -> (LefKey, [LegKey; 2]) {
-        // Roll for landing mobility. Initial placement isn't a "step" in the
-        // usual sense; we treat it as if each leg arrived from the side
-        // opposite its facing, matching the convention used by fire_step
-        // under forward-only motion. See resolve_mobility for why this
-        // matters. Left then right, as before, to keep the RNG stream.
-        let kind = self.lattice.sites[pos as usize].kind;
-        let left = resolve_mobility(kind, Direction::Left.opposite(), rng);
-        let right = resolve_mobility(kind, Direction::Right.opposite(), rng);
+        let [left, right] = land_lef(self.lattice.sites[pos as usize].kind, rng);
         self.insert_lef((pos, left), (pos, right))
     }
 }

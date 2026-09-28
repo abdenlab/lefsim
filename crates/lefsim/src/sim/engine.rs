@@ -10,7 +10,7 @@
 
 
 use crate::model::action::{Action, Rates, Touched};
-use crate::model::{Schedule, SimRng, SpawnRule, Time, World};
+use crate::model::{Schedule, SimRng, Spawn, Time, World};
 
 use super::heap::{IndexedHeap, Priority};
 
@@ -103,7 +103,7 @@ impl Engine {
     pub(crate) fn step(
         &mut self,
         world: &mut World,
-        spawn: &dyn SpawnRule,
+        spawn: &dyn Spawn,
         rng: &mut SimRng,
         touched: &mut Touched,
     ) -> Option<(Time, Action)> {
@@ -130,7 +130,7 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Direction, Lattice, Site, UniformNonCtcfSpawn};
+    use crate::model::{Direction, Lattice, Site, SpawnRule};
     use rand::SeedableRng;
 
     #[test]
@@ -149,7 +149,7 @@ mod tests {
         for _ in 0..2000 {
             let predicted = engine.next_event_time();
             let fired = engine
-                .step(&mut world, &UniformNonCtcfSpawn, &mut rng, &mut touched)
+                .step(&mut world, &SpawnRule::UniformNonCtcf, &mut rng, &mut touched)
                 .map(|(t, _)| t);
             assert_eq!(predicted, fired);
             assert_eq!(engine.clock(), fired.unwrap());

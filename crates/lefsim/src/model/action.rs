@@ -6,7 +6,7 @@ use smallvec::SmallVec;
 
 use super::entity::{LefKey, LegKey, Mobility};
 use super::lattice::{Direction, SiteKind};
-use super::spawn::SpawnRule;
+use super::spawn::Spawn;
 use super::world::World;
 use super::{Schedule, SimRng, Time};
 
@@ -41,7 +41,7 @@ impl Default for Rates {
 pub enum Action {
     /// A leg attempts to step one cell in its `facing` direction.
     Step { leg: LegKey },
-    /// A LEF unbinds and respawns at a new site sampled from the [`SpawnRule`].
+    /// A LEF unbinds and respawns at a new site sampled from the spawn rule.
     Respawn { lef: LefKey },
 }
 
@@ -78,7 +78,7 @@ impl Action {
     pub(crate) fn fire(
         &self,
         world: &mut World,
-        spawn: &dyn SpawnRule,
+        spawn: &dyn Spawn,
         _now: Time,
         rng: &mut SimRng,
         touched: &mut Touched,
@@ -239,7 +239,7 @@ fn fire_step(
 fn fire_respawn(
     lef_k: LefKey,
     world: &mut World,
-    spawn: &dyn SpawnRule,
+    spawn: &dyn Spawn,
     rng: &mut SimRng,
     touched: &mut Touched,
 ) {
@@ -277,20 +277,13 @@ fn fire_respawn(
         }
     }
 
-    // Place both legs at the spawn site. This is a landing for each leg, so
-    // each rolls landing_mobility against the new site. Respawn isn't a
-    // step, so we adopt the same convention as spawn_lef: treat each leg
-    // as if it arrived from the side opposite its facing. (Open modeling
-    // question: respawn could equally well init both legs as Moving on
-    // the grounds that "binding != stepping". See AGENTS.md for the
-    // expected semantics.)
+    // Place both legs at the spawn site, landing as initial placement does.
     let kind = world.lattice.sites[new_pos as usize].kind;
-    for &l in &[l1, l2] {
-        let facing = world.legs[l].facing;
-        let arrived_from = facing.opposite();
+    let mobility = land_lef(kind, rng);
+    for (l, m) in [l1, l2].into_iter().zip(mobility) {
         let leg = &mut world.legs[l];
         leg.pos = new_pos;
-        leg.mobility = resolve_mobility(kind, arrived_from, rng);
+        leg.mobility = m;
     }
     world.insert_leg(l1, new_pos);
     world.insert_leg(l2, new_pos);
@@ -314,6 +307,22 @@ fn sample_exponential(rng: &mut SimRng, rate: f64) -> Time {
 
 // ----- landing on a site -----
 
+/// The mobilities of a LEF's left and right legs as it lands, both at once,
+/// on a site of `kind`: at initial placement ([`World::spawn_lef`]) and at
+/// respawn (`fire_respawn`). Sharing it means the two can't diverge.
+///
+/// Landing isn't a step, so each leg is treated as if it arrived from the
+/// side opposite its facing, as under forward-only stepping. (Open modeling
+/// question: landing could equally well leave both legs Moving on the
+/// grounds that "binding != stepping". See AGENTS.md for the expected
+/// semantics.) Rolls the left leg, then the right.
+pub(crate) fn land_lef(kind: SiteKind, rng: &mut SimRng) -> [Mobility; 2] {
+    [
+        resolve_mobility(kind, Direction::Left.opposite(), rng),
+        resolve_mobility(kind, Direction::Right.opposite(), rng),
+    ]
+}
+
 /// Stochastic resolution of a leg's mobility *at the moment it lands at a site*.
 ///
 /// Takes `arrived_from` — the side of the destination cell from which the
@@ -336,8 +345,8 @@ fn sample_exponential(rng: &mut SimRng, rate: f64) -> Time {
 /// non-mutating context. The correct call sites are exactly:
 ///
 /// - `fire_step` — leg stepped to a new cell
-/// - `fire_respawn` — LEF placed its legs at the spawn cell
-/// - [`World::spawn_lef`] — initial placement at simulation start
+/// - [`land_lef`] — a LEF placed its legs at a spawn cell, initially or
+///   on respawn
 ///
 /// # Semantics
 ///
