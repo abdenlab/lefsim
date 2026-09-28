@@ -759,6 +759,65 @@ def test_keyframed_stream_reduces_to_the_plain_log():
     assert events.to_pydict() == plain.to_pydict()
 
 
+# ---------------------------------------------------------------- parquet
+
+
+def test_to_parquet_writes_one_keyframed_row_group_per_chunk(tmp_path):
+    import pyarrow.parquet as pq
+
+    path = tmp_path / "run.parquet"
+    sim = make_sim(seed=22)
+    sim.run_until(30.0)
+    stream = sim.stream(300.0, events=True, keyframes=True, max_rows=80)
+    assert stream.time == 30.0
+    stream.to_parquet(path)
+    assert stream.closed and stream.time == 300.0
+
+    f = pq.ParquetFile(path)
+    meta = f.metadata.metadata  # the footer's key-value metadata
+    run = json.loads(meta[b"lefsim.run"])
+    assert (run["record_start"], run["record_end"]) == (30.0, 300.0)
+    assert meta[b"lefsim.row_groups"] == b"keyframed"
+    assert lefsim.Model.from_json(meta[b"lefsim.model"].decode()) == make_model(seed=22)
+
+    # Each row group is one chunk and opens with a full keyframe.
+    fresh = make_sim(seed=22)
+    fresh.run_until(30.0)
+    expected = [table(b) for b in fresh.stream(300.0, events=True, keyframes=True, max_rows=80)]
+    assert f.num_row_groups == len(expected) > 3
+    for g in range(f.num_row_groups):
+        group = f.read_row_group(g)
+        head = group.slice(0, 16)
+        assert head["action"].to_pylist() == ["Keyframe"] * 16
+        assert head["leg_id"].to_pylist() == list(range(16))
+        assert group.to_pydict() == expected[g].to_pydict()
+
+
+def test_an_interrupted_write_leaves_a_valid_file(tmp_path):
+    import pyarrow.parquet as pq
+
+    path = tmp_path / "run.parquet"
+    stream = make_sim(n_lefs=50).stream(float("inf"), events=True, keyframes=True, max_rows=2_000)
+    timer = threading.Timer(0.3, _thread.interrupt_main)
+    timer.start()
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            stream.to_parquet(path)
+    finally:
+        timer.cancel()
+
+    f = pq.ParquetFile(path)
+    run = json.loads(f.metadata.metadata[b"lefsim.run"])
+    last_row = f.read_row_group(f.num_row_groups - 1)["time"].to_pylist()[-1]
+    assert f.num_row_groups > 0 and last_row <= run["record_end"] < float("inf")
+
+
+def test_to_parquet_takes_only_keyframed_event_streams(tmp_path):
+    for kw in (dict(dt=1.0), dict(events=True)):
+        with pytest.raises(ValueError, match="keyframed event streams"):
+            make_sim().stream(10.0, **kw).to_parquet(tmp_path / "x.parquet")
+
+
 # ---------------------------------------------------------------- replayer
 
 

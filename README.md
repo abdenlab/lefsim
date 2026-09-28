@@ -359,10 +359,13 @@ record in bounded pieces. For runs too large to hold in memory,
 runs as it is read, in bounded memory:
 
 ```python
-import duckdb
-stream = sim.stream(1e7, events=True, keyframes=True)  # consumes `sim`
-duckdb.sql("copy (select * from stream) to 'events.parquet'")
+sim.stream(1e7, events=True, keyframes=True).to_parquet("events.parquet")  # consumes `sim`
 ```
+
+`to_parquet` writes one row group per keyframed chunk, and records where the run
+came from in the file's metadata: `lefsim.model` (the model the run started
+from) and `lefsim.run` (seed, start time, when the recording starts and actually
+ends). Streams carry the same metadata in their Arrow schema.
 
 A `Replayer` reads a keyframed event log back from any Arrow source and
 rebuilds the state at any time:

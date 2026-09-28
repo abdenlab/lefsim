@@ -573,7 +573,7 @@ impl PySim {
                 let max = max_rows.unwrap_or(DEFAULT_CHUNK);
                 let rec = event_recorder(self.sim()?.n_legs(), Some((max, "max_rows")), keyframes)?;
                 let sim = self.sim.take().ok_or_else(consumed)?;
-                SimReader::events(sim, t_end, rec)
+                SimReader::events(sim, t_end, rec, keyframes)
             }
             _ => return Err(value_error("pass exactly one of dt=... or events=True")),
         };

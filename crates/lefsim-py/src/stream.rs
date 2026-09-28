@@ -9,7 +9,7 @@ use std::sync::Arc;
 use arrow_array::{ArrayRef, RecordBatch, StructArray};
 use arrow_schema::{ArrowError, FieldRef, SchemaRef};
 use lefsim::{EventRecorder, Recorder, StopReason, Time};
-use pyo3::exceptions::{PyIOError, PyRuntimeError};
+use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyCapsule;
 use pyo3_arrow::error::PyArrowResult;
@@ -36,6 +36,8 @@ pub struct SimReader {
     events: Option<EventRecorder>,
     layout: Layout,
     schema: SchemaRef,
+    /// Whether this is an event stream whose batches open with keyframes.
+    keyframed: bool,
     done: bool,
 }
 
@@ -65,12 +67,17 @@ fn with_provenance(schema: SchemaRef, sim: &lefsim::Sim, record_end: Time) -> Sc
 impl SimReader {
     pub fn snapshots(sim: lefsim::Sim, t_end: Time, rec: Recorder, layout: Layout) -> Self {
         let schema = with_provenance(state_schema(layout, true, sim.n_lefs()), &sim, t_end);
-        SimReader { sim, t_end, grid: Some(rec), events: None, layout, schema, done: false }
+        SimReader { sim, t_end, grid: Some(rec), events: None, layout, schema, keyframed: false, done: false }
     }
 
-    pub fn events(sim: lefsim::Sim, t_end: Time, rec: EventRecorder) -> Self {
+    pub fn events(sim: lefsim::Sim, t_end: Time, rec: EventRecorder, keyframed: bool) -> Self {
         let schema = with_provenance(events_schema(), &sim, t_end);
-        SimReader { sim, t_end, grid: None, events: Some(rec), layout: Layout::Lef, schema, done: false }
+        SimReader { sim, t_end, grid: None, events: Some(rec), layout: Layout::Lef, schema, keyframed, done: false }
+    }
+
+    /// The sim's clock.
+    pub fn time(&self) -> Time {
+        self.sim.time()
     }
 
     pub fn schema(&self) -> SchemaRef {
@@ -139,12 +146,16 @@ impl ArrayReader for SimReader {
 pub struct PyStream {
     reader: Option<SimReader>,
     schema: SchemaRef,
+    keyframed: bool,
+    /// The time the batches handed out so far cover through.
+    time: Time,
 }
 
 impl PyStream {
     pub fn new(reader: SimReader) -> Self {
         let schema = reader.schema();
-        PyStream { reader: Some(reader), schema }
+        let (keyframed, time) = (reader.keyframed, reader.time());
+        PyStream { reader: Some(reader), schema, keyframed, time }
     }
 }
 
@@ -159,6 +170,39 @@ impl PyStream {
     #[getter]
     fn closed(&self) -> bool {
         self.reader.is_none()
+    }
+
+    /// The time the batches read so far (by iterating) describe the run
+    /// through: where the next batch starts. At the end of the stream it's
+    /// the time the stream was asked to end at.
+    #[getter]
+    fn time(&self) -> Time {
+        self.time
+    }
+
+    /// Write this stream to a Parquet file as it runs, one row group per
+    /// batch, so the file indexes itself for random access
+    /// (`Replayer.from_parquet`). Only for keyframed event streams
+    /// (`events=True, keyframes=True`). The footer carries `lefsim.model`
+    /// and `lefsim.run`, with `record_end` set to where the data actually
+    /// ends (if writing stops early, e.g. on Ctrl-C, the file is still
+    /// valid up to there), and `lefsim.row_groups = "keyframed"`.
+    /// Requires pyarrow. Consumes the stream.
+    fn to_parquet(slf: &Bound<'_, Self>, path: &Bound<'_, PyAny>) -> PyResult<()> {
+        {
+            let me = slf.borrow();
+            if !me.keyframed {
+                return Err(PyValueError::new_err(
+                    "to_parquet writes keyframed event streams (events=True, keyframes=True); \
+                     other streams need no index and can be written with any Parquet writer",
+                ));
+            }
+            if me.reader.is_none() {
+                return Err(PyIOError::new_err("stream was already read"));
+            }
+        }
+        slf.py().import("lefsim._parquet")?.call_method1("write_stream", (slf, path))?;
+        Ok(())
     }
 
     fn __repr__(&self) -> String {
@@ -180,8 +224,12 @@ impl PyStream {
             py.check_signals()?;
             match step.map_err(|e| PyRuntimeError::new_err(e.to_string()))? {
                 Advance::Pending => continue,
-                Advance::Batch(b) => return Ok(Some(PyBatch(b))),
+                Advance::Batch(b) => {
+                    self.time = reader.time();
+                    return Ok(Some(PyBatch(b)));
+                }
                 Advance::Done => {
+                    self.time = reader.time();
                     self.reader = None;
                     return Ok(None);
                 }
