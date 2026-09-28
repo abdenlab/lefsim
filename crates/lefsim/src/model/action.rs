@@ -93,7 +93,7 @@ impl Action {
 /// Set of entities mutated by a fired action. The model author pushes
 /// every leg/LEF whose state changed (or whose neighborhood changed in a
 /// way that affects scheduling) into this buffer. The engine then asks
-/// it which actions need rescheduling via [`Touched::dependent_actions`].
+/// it which actions to reschedule via [`Touched::dependent_actions`].
 #[derive(Default, Debug)]
 pub(crate) struct Touched {
     pub(crate) legs: SmallVec<[LegKey; 8]>,
@@ -106,25 +106,30 @@ impl Touched {
         self.lefs.clear();
     }
 
-    /// Iterator over actions whose schedules may have been invalidated
-    /// because some entity in this set was mutated.
-    /// 
-    /// May yield the same action more than once (e.g. when both a leg
-    /// and its LEF are in the set); the caller is responsible for dedup.
-    pub(crate) fn dependent_actions<'a>(
-        &'a self,
-        world: &'a World,
-    ) -> impl Iterator<Item = Action> + 'a {
-        let from_legs = self.legs.iter().copied().flat_map(move |leg_k| {
+    /// The actions to reschedule after `fired` fired: `fired` itself first
+    /// (its schedule depends on the state it just changed), then every
+    /// action that depends on an entity in this set, each exactly once.
+    ///
+    /// This is the model's entity → action dependency map. Each reschedule
+    /// draws a fresh random wait, so both the order and the absence of
+    /// duplicates are part of a seeded trajectory.
+    pub(crate) fn dependent_actions(&self, world: &World, fired: Action) -> SmallVec<[Action; 16]> {
+        let from_legs = self.legs.iter().flat_map(|&leg_k| {
             let lef_k = world.legs[leg_k].lef;
             [Action::Step { leg: leg_k }, Action::Respawn { lef: lef_k }]
         });
-        let from_lefs = self
-            .lefs
-            .iter()
-            .copied()
-            .map(|lef_k| Action::Respawn { lef: lef_k });
-        from_legs.chain(from_lefs)
+        let from_lefs = self.lefs.iter().map(|&lef_k| Action::Respawn { lef: lef_k });
+
+        let mut actions: SmallVec<[Action; 16]> = SmallVec::new();
+        actions.push(fired);
+        // A touched set is small (a handful of entities), so a linear scan
+        // beats hashing.
+        for action in from_legs.chain(from_lefs) {
+            if !actions.contains(&action) {
+                actions.push(action);
+            }
+        }
+        actions
     }
 }
 
@@ -363,7 +368,25 @@ pub(crate) fn resolve_mobility(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::Lattice;
     use rand::SeedableRng;
+
+    #[test]
+    fn dependent_actions_start_with_the_fired_action_and_have_no_duplicates() {
+        let mut rng = SimRng::seed_from_u64(0);
+        let mut world = World::new(Lattice::new_plain(20));
+        let (lef, [left, right]) = world.spawn_lef(10, &mut rng);
+        let mut touched = Touched::default();
+        touched.legs.extend([left, right, left]); // a leg touched twice
+        touched.lefs.push(lef); // and the LEF both legs belong to
+
+        let fired = Action::Respawn { lef };
+        let deps = touched.dependent_actions(&world, fired);
+        assert_eq!(
+            deps.as_slice(),
+            &[fired, Action::Step { leg: left }, Action::Step { leg: right }]
+        );
+    }
 
     #[test]
     fn plain_site_always_moving() {

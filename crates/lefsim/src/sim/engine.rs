@@ -8,7 +8,6 @@
 //! `+∞` priority, which sits at the bottom of the heap without being
 //! removed.
 
-use smallvec::SmallVec;
 
 use crate::model::action::{Action, Rates, Touched};
 use crate::model::{Schedule, SimRng, SpawnRule, Time, World};
@@ -118,18 +117,10 @@ impl Engine {
         touched.clear();
         action.fire(world, spawn, time, rng, touched);
 
-        // Reactive rescheduling. The fired action is always re-evaluated;
-        // beyond that, `touched.dependent_actions` names every action that
-        // may have been invalidated by this step (the model's entity →
-        // action dependency map). Dedup against a small in-step set.
-        let mut seen: SmallVec<[Action; 16]> = SmallVec::new();
-        self.reschedule(action, world, rng);
-        seen.push(action);
-        for dep in touched.dependent_actions(world) {
-            if !seen.contains(&dep) {
-                seen.push(dep);
-                self.reschedule(dep, world, rng);
-            }
+        // Reactive rescheduling: the fired action and everything it may have
+        // invalidated, each once, as the model's dependency map names them.
+        for dep in touched.dependent_actions(world, action) {
+            self.reschedule(dep, world, rng);
         }
 
         Some((time, action))
