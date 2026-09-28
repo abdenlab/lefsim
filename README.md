@@ -203,6 +203,24 @@ Externally, LEFs and legs are identified by dense ids in the world's LEF order:
 `lef_id` runs over `0..n_lefs`, and `leg_id = 2 * lef_id + side`, where side 0
 is the left-facing leg and side 1 the right-facing one.
 
+With the `serde` feature, a `Model` saves and loads as a versioned JSON
+document (and so do `World`, `Lattice`, `Rates` and `LefStates` on their own):
+
+```json
+{
+  "format": "lefsim.model", "version": 1,
+  "lattice": { "n_sites": 100,
+               "ctcfs": [{ "site": 30, "captures_from": "right", "strength": 0.8 }] },
+  "lefs": { "left_pos": [10], "right_pos": [12],
+            "left_mobility": ["moving"], "right_mobility": ["moving"] },
+  "rates": { "step": 1.0, "respawn": 0.001, "respawn_captured": 0.0001 },
+  "spawn": { "rule": "uniform_non_ctcf" }
+}
+```
+
+Loading goes through the same constructors as building in code, so a document
+that describes an invalid model is rejected with the reason.
+
 Run the bundled trajectory printer with:
 
 ```

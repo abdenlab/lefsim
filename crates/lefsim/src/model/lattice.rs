@@ -6,6 +6,8 @@ pub type Position = u32;
 
 /// One of the two travel/orientation directions on the 1D lattice.
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum Direction {
     Left,
     Right,
@@ -103,6 +105,8 @@ impl Site {
 /// One CTCF, as plain data: where it is, which side captures, and how
 /// strongly. Used to build a [`Lattice`] and to describe one.
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Ctcf {
     pub site: Position,
     pub captures_from: Direction,
@@ -148,6 +152,11 @@ impl std::error::Error for LatticeError {}
 /// that the size fits a [`Position`], and that CTCF strengths lie in
 /// `[0, 1]`.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(try_from = "super::serial::LatticeData", into = "super::serial::LatticeData")
+)]
 pub struct Lattice {
     pub(crate) sites: Vec<Site>,
 }
@@ -178,6 +187,9 @@ impl Lattice {
 
     /// A lattice of `n_sites` with the given CTCFs (every other site plain).
     pub fn with_ctcfs(n_sites: usize, ctcfs: &[Ctcf]) -> Result<Self, LatticeError> {
+        if n_sites == 0 {
+            return Err(LatticeError::Empty);
+        }
         if n_sites > Position::MAX as usize {
             return Err(LatticeError::TooLarge { n_sites });
         }

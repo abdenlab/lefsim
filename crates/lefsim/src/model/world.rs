@@ -20,6 +20,8 @@ pub type LegState = (Position, Mobility);
 /// each column stored as its own `Vec`. Row `i` is LEF `i`: its left-facing
 /// leg (`leg_id = 2i`) and right-facing leg (`leg_id = 2i + 1`).
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct LefStates {
     pub left_pos: Vec<Position>,
     pub right_pos: Vec<Position>,
@@ -133,6 +135,11 @@ pub type OccupancyBucket = SmallVec<[LegKey; 2]>;
 /// Two worlds are equal when their lattices and [`LefStates`] are equal,
 /// whatever their internal keys.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(try_from = "super::serial::WorldData", into = "super::serial::WorldData")
+)]
 pub struct World {
     pub(crate) lattice: Lattice,
     pub(crate) legs: SlotMap<LegKey, Leg>,

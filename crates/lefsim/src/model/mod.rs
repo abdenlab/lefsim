@@ -10,6 +10,8 @@ pub mod entity;
 pub mod lattice;
 pub mod spawn;
 pub mod world;
+#[cfg(feature = "serde")]
+mod serial;
 
 pub use action::{Action, Rates};
 pub use entity::{Leg, Lef, LefKey, LegKey, Mobility};
@@ -34,9 +36,30 @@ pub enum Schedule {
 /// A complete, valid model: a world, its rates, and a built-in spawn rule.
 ///
 /// Plain data apart from validation: `Clone`, and equal when its parts are.
+/// With the `serde` feature it (de)serializes as a versioned document:
+///
+/// ```json
+/// {
+///   "format": "lefsim.model", "version": 1,
+///   "lattice": { "n_sites": 100,
+///                "ctcfs": [{ "site": 30, "captures_from": "right", "strength": 0.8 }] },
+///   "lefs": { "left_pos": [10], "right_pos": [12],
+///             "left_mobility": ["moving"], "right_mobility": ["moving"] },
+///   "rates": { "step": 1.0, "respawn": 0.001, "respawn_captured": 0.0001 },
+///   "spawn": { "rule": "uniform_non_ctcf" }
+/// }
+/// ```
+///
+/// Loading goes through [`Lattice::with_ctcfs`], [`World::from_lef_states`]
+/// and [`Model::new`], so a document can't describe an invalid model.
 /// Run it with [`crate::Sim::new`]. For a custom spawn rule, see
 /// [`crate::Sim::with_spawn`].
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(try_from = "serial::ModelData", into = "serial::ModelData")
+)]
 pub struct Model {
     pub(crate) world: World,
     pub(crate) rates: Rates,

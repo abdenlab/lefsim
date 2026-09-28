@@ -11,6 +11,8 @@ use super::world::World;
 use super::{Schedule, SimRng, Time};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct Rates {
     /// Step rate of a moving, unblocked leg.
     pub step: f64,

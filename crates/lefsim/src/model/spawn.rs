@@ -27,6 +27,8 @@ pub trait Spawn {
 
 /// The built-in spawn rules.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "rule", rename_all = "snake_case"))]
 pub enum SpawnRule {
     /// Uniform among `Plain` sites that no leg occupies.
     #[default]

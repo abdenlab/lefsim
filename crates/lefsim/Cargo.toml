@@ -9,3 +9,12 @@ smallvec.workspace = true
 rand.workspace = true
 rand_pcg.workspace = true
 libm.workspace = true
+serde = { workspace = true, optional = true }
+
+[features]
+# Serialize/Deserialize for the model types (Model, World, Lattice, Rates,
+# LefStates, ...). Validated types load through their constructors.
+serde = ["dep:serde"]
+
+[dev-dependencies]
+serde_json.workspace = true

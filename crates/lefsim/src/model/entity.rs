@@ -17,6 +17,8 @@ new_key_type! {
 
 /// Per-leg intrinsic mobility status, set by the most recent CTCF interaction.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum Mobility {
     /// Free to step in `facing` direction (subject to extrinsic blocking).
     Moving,
