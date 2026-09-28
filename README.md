@@ -371,11 +371,15 @@ A `Replayer` reads a keyframed event log back from any Arrow source and
 rebuilds the state at any time:
 
 ```python
-import pyarrow.parquet as pq
-r = lefsim.Replayer.from_arrow(pq.ParquetFile("events.parquet").iter_batches(), lattice, end=1e7)
-r.world_at(5_000.0)  # a World: start a new run from it
-pl.DataFrame(r.snapshots(dt=10.0))  # decode to a grid, as record_until(dt=10.0) would have
+r = lefsim.Replayer.from_parquet("events.parquet")  # reads only the footer
+r.world_at(5_000.0)  # reads one row group: a World to start a new run from
+pl.DataFrame(r.snapshots(dt=10.0, t_start=4_000.0, t_end=6_000.0))  # a grid, as record_until would have
 ```
+
+`from_parquet` takes the lattice and end time from the file's metadata, and
+reads only the row groups each call needs, so a file of any size opens
+instantly. Other Arrow sources load whole with `Replayer.from_arrow(source,
+lattice, end=...)`, which accepts any batch boundaries.
 
 Develop with:
 

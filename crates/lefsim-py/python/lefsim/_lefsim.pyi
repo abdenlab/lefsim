@@ -279,6 +279,14 @@ class Replayer:
         n_lefs: Optional[int] = None,
         end: Optional[float] = None,
     ) -> "Replayer": ...
+    @classmethod
+    def from_parquet(cls, path: Any, lattice: Optional[Lattice] = None) -> "Replayer":
+        """Open a file written by ``Stream.to_parquet`` for random access: only
+        the footer is read up front, then just the row groups each call
+        needs. Other files are read whole. Requires pyarrow."""
+    @property
+    def row_groups_read(self) -> int:
+        """Parquet row groups read so far (0 if not opened from a file)."""
     def push(self, events: Any, end: Optional[float] = None) -> None: ...
     @property
     def lattice(self) -> Lattice: ...

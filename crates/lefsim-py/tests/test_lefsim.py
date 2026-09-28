@@ -1,6 +1,7 @@
 """Tests for the lefsim Python bindings."""
 
 import copy
+import math
 import json
 import pathlib
 import pickle
@@ -810,6 +811,81 @@ def test_an_interrupted_write_leaves_a_valid_file(tmp_path):
     run = json.loads(f.metadata.metadata[b"lefsim.run"])
     last_row = f.read_row_group(f.num_row_groups - 1)["time"].to_pylist()[-1]
     assert f.num_row_groups > 0 and last_row <= run["record_end"] < float("inf")
+
+
+def write_run(tmp_path, seed, t_end=400.0, record_from=0.0, max_rows=80):
+    sim = make_sim(seed=seed)
+    sim.run_until(record_from)
+    path = tmp_path / f"run{seed}.parquet"
+    sim.stream(t_end, events=True, keyframes=True, max_rows=max_rows).to_parquet(path)
+    return path
+
+
+def test_from_parquet_reads_only_the_row_groups_it_needs(tmp_path):
+    import pyarrow.parquet as pq
+
+    path = write_run(tmp_path, 23)
+    n_groups = pq.ParquetFile(path).num_row_groups
+    assert n_groups > 10
+    r = lefsim.Replayer.from_parquet(path)
+    assert (r.n_lefs, r.start, r.end, r.row_groups_read) == (8, 0.0, 400.0, 0)
+    assert r.lattice == make_lattice()
+
+    # Random access: each far seek reads one row group, and matches the live run.
+    times = [350.0, 12.3, 199.9, 399.0, 77.7]
+    expected = live_worlds(23, sorted(times))
+    for t in times:
+        before = r.row_groups_read
+        assert r.world_at(t) == expected[sorted(times).index(t)], t
+        assert r.row_groups_read - before <= 1
+
+    # Playing forward in small steps reads each row group once more at most.
+    r.seek(0.0)
+    before = r.row_groups_read
+    steps = [0.5 * k for k in range(801)]
+    worlds = live_worlds(23, steps)
+    for t, w in zip(steps, worlds):
+        r.advance_to(t)
+        if int(t) % 50 == 0:
+            assert r.world() == w, t
+    assert r.row_groups_read - before <= n_groups
+
+
+def test_from_parquet_snapshots_equal_a_recording(tmp_path):
+    expected = table(make_sim(seed=24).record_until(400.0, dt=0.9).snapshots)
+    r = lefsim.Replayer.from_parquet(write_run(tmp_path, 24))
+    assert table(r.snapshots(0.9)).equals(expected)
+    # From partway, via t_start.
+    part = table(r.snapshots(0.9, t_start=200.0))
+    assert part.equals(expected.filter(pa.compute.greater_equal(expected["time"], 200.0)))
+
+
+def test_from_parquet_of_a_recording_that_starts_mid_run(tmp_path):
+    path = write_run(tmp_path, 25, record_from=100.0)
+    r = lefsim.Replayer.from_parquet(path)
+    assert (r.start, r.end) == (100.0, 400.0)
+    assert "end=400.0" in repr(r)
+    assert r.advance_to(50.0) == -math.inf and not r.ready  # not playing yet: it waits
+    assert r.world_at(250.0) == live_worlds(25, [250.0])[0]
+    with pytest.raises(ValueError, match="no keyframe at or before"):
+        r.seek(50.0)
+    assert r.advance_to(50.0) == 100.0  # playing: stops at the start of the data
+    assert r.world() == live_worlds(25, [100.0])[0]
+
+
+def test_from_parquet_falls_back_for_other_files(tmp_path):
+    import pyarrow.parquet as pq
+
+    events = pa.RecordBatchReader.from_stream(make_sim(seed=26).stream(200.0, events=True, keyframes=True, max_rows=80)).read_all()
+    plain = tmp_path / "plain.parquet"
+    pq.write_table(events.replace_schema_metadata(None), plain, row_group_size=37)
+    with pytest.raises(ValueError, match="pass lattice="):
+        lefsim.Replayer.from_parquet(plain)
+    r = lefsim.Replayer.from_parquet(plain, make_lattice())
+    assert r.row_groups_read == 0  # read whole, not lazily
+    assert r.world_at(150.0) == live_worlds(26, [150.0])[0]
+    with pytest.raises(ValueError, match="reads its own data"):
+        lefsim.Replayer.from_parquet(write_run(tmp_path, 27)).push(events)
 
 
 def test_to_parquet_takes_only_keyframed_event_streams(tmp_path):
