@@ -9,7 +9,7 @@ fn lattice(strength: f64) -> Lattice {
     sites[60] = Site::ctcf(Direction::Right, strength);
     sites[100] = Site::ctcf(Direction::Right, strength);
     sites[140] = Site::ctcf(Direction::Left, strength);
-    Lattice::new(sites)
+    Lattice::new(sites).unwrap()
 }
 
 /// Respawns fast enough that a few hundred time units cover many LEF

@@ -20,7 +20,7 @@ fn fingerprint() -> u64 {
         let side = if i % 100 == 25 { Direction::Right } else { Direction::Left };
         *site = Site::ctcf(side, 0.7);
     }
-    let mut sim = Sim::builder(Lattice::new(sites))
+    let mut sim = Sim::builder(Lattice::new(sites).unwrap())
         .seed(0x5EED)
         .rates(Rates { step: 1.0, respawn_default: 0.01, respawn_captured: 0.002 })
         .lefs(20)

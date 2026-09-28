@@ -349,7 +349,8 @@ impl PySim {
             )?,
         };
 
-        let mut builder = lefsim::Sim::builder(Lattice::new(sites))
+        let lattice = Lattice::new(sites).map_err(|e| value_error(e.to_string()))?;
+        let mut builder = lefsim::Sim::builder(lattice)
             .seed(seed)
             .rates(rates);
         for pos in lef_sites {

@@ -10,7 +10,7 @@ fn lattice(strength: f64) -> Lattice {
     sites[60] = Site::ctcf(Direction::Right, strength);
     sites[100] = Site::ctcf(Direction::Right, strength);
     sites[140] = Site::ctcf(Direction::Left, strength);
-    Lattice::new(sites)
+    Lattice::new(sites).unwrap()
 }
 
 fn build(seed: u64, strength: f64) -> Sim {

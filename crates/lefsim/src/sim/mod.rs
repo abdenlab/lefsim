@@ -103,9 +103,6 @@ impl SimBuilder {
     /// sequence with the same seed.
     pub fn build(self) -> Result<Sim, BuildError> {
         let n_sites = self.lattice.len();
-        if n_sites == 0 {
-            return Err(BuildError::EmptyLattice);
-        }
         for init in &self.initial {
             if let InitialLef::At(pos) = *init
                 && pos as usize >= n_sites
@@ -156,14 +153,12 @@ impl SimBuilder {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BuildError {
-    EmptyLattice,
     PositionOutOfBounds { pos: Position, n_sites: usize },
 }
 
 impl fmt::Display for BuildError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BuildError::EmptyLattice => write!(f, "lattice has no sites"),
             BuildError::PositionOutOfBounds { pos, n_sites } => {
                 write!(f, "LEF position {pos} is outside a lattice of {n_sites} sites")
             }
@@ -445,7 +440,7 @@ mod tests {
         let mut sites = vec![Site::plain(); 100];
         sites[30] = Site::ctcf(Direction::Right, 0.5);
         sites[70] = Site::ctcf(Direction::Left, 0.5);
-        Lattice::new(sites)
+        Lattice::new(sites).unwrap()
     }
 
     #[test]
@@ -455,14 +450,8 @@ mod tests {
     }
 
     #[test]
-    fn build_rejects_empty_lattice() {
-        let err = Sim::builder(Lattice::new_plain(0)).build().err();
-        assert_eq!(err, Some(BuildError::EmptyLattice));
-    }
-
-    #[test]
     fn build_rejects_out_of_bounds_position() {
-        let err = Sim::builder(Lattice::new_plain(10)).lef_at(10).build().err();
+        let err = Sim::builder(Lattice::plain(10).unwrap()).lef_at(10).build().err();
         assert_eq!(
             err,
             Some(BuildError::PositionOutOfBounds { pos: 10, n_sites: 10 })
@@ -471,7 +460,7 @@ mod tests {
 
     #[test]
     fn dense_ids_follow_builder_order() {
-        let sim = Sim::builder(Lattice::new_plain(100))
+        let sim = Sim::builder(Lattice::plain(100).unwrap())
             .lef_at(10)
             .lef_at(50)
             .lefs(3)
@@ -581,7 +570,7 @@ mod tests {
 
     #[test]
     fn empty_sim_is_exhausted() {
-        let mut sim = Sim::builder(Lattice::new_plain(10)).build().unwrap();
+        let mut sim = Sim::builder(Lattice::plain(10).unwrap()).build().unwrap();
         assert_eq!(sim.run_events(5).stopped, StopReason::Exhausted);
         let report = sim.run_until(3.0);
         assert_eq!(report.stopped, StopReason::Exhausted);

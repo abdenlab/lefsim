@@ -199,7 +199,8 @@ impl WasmSim {
             )?,
         };
 
-        let mut builder = lefsim::Sim::builder(Lattice::new(sites)).seed(seed).rates(rates);
+        let lattice = Lattice::new(sites).map_err(|e| JsError::new(&e.to_string()))?;
+        let mut builder = lefsim::Sim::builder(lattice).seed(seed).rates(rates);
         for &pos in lef_sites {
             builder = builder.lef_at(pos);
         }

@@ -15,7 +15,7 @@ fn build() -> Sim {
     sites[30] = Site::ctcf(Direction::Right, 1.0);
     sites[70] = Site::ctcf(Direction::Left, 1.0);
 
-    Sim::builder(Lattice::new(sites))
+    Sim::builder(Lattice::new(sites).expect("valid lattice"))
         .seed(42)
         .lef_at(50)
         .build()

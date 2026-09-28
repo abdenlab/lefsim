@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn dependent_actions_start_with_the_fired_action_and_have_no_duplicates() {
         let mut rng = SimRng::seed_from_u64(0);
-        let mut world = World::new(Lattice::new_plain(20));
+        let mut world = World::new(Lattice::plain(20).unwrap());
         let (lef, [left, right]) = world.spawn_lef(10, &mut rng);
         let mut touched = Touched::default();
         touched.legs.extend([left, right, left]); // a leg touched twice

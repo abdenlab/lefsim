@@ -28,11 +28,11 @@
 //! sites[30] = Site::ctcf(Direction::Right, 1.0);
 //! sites[70] = Site::ctcf(Direction::Left, 1.0);
 //!
-//! let mut sim = Sim::builder(Lattice::new(sites)).seed(42).lefs(3).build()?;
+//! let mut sim = Sim::builder(Lattice::new(sites)?).seed(42).lefs(3).build()?;
 //! let (frames, report) = sim.collect_until(100.0, SampleMode::every_dt(1.0));
 //! assert_eq!(frames.n_snapshots(), 101);
 //! assert_eq!(report.stopped, StopReason::ReachedTime);
-//! # Ok::<(), BuildError>(())
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
 //! ## Module layout
@@ -55,8 +55,8 @@ pub mod model;
 pub mod sim;
 
 pub use model::{
-    Action, Direction, Lattice, Leg, Lef, LefKey, LegKey, Mobility, Position, Rates, Schedule,
-    SimRng, Site, SiteKind, SpawnRule, Time, UniformNonCtcfSpawn, World,
+    Action, Ctcf, Direction, Lattice, LatticeError, Leg, Lef, LefKey, LegKey, Mobility, Position,
+    Rates, Schedule, SimRng, Site, SiteKind, SpawnRule, Time, UniformNonCtcfSpawn, World,
 };
 pub use sim::record::{
     EventColumns, EventFrames, EventRecorder, LefColumns, LefFrames, LefSnapshot, Observer,

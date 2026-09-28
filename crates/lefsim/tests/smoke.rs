@@ -9,7 +9,7 @@ use lefsim::*;
 /// boundary, after which positions reset.
 #[test]
 fn lef_extrudes_outward_on_empty_lattice() {
-    let mut sim = Sim::builder(Lattice::new_plain(200))
+    let mut sim = Sim::builder(Lattice::plain(200).unwrap())
         .seed(7)
         .rates(Rates {
             step: 1.0,
@@ -46,7 +46,7 @@ fn lef_extrudes_outward_on_empty_lattice() {
 fn right_facing_leg_captured_at_compatible_ctcf() {
     let mut sites = vec![Site::plain(); 50];
     sites[20] = Site::ctcf(Direction::Left, 1.0);
-    let mut sim = Sim::builder(Lattice::new(sites))
+    let mut sim = Sim::builder(Lattice::new(sites).unwrap())
         .seed(11)
         .rates(Rates {
             step: 1.0,
@@ -76,7 +76,7 @@ fn eviction_triggers_immediate_respawn() {
     // on contact.
     let mut sites = vec![Site::plain(); 50];
     sites[20] = Site::ctcf(Direction::Right, 1.0);
-    let mut sim = Sim::builder(Lattice::new(sites))
+    let mut sim = Sim::builder(Lattice::new(sites).unwrap())
         .seed(13)
         .rates(Rates {
             step: 1.0,

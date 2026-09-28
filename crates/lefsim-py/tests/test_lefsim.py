@@ -66,7 +66,7 @@ def test_explicit_lef_sites_come_first():
 @pytest.mark.parametrize(
     "kwargs, match",
     [
-        (dict(n_sites=0), "no sites"),
+        (dict(n_sites=0), "at least one site"),
         (dict(n_sites=10, ctcf_sites=[3]), "ctcf_captures_from is required"),
         (dict(n_sites=10, ctcf_sites=[10], ctcf_captures_from="left"), "outside"),
         (dict(n_sites=10, ctcf_sites=[3, 3], ctcf_captures_from="left"), "twice"),

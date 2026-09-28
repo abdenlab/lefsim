@@ -12,7 +12,7 @@ pub mod world;
 
 pub use action::{Action, Rates};
 pub use entity::{Leg, Lef, LefKey, LegKey, Mobility};
-pub use lattice::{Direction, Lattice, Position, Site, SiteKind};
+pub use lattice::{Ctcf, Direction, Lattice, LatticeError, Position, Site, SiteKind};
 pub use spawn::{SpawnRule, UniformNonCtcfSpawn};
 pub use world::World;
 

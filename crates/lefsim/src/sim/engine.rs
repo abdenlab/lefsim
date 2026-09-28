@@ -138,7 +138,7 @@ mod tests {
         let mut sites = vec![Site::plain(); 100];
         sites[30] = Site::ctcf(Direction::Right, 0.5);
         sites[70] = Site::ctcf(Direction::Left, 0.5);
-        let mut world = World::new(Lattice::new(sites));
+        let mut world = World::new(Lattice::new(sites).unwrap());
         let mut rng = SimRng::seed_from_u64(3);
         world.spawn_lef(40, &mut rng);
         world.spawn_lef(60, &mut rng);
@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn advance_clock_to_leaves_next_event_untouched() {
-        let mut world = World::new(Lattice::new_plain(50));
+        let mut world = World::new(Lattice::plain(50).unwrap());
         let mut rng = SimRng::seed_from_u64(5);
         world.spawn_lef(25, &mut rng);
         let mut engine = Engine::new(Rates::default());
