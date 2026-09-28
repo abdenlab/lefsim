@@ -14,7 +14,7 @@ pub use action::{Action, Rates};
 pub use entity::{Leg, Lef, LefKey, LegKey, Mobility};
 pub use lattice::{Ctcf, Direction, Lattice, LatticeError, Position, Site, SiteKind};
 pub use spawn::{SpawnRule, UniformNonCtcfSpawn};
-pub use world::World;
+pub use world::{LefStates, LegState, World, WorldError};
 
 use rand_pcg::Pcg64;
 

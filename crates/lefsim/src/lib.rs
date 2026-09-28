@@ -55,8 +55,9 @@ pub mod model;
 pub mod sim;
 
 pub use model::{
-    Action, Ctcf, Direction, Lattice, LatticeError, Leg, Lef, LefKey, LegKey, Mobility, Position,
-    Rates, Schedule, SimRng, Site, SiteKind, SpawnRule, Time, UniformNonCtcfSpawn, World,
+    Action, Ctcf, Direction, Lattice, LatticeError, Leg, Lef, LefKey, LefStates, LegKey, LegState,
+    Mobility, Position, Rates, Schedule, SimRng, Site, SiteKind, SpawnRule, Time,
+    UniformNonCtcfSpawn, World, WorldError,
 };
 pub use sim::record::{
     EventColumns, EventFrames, EventRecorder, LefColumns, LefFrames, LefSnapshot, Observer,
