@@ -309,6 +309,17 @@ def test_the_model_is_copied_in_and_read_back_as_the_current_state():
     assert restarted.run_until(200.0).n_events > 0
 
 
+def test_a_sim_remembers_what_it_started_from():
+    model = make_model()
+    sim = lefsim.Sim(model, seed=7, start_time=12.5)
+    sim.run_until(300.0)
+    assert sim.initial_model() == model and sim.model() != model
+    assert (sim.seed, sim.start_time) == (7, 12.5)
+    again = lefsim.Sim(sim.initial_model(), seed=sim.seed, start_time=sim.start_time)
+    again.run_until(300.0)
+    assert again.world() == sim.world()
+
+
 def test_copy_forks_the_run():
     sim = make_sim(seed=3)
     sim.run_until(50.0)

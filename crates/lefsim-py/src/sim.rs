@@ -342,6 +342,26 @@ impl PySim {
         Ok(PyModel(self.sim()?.model().expect("Python sims use built-in spawn rules")))
     }
 
+    /// The model this run started from. With `seed` and `start_time`, it
+    /// says where a recording came from: `Sim(sim.initial_model(),
+    /// seed=sim.seed, start_time=sim.start_time)` replays the run from its
+    /// start, event for event.
+    fn initial_model(&self) -> PyResult<PyModel> {
+        Ok(PyModel(self.sim()?.initial_model().expect("Python sims use built-in spawn rules")))
+    }
+
+    /// The seed this run was started with.
+    #[getter]
+    fn seed(&self) -> PyResult<u64> {
+        Ok(self.sim()?.seed())
+    }
+
+    /// The clock at construction.
+    #[getter]
+    fn start_time(&self) -> PyResult<f64> {
+        Ok(self.sim()?.start_time())
+    }
+
     /// The current state as a `World`.
     fn world(&self) -> PyResult<PyWorld> {
         Ok(PyWorld(self.sim()?.world().clone()))

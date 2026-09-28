@@ -499,6 +499,22 @@ impl WasmSim {
         lefs_object(&self.sim.world().lef_states())
     }
 
+    /// The LEF table this run started from, copied.
+    pub fn initial_lefs(&self) -> Object {
+        let model = self.sim.initial_model().expect("wasm sims use built-in spawn rules");
+        lefs_object(&model.world().lef_states())
+    }
+
+    /// The seed this run was started with.
+    pub fn seed(&self) -> u64 {
+        self.sim.seed()
+    }
+
+    /// The clock at construction.
+    pub fn start_time(&self) -> f64 {
+        self.sim.start_time()
+    }
+
     /// Fire one event. Returns `[time, actionCode, id]` (`id` is a `leg_id`
     /// for a step, a `lef_id` for a respawn) or `null` if none remain.
     pub fn step(&mut self) -> JsValue {

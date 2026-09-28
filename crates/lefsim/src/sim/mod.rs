@@ -68,6 +68,11 @@ pub struct Sim {
     lef_ids: SecondaryMap<LefKey, u32>,
     leg_ids: SecondaryMap<LegKey, u32>,
     events: u64,
+    /// What the run started from, for recordings to say where they came
+    /// from: the world, seed and clock at construction.
+    initial_world: World,
+    seed: u64,
+    start_time: Time,
 }
 
 /// Why a batch driver returned.
@@ -143,6 +148,9 @@ impl Sim {
         let mut engine = Engine::new(rates, start_time);
         engine.initialize(&world, &mut rng);
         Sim {
+            initial_world: world.clone(),
+            seed,
+            start_time,
             world,
             engine,
             rng,
@@ -194,6 +202,30 @@ impl Sim {
     /// stop there when an event budget runs out mid-chain; [`Sim::step`] can.
     pub fn world(&self) -> &World {
         &self.world
+    }
+
+    /// The model this run started from (its world at construction), or
+    /// `None` for a custom spawn rule, which a [`Model`] can't hold.
+    /// Together with [`Sim::seed`] and [`Sim::start_time`] it says where a
+    /// recording came from: `Sim::with_start_time(initial, seed, start)`
+    /// replays this run from its start, event for event.
+    pub fn initial_model(&self) -> Option<Model> {
+        match self.spawn {
+            SpawnSource::BuiltIn(spawn) => {
+                Some(Model { world: self.initial_world.clone(), rates: self.rates(), spawn })
+            }
+            SpawnSource::Custom(_) => None,
+        }
+    }
+
+    /// The seed this run was started with.
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
+
+    /// The clock at construction.
+    pub fn start_time(&self) -> Time {
+        self.start_time
     }
 
     /// The current state as a model: the world now, plus the rates and
@@ -456,6 +488,22 @@ mod tests {
     }
 
     #[test]
+    fn a_sim_remembers_what_it_started_from() {
+        let model = model_at(&[40, 60]);
+        let mut sim = Sim::with_start_time(model.clone(), 7, 12.5);
+        sim.run_until(300.0);
+        assert_eq!(sim.initial_model(), Some(model.clone()));
+        assert_ne!(sim.model(), Some(model.clone()));
+        assert_eq!((sim.seed(), sim.start_time()), (7, 12.5));
+
+        // They replay the run from its start, event for event.
+        let mut again = Sim::with_start_time(sim.initial_model().unwrap(), sim.seed(), sim.start_time());
+        again.run_until(300.0);
+        assert_eq!(again.world(), sim.world());
+        assert_eq!(sim.clone().initial_model(), Some(model)); // a fork keeps it
+    }
+
+    #[test]
     fn custom_spawn_rules_are_checked_and_have_no_model() {
         /// Always the same site; fine for one LEF.
         struct Fixed(Position);
@@ -475,6 +523,7 @@ mod tests {
         let one = model_at(&[40]).world().clone();
         let mut sim = Sim::with_spawn(one, Rates::default(), Fixed(12), 0).unwrap();
         assert_eq!(sim.model(), None);
+        assert_eq!(sim.initial_model(), None);
         while !matches!(sim.step(), Some((_, Action::Respawn { .. }))) {}
         assert_eq!(positions(&sim, 0), (12, 12));
         let _fork = sim.clone(); // shares the rule

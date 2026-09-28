@@ -195,6 +195,15 @@ class Sim:
     def rates(self) -> Rates: ...
     def model(self) -> Model:
         """The current state as a ``Model``."""
+    def initial_model(self) -> Model:
+        """The model this run started from (with ``seed`` and ``start_time``,
+        where a recording came from)."""
+    @property
+    def seed(self) -> int:
+        """The seed this run was started with."""
+    @property
+    def start_time(self) -> float:
+        """The clock at construction."""
     def world(self) -> World:
         """The current state as a ``World``."""
     def state(self, *, layout: Layout = "lef") -> Batch:

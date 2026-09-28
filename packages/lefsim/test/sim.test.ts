@@ -291,6 +291,18 @@ describe("state as a model", () => {
     expect(next.runUntil(600).nEvents).toBeGreaterThan(0);
   });
 
+  it("remembers the model, seed and start time it started from", () => {
+    const model = makeModel({ ...TADS, seed: 1 });
+    using sim = new Sim(model, { seed: 7, startTime: 12.5 });
+    sim.runUntil(300);
+    expect(sim.initialModel()).toEqual(model);
+    expect(sim.model()).not.toEqual(model);
+    expect([sim.seed, sim.startTime]).toEqual([7n, 12.5]);
+    using again = new Sim(sim.initialModel(), { seed: sim.seed, startTime: sim.startTime });
+    again.runUntil(300);
+    expect(snapshot(again)).toEqual(snapshot(sim));
+  });
+
   it("clone() forks the run exactly", () => {
     using sim = make(5);
     sim.runUntil(300);

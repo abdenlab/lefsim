@@ -252,6 +252,27 @@ export class Sim implements Disposable {
     return { world: this.world(), rates: this.rates, spawnRule: this.spawnRule };
   }
 
+  /**
+   * The model this run started from. With {@link Sim.seed} and
+   * {@link Sim.startTime}, it says where a recording came from:
+   * `new Sim(sim.initialModel(), { seed: sim.seed, startTime: sim.startTime })`
+   * replays the run from its start, event for event.
+   */
+  initialModel(): Model {
+    const lefs = this.#sim.initial_lefs() as World["lefs"];
+    return { world: { lattice: this.lattice, lefs }, rates: this.rates, spawnRule: this.spawnRule };
+  }
+
+  /** The seed this run was started with. */
+  get seed(): bigint {
+    return this.#sim.seed();
+  }
+
+  /** The clock at construction. */
+  get startTime(): number {
+    return this.#sim.start_time();
+  }
+
   /** An exact fork: a copy that continues the run as this one would. */
   clone(): Sim {
     const model = { world: { lattice: this.lattice }, spawnRule: this.spawnRule } as Model;
