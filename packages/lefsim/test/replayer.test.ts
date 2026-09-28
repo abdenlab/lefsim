@@ -103,6 +103,18 @@ describe("Replayer", () => {
     }
   });
 
+  it("jumps forward any distance, including onto keyframe times", () => {
+    const r = new Replayer(OPTIONS.nLefs!);
+    for (const c of chunks) r.push(c);
+    const starts = chunks.map((c) => c.time[0]!);
+    const jumps = [0.5, 0.9, starts[3]!, starts[3]! + 0.1, starts[9]!, 250, starts.at(-2)!, T].sort((a, b) => a - b);
+    const expected = reference(2, jumps);
+    for (const t of jumps) {
+      expect(r.advanceTo(t)).toBe(t);
+      expect(copy(r.state())).toEqual(expected.get(t));
+    }
+  });
+
   it("seeks to any time in any order", () => {
     const r = new Replayer(OPTIONS.nLefs!);
     for (const c of chunks) r.push(c);

@@ -75,6 +75,23 @@ fn forward_replay_matches_the_live_run() {
 }
 
 #[test]
+fn forward_jumps_of_any_size_match_the_live_run() {
+    // Jumps within a chunk, across one keyframe, across many, and landing
+    // exactly on keyframe times (where a keyframe shares its time with the
+    // last rows of the chunk before it).
+    let chunks = record(10, 400.0, 60);
+    let starts: Vec<Time> = chunks.iter().map(|(c, _)| c.time()[0]).collect();
+    let mut times = vec![0.5, 0.9, starts[3], starts[3] + 0.1, starts[9], 250.0, starts[starts.len() - 2], 400.0];
+    times.sort_by(f64::total_cmp);
+    let expected = reference(10, &times);
+    let mut r = replayer(&chunks);
+    for (t, e) in times.iter().zip(&expected) {
+        assert_eq!(r.advance_to(*t), *t);
+        assert_eq!(r.lef_states().unwrap(), e, "t={t}");
+    }
+}
+
+#[test]
 fn seeking_in_any_order_matches_the_live_run() {
     let times = grid(0.0, 400.0, 3.1);
     let expected = reference(2, &times);

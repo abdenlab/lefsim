@@ -93,8 +93,11 @@ export class Replayer {
 
   /**
    * Move to time `t`, clamped to {@link Replayer.end}. Going forward applies
-   * only the rows in between; going backward seeks. Returns the time reached
-   * (less than `t` when the data runs out, i.e. while buffering).
+   * the rows in between, or restarts from a keyframe in between if there is
+   * one (so any jump costs at most one chunk); going backward seeks. Unlike
+   * {@link Replayer.seek} it never throws for missing data, which suits a
+   * playback loop. Returns the time reached (less than `t` when the data
+   * runs out, i.e. while buffering).
    */
   advanceTo(t: number): number {
     if (Number.isNaN(t)) throw new RangeError("t is NaN");
@@ -105,6 +108,15 @@ export class Replayer {
     }
     if (t < this.#time) return this.seek(t);
     const target = Math.min(t, this.#end);
+    // A keyframe between here and the target holds the full state, so
+    // restarting from it skips every row before it: a long jump costs at
+    // most one chunk, as a seek does. Positions, not times, decide "ahead",
+    // since a keyframe can share its time with the rows before it.
+    const k = this.#keyframeAtOrBefore(target);
+    const cur = this.#cursor;
+    if (k && (k.chunk > cur.chunk || (k.chunk === cur.chunk && k.row > cur.row))) {
+      this.#cursor = { chunk: k.chunk, row: k.row };
+    }
     this.#applyThrough(target);
     this.#time = Math.max(this.#time, target);
     return this.#time;

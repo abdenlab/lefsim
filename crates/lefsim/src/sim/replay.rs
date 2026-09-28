@@ -207,7 +207,11 @@ impl Replayer {
     }
 
     /// Move to time `t`, clamped to [`Replayer::end`]. Going forward applies
-    /// only the rows in between; going backward seeks. Returns the time
+    /// the rows in between, or restarts from a keyframe in between if there
+    /// is one (so any jump costs at most one chunk); going backward seeks.
+    /// Unlike [`Replayer::seek`] it never fails, which suits a playback
+    /// loop: it waits before the first keyframe and at the end of the data.
+    /// Returns the time
     /// reached: less than `t` when the data runs out (while buffering), and
     /// unchanged before the first keyframe. Panics if `t` is NaN.
     pub fn advance_to(&mut self, t: Time) -> Time {
@@ -222,6 +226,15 @@ impl Replayer {
             return self.seek(t).expect("the current time follows a keyframe");
         }
         let target = t.min(self.end);
+        // A keyframe between here and the target holds the full state, so
+        // restarting from it skips every row before it: a long jump costs
+        // at most one chunk, as a seek does. Positions, not times, decide
+        // "ahead", since a keyframe can share its time with the rows before it.
+        if let Some(k) = self.keyframe_at_or_before(target)
+            && (k.chunk, k.row) > self.cursor
+        {
+            self.cursor = (k.chunk, k.row);
+        }
         self.apply_through(target);
         self.time = self.time.max(target);
         self.time
