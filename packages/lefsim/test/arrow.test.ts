@@ -10,6 +10,7 @@ import {
   Schema,
   Struct,
   Table,
+  tableFromArrays,
   tableFromIPC,
   tableToIPC,
   Uint32,
@@ -20,8 +21,8 @@ import {
 } from "apache-arrow";
 import { describe, expect, it } from "vitest";
 
-import { deltaChunkFromArrow, eventsToArrow, latticeToArrow, lefsToArrow, snapshotsToArrow } from "../src/arrow.ts";
-import { createLattice, KEYFRAME, Replayer, type Side } from "../src/index.ts";
+import { deltaChunkFromArrow, eventsToArrow, latticeToArrow, lefsToArrow, replayerFromArrow, snapshotsToArrow } from "../src/arrow.ts";
+import { createLattice, KEYFRAME, Replayer, ROW_KIND, type Side } from "../src/index.ts";
 import { makeSim, type Setup } from "./helpers.ts";
 import schemas from "./fixtures/schemas.json";
 import ipcInfo from "./fixtures/python_events.json";
@@ -158,29 +159,20 @@ describe("deltaChunkFromArrow", () => {
 });
 
 describe("Arrow IPC from the Python binding", () => {
-  it("replays in the TS Replayer to the wasm Sim's states", async () => {
-    const bytes = readFileSync(new URL("./fixtures/python_events.arrows", import.meta.url));
-    const reader = RecordBatchReader.from(bytes);
-    const { config } = ipcInfo;
-    const nLefs = config.nLefs;
-    const lattice = createLattice(config.nSites, {
-      site: config.ctcfSites,
-      capturesFrom: config.ctcfCapturesFrom as Side[],
-      strength: config.ctcfStrength,
-    });
-    const replayer = new Replayer(lattice, nLefs);
-    let batches = 0;
-    for (const batch of reader) {
-      const chunk = deltaChunkFromArrow(batch);
-      for (let i = 0; i < 2 * nLefs; i++) expect(chunk.kind[i]).toBe(KEYFRAME);
-      replayer.push(chunk);
-      batches++;
-    }
-    expect(batches).toBe(ipcInfo.batches);
+  const { config } = ipcInfo;
+  const nLefs = config.nLefs;
+  const lattice = createLattice(config.nSites, {
+    site: config.ctcfSites,
+    capturesFrom: config.ctcfCapturesFrom as Side[],
+    strength: config.ctcfStrength,
+  });
+  const batches = () => [...RecordBatchReader.from(readFileSync(new URL("./fixtures/python_events.arrows", import.meta.url)))];
 
+  /** Replay against a live wasm Sim of the same run at many times. */
+  function expectMatchesLiveRun(replayer: Replayer) {
     using sim = makeSim({
       nSites: config.nSites,
-      ctcfs: { site: config.ctcfSites, capturesFrom: config.ctcfCapturesFrom as ("left" | "right")[], strength: config.ctcfStrength },
+      ctcfs: { site: config.ctcfSites, capturesFrom: config.ctcfCapturesFrom as Side[], strength: config.ctcfStrength },
       nLefs,
       seed: config.seed,
       rates: config.rates,
@@ -197,5 +189,48 @@ describe("Arrow IPC from the Python binding", () => {
       checked++;
     }
     expect(checked).toBeGreaterThan(150);
+  }
+
+  it("replays in the TS Replayer to the wasm Sim's states", () => {
+    const replayer = new Replayer(lattice, nLefs);
+    for (const batch of batches()) {
+      const chunk = deltaChunkFromArrow(batch);
+      for (let i = 0; i < 2 * nLefs; i++) expect(chunk.kind[i]).toBe(KEYFRAME);
+      replayer.push(chunk);
+    }
+    expect(batches().length).toBe(ipcInfo.batches);
+    expectMatchesLiveRun(replayer);
+  });
+
+  it("replayerFromArrow loads a log whatever its batch boundaries", () => {
+    // Re-slice into 37-row batches, which cut keyframes in half.
+    const table = new Table(batches());
+    const sliced: RecordBatch[] = [];
+    for (let at = 0; at < table.numRows; at += 37) sliced.push(...table.slice(at, at + 37).batches);
+    const replayer = replayerFromArrow(sliced, lattice, { end: config.tEnd });
+    expect([replayer.nLefs, replayer.start, replayer.end]).toEqual([nLefs, 0, config.tEnd]);
+    expectMatchesLiveRun(replayer);
+    // A table works too, and end defaults to the last row.
+    expect(replayerFromArrow(table, lattice).end).toBeLessThan(config.tEnd);
+  });
+
+  it("replayerFromArrow reads names in any case, or codes", () => {
+    const table = new Table(batches());
+    const time = table.getChild("time")!.toArray() as Float64Array;
+    const plain = tableFromArrays({
+      time,
+      leg_id: table.getChild("leg_id")!.toArray() as Uint32Array,
+      pos: table.getChild("pos")!.toArray() as Uint32Array,
+      mobility: Array.from(table.getChild("mobility")!, (v) => String(v).toUpperCase()),
+      action: Uint8Array.from(table.getChild("action")!, (v) => ROW_KIND.indexOf(v as (typeof ROW_KIND)[number])),
+    });
+    const replayer = replayerFromArrow(plain, lattice, { end: config.tEnd });
+    expectMatchesLiveRun(replayer);
+  });
+
+  it("replayerFromArrow needs a keyframe to size itself", () => {
+    using sim = makeSim({ nSites: 100, nLefs: 2, seed: 1 });
+    const log = eventsToArrow(sim.recordUntil(50, { events: true }).events!);
+    expect(() => replayerFromArrow(log, lattice)).toThrow(/no keyframe/);
   });
 });

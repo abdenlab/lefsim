@@ -5,7 +5,7 @@
  * tell whether it's watching a local simulation or a recorded/streamed one.
  */
 
-import { KEYFRAME, type DeltaChunk, type Lattice, type LiveState, type SnapshotColumns, type World } from "./types.ts";
+import { KEYFRAME, MOBILITY, ROW_KIND, type DeltaChunk, type Lattice, type LiveState, type SnapshotColumns, type World } from "./types.ts";
 
 interface KeyframeRef {
   chunk: number;
@@ -71,27 +71,47 @@ export class Replayer {
     return this.#end;
   }
 
-  /** Append a chunk. Its rows must not precede rows already pushed. */
+  /**
+   * Append a chunk of rows, which describes the run through `chunk.end`. Its
+   * rows must not precede rows already pushed, and it must hold whole
+   * keyframes (one row per leg, in `leg_id` order, at one time). Checks
+   * every row, as the core's replayer does; on error, nothing is pushed.
+   */
   push(chunk: DeltaChunk): void {
     const n = chunk.time.length;
-    if (chunk.legId.length !== n || chunk.pos.length !== n || chunk.mobility.length !== n || chunk.kind.length !== n) {
+    const { time, legId, mobility, kind } = chunk;
+    if (legId.length !== n || chunk.pos.length !== n || mobility.length !== n || kind.length !== n) {
       throw new RangeError("chunk columns must have equal length");
     }
-    const last = this.#lastRowTime();
-    if (n > 0 && chunk.time[0]! < last) throw new RangeError("chunk rows precede rows already pushed");
+    const nLegs = 2 * this.nLefs;
+    let previous = this.#lastRowTime();
+    for (let row = 0; row < n; row++) {
+      const t = time[row]!;
+      if (Number.isNaN(t) || t < previous) throw new RangeError(`row at t=${t} comes after a row at t=${previous}`);
+      previous = t;
+      if (legId[row]! >= nLegs) throw new RangeError(`leg id ${legId[row]} is out of range for ${nLegs} legs`);
+      if (mobility[row]! >= MOBILITY.length) throw new RangeError(`invalid mobility code ${mobility[row]}`);
+      if (kind[row]! >= ROW_KIND.length) throw new RangeError(`invalid row kind code ${kind[row]}`);
+    }
+    if (Number.isNaN(chunk.end) || chunk.end < previous) {
+      throw new RangeError(`chunk end ${chunk.end} is before its last row at t=${previous}`);
+    }
+
     const index = this.#chunks.length;
+    const found: KeyframeRef[] = [];
     for (let row = 0; row < n; ) {
-      if (chunk.kind[row] !== KEYFRAME) {
+      if (kind[row] !== KEYFRAME) {
         row++;
         continue;
       }
       const start = row;
-      while (row < n && chunk.kind[row] === KEYFRAME && chunk.time[row] === chunk.time[start]) row++;
-      if (row - start !== 2 * this.nLefs) {
-        throw new RangeError(`keyframe has ${row - start} rows, expected ${2 * this.nLefs} (2 per LEF)`);
+      while (row < n && kind[row] === KEYFRAME && time[row] === time[start] && legId[row] === row - start) row++;
+      if (row - start !== nLegs) {
+        throw new RangeError(`keyframe at t=${time[start]} has ${row - start} rows; expected ${nLegs}, one per leg in order`);
       }
-      this.#keyframes.push({ chunk: index, row: start, time: chunk.time[start]! });
+      found.push({ chunk: index, row: start, time: time[start]! });
     }
+    this.#keyframes.push(...found);
     this.#chunks.push(chunk);
     this.#end = Math.max(this.#end, chunk.end);
   }

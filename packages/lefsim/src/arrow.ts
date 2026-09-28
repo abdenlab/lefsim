@@ -19,6 +19,7 @@ import {
   RecordBatch,
   Schema,
   Struct,
+  Table,
   Uint32,
   Uint8,
   Utf8,
@@ -26,8 +27,10 @@ import {
   type DataType,
 } from "apache-arrow";
 
+import { Replayer } from "./replayer.ts";
 import {
   DIRECTION,
+  KEYFRAME,
   MOBILITY,
   ROW_KIND,
   type DeltaChunk,
@@ -194,26 +197,33 @@ function column<T extends Typed>(b: RecordBatch, name: string, Ctor: TypedCtor<T
   if (!vec) throw new RangeError(`missing column "${name}"`);
   const data = vec.data[0];
   if (vec.data.length === 1 && data && data.values instanceof Ctor && !vec.nullCount) {
-    return (data.values as T).subarray(data.offset, data.offset + data.length) as T;
+    // A sliced Data's `values` already start at the slice (its `offset`
+    // refers to the original buffers), so take `length` values from 0.
+    return (data.values as T).subarray(0, data.length) as T;
   }
   return Ctor.from(Array.from(vec.toArray() as ArrayLike<number | bigint>, Number));
 }
 
-/** Dictionary keys mapped to our codes (zero-copy when the dictionary matches). */
+/**
+ * A categorical column as our codes: zero-copy when its dictionary is ours;
+ * otherwise names (in any case) or integer codes are mapped, e.g. after
+ * another tool re-encoded the data.
+ */
 function codes(b: RecordBatch, name: string, names: readonly string[]): Uint8Array {
   const vec = b.getChild(name);
   if (!vec) throw new RangeError(`missing column "${name}"`);
   const data = vec.data[0];
   const dictionary = data?.dictionary?.toArray() as string[] | undefined;
   if (vec.data.length === 1 && data && dictionary && data.values instanceof Uint8Array) {
-    const keys = data.values.subarray(data.offset, data.offset + data.length);
+    const keys = data.values.subarray(0, data.length); // see `column` on offsets
     if (dictionary.length <= names.length && dictionary.every((v, i) => v === names[i])) return keys;
   }
-  // Different encoding (e.g. re-encoded by another tool): map by name.
+  const lower = names.map((n) => n.toLowerCase());
   const out = new Uint8Array(vec.length);
   for (let i = 0; i < vec.length; i++) {
-    const code = names.indexOf(String(vec.get(i)));
-    if (code < 0) throw new RangeError(`column "${name}" has unknown value ${JSON.stringify(vec.get(i))}`);
+    const v: unknown = vec.get(i);
+    const code = typeof v === "number" ? (Number.isInteger(v) && v >= 0 && v < names.length ? v : -1) : lower.indexOf(String(v).toLowerCase());
+    if (code < 0) throw new RangeError(`column "${name}" has unknown value ${JSON.stringify(v)}`);
     out[i] = code;
   }
   return out;
@@ -238,6 +248,72 @@ export function deltaChunkFromArrow(b: RecordBatch, options: { end?: number } = 
     kind: codes(b, "action", ROW_KIND),
     end: options.end ?? (time.length ? time[time.length - 1]! : -Infinity),
   };
+}
+
+/**
+ * A {@link Replayer} loaded with a whole keyframed event log: a record
+ * batch, a table, or any iterable of batches (e.g. from an Arrow IPC
+ * stream). Batch boundaries don't matter: the rows are re-split at their
+ * keyframes. `nLefs` defaults to the size of the first keyframe. `end` is
+ * the time through which the log describes the run (e.g. the `tEnd` it was
+ * recorded to); it defaults to the last row. The TS counterpart of the
+ * Python binding's `Replayer.from_arrow`.
+ */
+export function replayerFromArrow(
+  source: RecordBatch | Table | Iterable<RecordBatch>,
+  lattice: Lattice,
+  options: { nLefs?: number; end?: number } = {},
+): Replayer {
+  const batches: Iterable<RecordBatch> = source instanceof RecordBatch ? [source] : source instanceof Table ? source.batches : source;
+  const parts = Array.from(batches, (b) => deltaChunkFromArrow(b));
+  const concat = <T extends Float64Array | Uint32Array | Uint8Array>(key: "time" | "legId" | "pos" | "mobility" | "kind", Ctor: { new (n: number): T }): T => {
+    const out = new Ctor(parts.reduce((n, p) => n + p[key].length, 0));
+    let at = 0;
+    for (const p of parts) {
+      out.set(p[key] as never, at);
+      at += p[key].length;
+    }
+    return out;
+  };
+  const rows = {
+    time: concat("time", Float64Array),
+    legId: concat("legId", Uint32Array),
+    pos: concat("pos", Uint32Array),
+    mobility: concat("mobility", Uint8Array),
+    kind: concat("kind", Uint8Array),
+  };
+  const n = rows.time.length;
+  const isKeyframe = (i: number) => rows.kind[i] === KEYFRAME;
+
+  let nLefs = options.nLefs;
+  if (nLefs === undefined) {
+    const first = rows.kind.indexOf(KEYFRAME);
+    if (first < 0) throw new RangeError("no keyframe in the log: pass nLefs, or record with keyframes");
+    let len = 0;
+    while (first + len < n && isKeyframe(first + len) && rows.time[first + len] === rows.time[first] && rows.legId[first + len] === len) len++;
+    nLefs = len / 2;
+  }
+
+  // One chunk per keyframe (a keyframe starts with leg 0), each describing
+  // the run up to the next keyframe.
+  const replayer = new Replayer(lattice, nLefs);
+  const slice = (a: number, b: number, end: number): DeltaChunk => ({
+    time: rows.time.subarray(a, b),
+    legId: rows.legId.subarray(a, b),
+    pos: rows.pos.subarray(a, b),
+    mobility: rows.mobility.subarray(a, b),
+    kind: rows.kind.subarray(a, b),
+    end,
+  });
+  let from = 0;
+  for (let i = 1; i < n; i++) {
+    if (isKeyframe(i) && rows.legId[i] === 0) {
+      replayer.push(slice(from, i, rows.time[i]!));
+      from = i;
+    }
+  }
+  if (n > from) replayer.push(slice(from, n, options.end ?? rows.time[n - 1]!));
+  return replayer;
 }
 
 // ------------------------------------------------------------------ streams

@@ -263,13 +263,37 @@ describe("Replayer", () => {
     expect(evictions).toBeGreaterThan(10);
   });
 
-  it("validates chunks", () => {
-    const r = new Replayer(LATTICE, 2);
-    const bad = { ...chunks[0]!, legId: chunks[0]!.legId.subarray(1) };
-    expect(() => r.push(bad)).toThrow(/equal length/);
-    expect(() => r.push(chunks[0]!)).toThrow(/expected 4/); // 8 LEFs' keyframe into a 2-LEF replayer
-    const ok = new Replayer(LATTICE, OPTIONS.nLefs!);
-    ok.push(chunks[1]!);
-    expect(() => ok.push(chunks[0]!)).toThrow(/precede/);
+  it("checks every row, as the core's replayer does, and rejects a bad chunk whole", () => {
+    const first = chunks[0]!;
+    const edit = (change: (c: DeltaChunk) => void): DeltaChunk => {
+      const c = {
+        ...first,
+        time: first.time.slice(),
+        legId: first.legId.slice(),
+        pos: first.pos.slice(),
+        mobility: first.mobility.slice(),
+        kind: first.kind.slice(),
+      };
+      change(c);
+      return c;
+    };
+    const r = new Replayer(LATTICE, OPTIONS.nLefs!);
+    const cases: [DeltaChunk, RegExp][] = [
+      [{ ...first, legId: first.legId.subarray(1) }, /equal length/],
+      [edit((c) => (c.legId[20] = 16)), /leg id 16 is out of range for 16 legs/],
+      [edit((c) => (c.mobility[20] = 7)), /invalid mobility code 7/],
+      [edit((c) => (c.kind[20] = 9)), /invalid row kind code 9/],
+      [edit((c) => c.legId.set([1, 0], 0)), /keyframe at t=0 has 0 rows; expected 16, one per leg in order/],
+      [edit((c) => (c.end = c.time.at(-1)! - 1)), /chunk end .* is before its last row/],
+      [edit((c) => (c.time[17] = c.time[16]! - 1)), /comes after a row/],
+    ];
+    for (const [chunk, message] of cases) expect(() => r.push(chunk)).toThrow(message);
+    expect(r.start).toBeNull(); // nothing was pushed
+
+    // A keyframe for 8 LEFs doesn't fit a 2-LEF replayer.
+    expect(() => new Replayer(LATTICE, 2).push(first)).toThrow(/out of range for 4 legs/);
+    // Chunks must come in order.
+    r.push(chunks[1]!);
+    expect(() => r.push(first)).toThrow(/comes after a row/);
   });
 });

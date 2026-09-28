@@ -445,8 +445,10 @@ records grid snapshots and/or event deltas as typed-array columns, and
 `sim.stream(tEnd, { dt, maxSnapshots } | { events: true, maxRows })` returns a `ReadableStream` of
 chunks, computed only as it's read. Arrow lives in a separate entry point,
 `lefsim/arrow`, so live-only pages don't bundle it. It builds Arrow JS record
-batches with exactly the Python binding's schemas, and `toRecordBatches()` turns
-a stream into batches:
+batches with exactly the Python binding's schemas, `toRecordBatches()` turns
+a stream into batches, and `replayerFromArrow(batches, lattice, { end })` loads a
+keyframed event log from any Arrow source into a `Replayer` (as Python's
+`Replayer.from_arrow` does, whatever the batch boundaries):
 
 ```ts
 import { iterate } from "lefsim";
