@@ -96,8 +96,10 @@ export class Replayer {
    * the rows in between, or restarts from a keyframe in between if there is
    * one (so any jump costs at most one chunk); going backward seeks. Unlike
    * {@link Replayer.seek} it never throws for missing data, which suits a
-   * playback loop. Returns the time reached (less than `t` when the data
-   * runs out, i.e. while buffering).
+   * playback loop: it waits before the first keyframe, and once playing it
+   * stays within {@link Replayer.start} and {@link Replayer.end}. Returns
+   * the time reached (less than `t` when the data runs out, i.e. while
+   * buffering; more than `t` when asked to go back before the data).
    */
   advanceTo(t: number): number {
     if (Number.isNaN(t)) throw new RangeError("t is NaN");
@@ -106,7 +108,8 @@ export class Replayer {
       if (first === null || t < first) return this.#time;
       return this.seek(t);
     }
-    if (t < this.#time) return this.seek(t);
+    // Back no further than the first keyframe, as forward stops at `end`.
+    if (t < this.#time) return this.seek(Math.max(t, this.start!));
     const target = Math.min(t, this.#end);
     // A keyframe between here and the target holds the full state, so
     // restarting from it skips every row before it: a long jump costs at

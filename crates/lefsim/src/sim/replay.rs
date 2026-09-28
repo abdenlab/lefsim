@@ -206,14 +206,16 @@ impl Replayer {
         Ok(())
     }
 
-    /// Move to time `t`, clamped to [`Replayer::end`]. Going forward applies
-    /// the rows in between, or restarts from a keyframe in between if there
-    /// is one (so any jump costs at most one chunk); going backward seeks.
+    /// Move to time `t`. Going forward applies the rows in between, or
+    /// restarts from a keyframe in between if there is one (so any jump
+    /// costs at most one chunk); going backward seeks.
+    ///
     /// Unlike [`Replayer::seek`] it never fails, which suits a playback
-    /// loop: it waits before the first keyframe and at the end of the data.
-    /// Returns the time
-    /// reached: less than `t` when the data runs out (while buffering), and
-    /// unchanged before the first keyframe. Panics if `t` is NaN.
+    /// loop. Before the first keyframe it waits (nothing changes); once
+    /// playing, it stays within [`Replayer::start`] and [`Replayer::end`].
+    /// Returns the time reached: less than `t` when the data runs out
+    /// (while buffering), more than `t` when asked to go back before the
+    /// data. Panics if `t` is NaN.
     pub fn advance_to(&mut self, t: Time) -> Time {
         assert!(!t.is_nan(), "advance_to: t is NaN");
         if !self.ready {
@@ -223,7 +225,9 @@ impl Replayer {
             };
         }
         if t < self.time {
-            return self.seek(t).expect("the current time follows a keyframe");
+            // Back no further than the first keyframe, as forward stops at `end`.
+            let first = self.start().expect("ready means a keyframe was applied");
+            return self.seek(t.max(first)).expect("a keyframe is at or before the target");
         }
         let target = t.min(self.end);
         // A keyframe between here and the target holds the full state, so

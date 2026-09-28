@@ -785,6 +785,11 @@ def test_replayer_state_and_late_join():
     assert table(r.state()).equals(table(sim.state()))
     assert table(r.state(layout="leg")).equals(table(sim.state(layout="leg")))
 
+    # Once playing, advance_to never fails: going back before the data
+    # stops at its start.
+    assert r.advance_to(first - 1.0) == first
+    assert r.world() == live_worlds(17, [first])[0]
+
 
 def test_replayer_trim_before():
     r = lefsim.Replayer.from_arrow(keyframed_stream(18, 300.0, max_rows=60), make_lattice())

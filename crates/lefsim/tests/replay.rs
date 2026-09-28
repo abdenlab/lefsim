@@ -122,6 +122,21 @@ fn a_late_joiner_starts_at_its_first_keyframe() {
         r.advance_to(*t);
         assert_eq!(r.lef_states().unwrap(), &expected, "t={t}");
     }
+
+    // Once playing, going back before the data stops at its start.
+    assert_eq!(r.advance_to(first - 1.0), first);
+    assert_eq!(r.lef_states().unwrap(), &reference(3, &[first])[0]);
+}
+
+#[test]
+fn going_back_before_trimmed_data_stops_at_the_new_start() {
+    let mut r = replayer(&record(11, 400.0, 60));
+    r.advance_to(300.0);
+    r.trim_before(250.0);
+    let start = r.start().unwrap();
+    assert!(start > 0.0);
+    assert_eq!(r.advance_to(0.0), start);
+    assert_eq!(r.lef_states().unwrap(), &reference(11, &[start])[0]);
 }
 
 #[test]

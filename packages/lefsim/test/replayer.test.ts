@@ -141,6 +141,9 @@ describe("Replayer", () => {
         r.advanceTo(t);
         expect(copy(r.state())).toEqual(ref.get(t));
       }
+      // Once playing, going back before the data stops at its start.
+      expect(r.advanceTo(start - 1)).toBe(start);
+      expect(copy(r.state())).toEqual(reference(2, [start]).get(start));
     }
   });
 
