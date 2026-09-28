@@ -525,6 +525,11 @@ impl PySim {
     /// `polars.DataFrame`, duckdb). It runs without the GIL, so it can be
     /// consumed from any thread.
     ///
+    /// The stream's schema metadata says where it came from, once for the
+    /// whole stream: `lefsim.model` (the model the run started from, as
+    /// JSON) and `lefsim.run` (JSON: `seed` as a string, `start_time`,
+    /// `record_start`, the requested `record_end` or null, `lefsim_version`).
+    ///
     /// The Sim is moved into the stream and can't be used afterwards; copy
     /// it first (`copy.copy(sim)`) to keep going from here.
     #[pyo3(signature = (

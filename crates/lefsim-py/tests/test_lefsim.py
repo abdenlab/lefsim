@@ -638,6 +638,46 @@ def test_stream_capsule_consumers(consumer):
     assert stream.closed
 
 
+def test_a_stream_says_where_it_came_from():
+    sim = make_sim(seed=21)
+    sim.run_until(40.0)  # record from t = 40
+    stream = sim.stream(100.0, events=True, keyframes=True, max_rows=60)
+    reader = pa.RecordBatchReader.from_stream(stream)
+    meta = reader.schema.metadata
+    model = lefsim.Model.from_json(meta[b"lefsim.model"].decode())
+    run = json.loads(meta[b"lefsim.run"])
+    assert model == make_model(seed=21)  # the model the run started from
+    assert run == {
+        "format": "lefsim.run",
+        "version": 1,
+        "seed": "21",
+        "start_time": 0.0,
+        "record_start": 40.0,
+        "record_end": 100.0,
+        "lefsim_version": lefsim.__version__,
+    }
+    assert meta[b"lefsim.kind"] == b"events"
+    batches = list(reader)
+    assert len(batches) > 3 and all(b.schema.metadata == meta for b in batches)
+
+    # Re-running from it by hand gives the same rows.
+    again = lefsim.Sim(model, seed=int(run["seed"]), start_time=run["start_time"])
+    again.run_until(run["record_start"])
+    expected = pa.RecordBatchReader.from_stream(again.stream(100.0, events=True, keyframes=True, max_rows=60))
+    assert pa.Table.from_batches(batches).equals(expected.read_all())
+
+
+def test_an_unbounded_stream_has_no_record_end():
+    stream = make_sim().stream(float("inf"), dt=1.0)
+    run = json.loads(pa.RecordBatchReader.from_stream(stream).schema.metadata[b"lefsim.run"])
+    assert run["record_end"] is None
+
+
+def test_recordings_carry_no_provenance():
+    rec = make_sim().record_until(10.0, dt=1.0, events=True)
+    assert "lefsim.model" not in rec.snapshots.metadata and "lefsim.run" not in rec.events.metadata
+
+
 def test_stream_consumes_the_sim_but_a_copy_survives():
     sim = make_sim()
     kept = copy.copy(sim)

@@ -39,22 +39,38 @@ pub struct SimReader {
     done: bool,
 }
 
+/// `schema` plus where the stream comes from: `lefsim.model` (the model the
+/// run started from, as JSON) and `lefsim.run` (seed, start time, when this
+/// recording starts and the time it's asked to end at, and the version).
+/// Carried once, by the stream's schema; every batch shares it.
+fn with_provenance(schema: SchemaRef, sim: &lefsim::Sim, record_end: Time) -> SchemaRef {
+    let model = sim.initial_model().expect("Python sims use built-in spawn rules");
+    let run = serde_json::json!({
+        "format": "lefsim.run",
+        "version": 1,
+        // A string: JSON readers in JavaScript lose integers beyond 2^53.
+        "seed": sim.seed().to_string(),
+        "start_time": sim.start_time(),
+        "record_start": sim.time(),
+        // null for an unbounded stream: JSON has no infinity.
+        "record_end": record_end.is_finite().then_some(record_end),
+        "lefsim_version": env!("CARGO_PKG_VERSION"),
+    });
+    let mut metadata = schema.metadata().clone();
+    metadata.insert("lefsim.model".into(), serde_json::to_string(&model).expect("a model serializes"));
+    metadata.insert("lefsim.run".into(), run.to_string());
+    Arc::new(schema.as_ref().clone().with_metadata(metadata))
+}
+
 impl SimReader {
     pub fn snapshots(sim: lefsim::Sim, t_end: Time, rec: Recorder, layout: Layout) -> Self {
-        let schema = state_schema(layout, true, sim.n_lefs());
+        let schema = with_provenance(state_schema(layout, true, sim.n_lefs()), &sim, t_end);
         SimReader { sim, t_end, grid: Some(rec), events: None, layout, schema, done: false }
     }
 
     pub fn events(sim: lefsim::Sim, t_end: Time, rec: EventRecorder) -> Self {
-        SimReader {
-            sim,
-            t_end,
-            grid: None,
-            events: Some(rec),
-            layout: Layout::Lef,
-            schema: events_schema(),
-            done: false,
-        }
+        let schema = with_provenance(events_schema(), &sim, t_end);
+        SimReader { sim, t_end, grid: None, events: Some(rec), layout: Layout::Lef, schema, done: false }
     }
 
     pub fn schema(&self) -> SchemaRef {
@@ -62,11 +78,13 @@ impl SimReader {
     }
 
     fn take_batch(&mut self) -> Result<RecordBatch, ArrowError> {
-        match (&mut self.grid, &mut self.events) {
+        let batch = match (&mut self.grid, &mut self.events) {
             (Some(rec), _) => frames_batch(rec.take_frames(), self.layout),
             (None, Some(ev)) => events_batch(ev.take_frames()),
             (None, None) => unreachable!("a reader always has a recorder"),
-        }
+        }?;
+        // Share the stream's schema, provenance included (no copy per batch).
+        batch.with_schema(self.schema.clone())
     }
 
     /// Run until a batch is ready, the run ends, or the per-call event cap

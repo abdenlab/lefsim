@@ -252,7 +252,11 @@ class Sim:
     ) -> Stream:
         """Move this Sim into a lazy Arrow stream: pass ``dt`` (batches of at
         most ``max_snapshots`` snapshots) or ``events=True`` (about
-        ``max_rows`` rows). Both default to 10,000."""
+        ``max_rows`` rows). Both default to 10,000.
+
+        The stream's schema metadata says where it came from:
+        ``lefsim.model`` (the initial model, JSON) and ``lefsim.run`` (JSON:
+        seed, start_time, record_start, record_end, lefsim_version)."""
 
 class Replayer:
     """Rebuilds the state of a run at any recorded time from a keyframed
