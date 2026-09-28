@@ -16,7 +16,10 @@
 //!
 //! ## Running and observing
 //!
-//! [`Sim`] is the entry point: build one with [`SimBuilder`], drive it with
+//! A [`Model`] is a [`World`] (the lattice and the LEFs on it), its [`Rates`]
+//! and a [`SpawnRule`]. Build the world LEF by LEF with [`World::add_lef`],
+//! from a table with [`World::from_lef_states`], or at random with
+//! [`populate`]. [`Sim`] runs a model from a seed: drive it with
 //! [`Sim::step`], [`Sim::run_until`] or [`Sim::run_events`], and observe it
 //! with a [`Recorder`] (grid snapshots) and/or an [`EventRecorder`] (event
 //! deltas) via the `*_with` drivers.
@@ -24,11 +27,14 @@
 //! ```
 //! use lefsim::*;
 //!
-//! let mut sites = vec![Site::plain(); 100];
-//! sites[30] = Site::ctcf(Direction::Right, 1.0);
-//! sites[70] = Site::ctcf(Direction::Left, 1.0);
-//!
-//! let mut sim = Sim::builder(Lattice::new(sites)?).seed(42).lefs(3).build()?;
+//! let lattice = Lattice::with_ctcfs(100, &[
+//!     Ctcf { site: 30, captures_from: Direction::Right, strength: 1.0 },
+//!     Ctcf { site: 70, captures_from: Direction::Left, strength: 1.0 },
+//! ])?;
+//! let rule = SpawnRule::UniformNonCtcf;
+//! let world = populate(lattice, 3, &rule, 42)?;
+//! let model = Model::new(world, Rates::default(), rule)?;
+//! let mut sim = Sim::new(model, 42);
 //! let (frames, report) = sim.collect_until(100.0, SampleMode::every_dt(1.0));
 //! assert_eq!(frames.n_snapshots(), 101);
 //! assert_eq!(report.stopped, StopReason::ReachedTime);
@@ -47,8 +53,8 @@
 //!     and firing, and how landing on a CTCF resolves.
 //!   - [`model::spawn`]: spawn-site rules used by `Action::Respawn`.
 //! - [`sim`]: running and observing a model.
-//!   - [`Sim`], its builder, and batch drivers.
-//!   - [`sim::record`]: recorders, frame buffers, and static run metadata.
+//!   - [`Sim`], its constructors, and batch drivers.
+//!   - [`sim::record`]: recorders and frame buffers.
 //!   - The event loop and its indexed heap (internal).
 
 pub mod model;
@@ -56,11 +62,11 @@ pub mod sim;
 
 pub use model::{
     Action, Ctcf, Direction, Lattice, LatticeError, Leg, Lef, LefKey, LefStates, LegKey, LegState,
-    Mobility, Position, Rates, Schedule, SimRng, Site, SiteKind, Spawn, SpawnError, SpawnRule,
-    Time, World, WorldError, populate,
+    Mobility, Model, ModelError, Position, Rates, Schedule, SimRng, Site, SiteKind, Spawn,
+    SpawnError, SpawnRule, Time, World, WorldError, populate,
 };
 pub use sim::record::{
     EventColumns, EventFrames, EventRecorder, LefColumns, LefFrames, LefSnapshot, Observer,
-    Recorder, SampleMode, SimMeta,
+    Recorder, SampleMode,
 };
-pub use sim::{BuildError, RunReport, Sim, SimBuilder, StopReason};
+pub use sim::{RunReport, Sim, StopReason};

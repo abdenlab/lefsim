@@ -26,7 +26,7 @@
 //! or not anything is observing it.
 
 use super::Sim;
-use crate::model::{Action, Rates, SiteKind, Time};
+use crate::model::{Action, Time};
 
 // ===================================================================
 // Grid snapshots
@@ -704,82 +704,5 @@ pub(crate) mod sealed {
         fn on_event(&mut self, time: Time, action: Action, sim: &Sim) {
             (**self).on_event(time, action, sim)
         }
-    }
-}
-
-// ===================================================================
-// Static metadata
-// ===================================================================
-
-/// Everything about a run that never changes, as columnar tables. Build once
-/// with [`Sim::meta`] and ship alongside the frames.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SimMeta {
-    pub rates: Rates,
-    pub lattice: LatticeTable,
-    pub ctcfs: CtcfTable,
-    pub lefs: LefTable,
-    pub legs: LegTable,
-}
-
-/// One row per site; row index is the site's `Position`.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct LatticeTable {
-    /// [`SiteKind::code`] per site.
-    pub kind: Vec<u8>,
-}
-
-/// One row per CTCF site, in position order.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct CtcfTable {
-    pub site: Vec<u32>,
-    /// [`Direction::code`](crate::Direction::code) of the CTCF's capture side.
-    pub captures_from: Vec<u8>,
-    pub strength: Vec<f64>,
-}
-
-/// One row per LEF; row index is `lef_id`.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct LefTable {
-    pub left_leg_id: Vec<u32>,
-    pub right_leg_id: Vec<u32>,
-}
-
-/// One row per leg; row index is `leg_id`.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct LegTable {
-    pub lef_id: Vec<u32>,
-    /// [`Direction::code`](crate::Direction::code) of the leg's facing.
-    pub facing: Vec<u8>,
-}
-
-impl SimMeta {
-    pub(crate) fn from_sim(sim: &Sim) -> Self {
-        let world = sim.world();
-        let mut lattice = LatticeTable::default();
-        let mut ctcfs = CtcfTable::default();
-        for (pos, site) in world.lattice.sites.iter().enumerate() {
-            lattice.kind.push(site.kind.code());
-            if let SiteKind::Ctcf { captures_from, strength } = site.kind {
-                ctcfs.site.push(pos as u32);
-                ctcfs.captures_from.push(captures_from.code());
-                ctcfs.strength.push(strength);
-            }
-        }
-
-        let mut lefs = LefTable::default();
-        for &lef in sim.lef_keys() {
-            let [left, right] = world.lefs[lef].legs;
-            lefs.left_leg_id.push(sim.leg_id(left).expect("leg belongs to this sim"));
-            lefs.right_leg_id.push(sim.leg_id(right).expect("leg belongs to this sim"));
-        }
-        let mut legs = LegTable::default();
-        for &leg in sim.leg_keys() {
-            let state = &world.legs[leg];
-            legs.lef_id.push(sim.lef_id(state.lef).expect("lef belongs to this sim"));
-            legs.facing.push(state.facing.code());
-        }
-
-        SimMeta { rates: sim.rates(), lattice, ctcfs, lefs, legs }
     }
 }

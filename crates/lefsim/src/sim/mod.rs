@@ -5,177 +5,63 @@
 //! `Sim` owns them together so callers (and FFI bindings) wrap a single,
 //! concrete, `Send` type.
 //!
-//! Construction goes through [`SimBuilder`], which is the only place LEFs can
-//! be created. Once [`SimBuilder::build`] has initialized the engine's heap,
-//! the set of entities is fixed for the rest of the run.
+//! A `Sim` starts from a [`Model`] and a seed ([`Sim::new`]). It takes the
+//! model by value and only exposes the world read-only afterwards, so the
+//! set of entities is fixed once the event heap exists.
 //!
 //! ## Dense ids
 //!
-//! LEFs and legs are identified externally by dense `u32` ids assigned in
-//! builder order: `lef_id` in `0..n_lefs`, and `leg_id = 2 * lef_id + side`
-//! where side 0 is the left-facing leg and side 1 the right-facing one.
-//! Slotmap keys stay internal.
+//! LEFs and legs are identified externally by dense `u32` ids: `lef_id` is
+//! the LEF's row in the world's [`LefStates`](crate::LefStates), and
+//! `leg_id = 2 * lef_id + side` where side 0 is the left-facing leg and side
+//! 1 the right-facing one. Slotmap keys stay internal.
 
 mod engine;
 mod heap;
 pub mod record;
 
-use std::fmt;
+use std::sync::Arc;
 
 use rand::SeedableRng;
 use slotmap::SecondaryMap;
 
 use crate::model::action::Touched;
 use crate::model::{
-    Action, Lattice, LefKey, LegKey, Mobility, Position, Rates, SimRng, Spawn, SpawnRule, Time,
-    World,
+    self, Action, LefKey, LegKey, Mobility, Model, ModelError, Position, Rates, SimRng, Spawn,
+    SpawnRule, Time, World,
 };
 use engine::Engine;
 use record::sealed::Observe;
-use record::{LefFrames, Observer, Recorder, SampleMode, SimMeta};
+use record::{LefFrames, Observer, Recorder, SampleMode};
 
-/// How an initial LEF is placed during [`SimBuilder::build`].
-#[derive(Copy, Clone, Debug)]
-enum InitialLef {
-    At(Position),
-    FromSpawnRule,
+/// The spawn rule a `Sim` runs with. Custom rules are shared, not copied,
+/// when a `Sim` is cloned: rules take `&self`, so that's safe.
+#[derive(Clone)]
+enum SpawnSource {
+    BuiltIn(SpawnRule),
+    Custom(Arc<dyn Spawn + Send + Sync>),
 }
 
-/// Construction phase of a [`Sim`]. The only way to create LEFs.
-pub struct SimBuilder {
-    lattice: Lattice,
-    rates: Rates,
-    seed: u64,
-    spawn: Box<dyn Spawn + Send + Sync>,
-    initial: Vec<InitialLef>,
-}
-
-impl SimBuilder {
-    /// Defaults: seed 0, [`Rates::default`], [`SpawnRule::UniformNonCtcf`], no LEFs.
-    pub fn new(lattice: Lattice) -> Self {
-        SimBuilder {
-            lattice,
-            rates: Rates::default(),
-            seed: 0,
-            spawn: Box::new(SpawnRule::UniformNonCtcf),
-            initial: Vec::new(),
-        }
-    }
-
-    pub fn rates(mut self, rates: Rates) -> Self {
-        self.rates = rates;
-        self
-    }
-
-    pub fn seed(mut self, seed: u64) -> Self {
-        self.seed = seed;
-        self
-    }
-
-    /// Rule used to pick respawn sites, and initial sites for [`Self::lefs`].
-    ///
-    /// `Send + Sync` keeps [`Sim`] `Send + Sync`, which FFI wrappers need
-    /// (e.g. a pyo3 `#[pyclass]`). Spawn rules take `&self`, so stateless or
-    /// immutable rules satisfy this for free.
-    pub fn spawn_rule<S: Spawn + Send + Sync + 'static>(mut self, rule: S) -> Self {
-        self.spawn = Box::new(rule);
-        self
-    }
-
-    /// Add one LEF with both legs at `pos`.
-    pub fn lef_at(mut self, pos: Position) -> Self {
-        self.initial.push(InitialLef::At(pos));
-        self
-    }
-
-    /// Add `n` LEFs at sites drawn from the spawn rule.
-    pub fn lefs(mut self, n: usize) -> Self {
-        self.initial
-            .extend(std::iter::repeat_n(InitialLef::FromSpawnRule, n));
-        self
-    }
-
-    /// Place every LEF (in the order they were added), then initialize the
-    /// engine. After this, no LEF can be added.
-    ///
-    /// The RNG draw order is: all LEF placements first, then initial
-    /// scheduling — matching a hand-rolled `spawn_lef` + `Engine::initialize`
-    /// sequence with the same seed.
-    pub fn build(self) -> Result<Sim, BuildError> {
-        let n_sites = self.lattice.len();
-        for init in &self.initial {
-            if let InitialLef::At(pos) = *init
-                && pos as usize >= n_sites
-            {
-                return Err(BuildError::PositionOutOfBounds { pos, n_sites });
-            }
-        }
-
-        let mut rng = SimRng::seed_from_u64(self.seed);
-        let mut world = World::new(self.lattice);
-        let n_lefs = self.initial.len();
-        let mut lef_order = Vec::with_capacity(n_lefs);
-        let mut leg_order = Vec::with_capacity(2 * n_lefs);
-        let mut lef_ids = SecondaryMap::with_capacity(n_lefs);
-        let mut leg_ids = SecondaryMap::with_capacity(2 * n_lefs);
-
-        for init in self.initial {
-            let pos = match init {
-                InitialLef::At(pos) => pos,
-                InitialLef::FromSpawnRule => self.spawn.sample(&world, &mut rng),
-            };
-            let (lef_k, [left, right]) = world.spawn_lef(pos, &mut rng);
-            let lef_id = lef_order.len() as u32;
-            lef_ids.insert(lef_k, lef_id);
-            leg_ids.insert(left, 2 * lef_id);
-            leg_ids.insert(right, 2 * lef_id + 1);
-            lef_order.push(lef_k);
-            leg_order.extend([left, right]);
-        }
-
-        let mut engine = Engine::new(self.rates);
-        engine.initialize(&world, &mut rng);
-
-        Ok(Sim {
-            world,
-            engine,
-            rng,
-            spawn: self.spawn,
-            touched: Touched::default(),
-            lef_order,
-            leg_order,
-            lef_ids,
-            leg_ids,
-            events: 0,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum BuildError {
-    PositionOutOfBounds { pos: Position, n_sites: usize },
-}
-
-impl fmt::Display for BuildError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl SpawnSource {
+    fn get(&self) -> &dyn Spawn {
         match self {
-            BuildError::PositionOutOfBounds { pos, n_sites } => {
-                write!(f, "LEF position {pos} is outside a lattice of {n_sites} sites")
-            }
+            SpawnSource::BuiltIn(rule) => rule,
+            SpawnSource::Custom(rule) => &**rule,
         }
     }
 }
-
-impl std::error::Error for BuildError {}
 
 /// A whole simulation run: world, engine, RNG, and spawn rule together.
+///
+/// `Clone` gives an independent copy that continues bit for bit like the
+/// original: a fork of the run at its current time.
+#[derive(Clone)]
 pub struct Sim {
     world: World,
     engine: Engine,
     rng: SimRng,
-    spawn: Box<dyn Spawn + Send + Sync>,
+    spawn: SpawnSource,
     touched: Touched,
-    lef_order: Vec<LefKey>,
     leg_order: Vec<LegKey>,
     lef_ids: SecondaryMap<LefKey, u32>,
     leg_ids: SecondaryMap<LegKey, u32>,
@@ -207,8 +93,66 @@ pub struct RunReport {
 }
 
 impl Sim {
-    pub fn builder(lattice: Lattice) -> SimBuilder {
-        SimBuilder::new(lattice)
+    // ----- construction -----
+
+    /// Run `model` from time 0. `seed` drives the whole run.
+    pub fn new(model: Model, seed: u64) -> Self {
+        Self::with_start_time(model, seed, 0.0)
+    }
+
+    /// Run `model` with the clock starting at `start_time`, e.g. to continue
+    /// from a state recorded at that time. Panics if `start_time` isn't
+    /// finite.
+    pub fn with_start_time(model: Model, seed: u64, start_time: Time) -> Self {
+        let (world, rates, spawn) = model.into_parts();
+        Self::start(world, rates, SpawnSource::BuiltIn(spawn), seed, start_time)
+    }
+
+    /// Run a world with a custom spawn rule, from time 0. Checks the rates
+    /// and the rule as [`Model::new`] does.
+    ///
+    /// `Send + Sync` keeps [`Sim`] `Send + Sync`, which FFI wrappers need
+    /// (e.g. a pyo3 `#[pyclass]`). Spawn rules take `&self`, so stateless or
+    /// immutable rules satisfy this for free.
+    pub fn with_spawn<S: Spawn + Send + Sync + 'static>(
+        world: World,
+        rates: Rates,
+        spawn: S,
+        seed: u64,
+    ) -> Result<Self, ModelError> {
+        model::check(&world, &rates, &spawn)?;
+        Ok(Self::start(world, rates, SpawnSource::Custom(Arc::new(spawn)), seed, 0.0))
+    }
+
+    fn start(world: World, rates: Rates, spawn: SpawnSource, seed: u64, start_time: Time) -> Self {
+        assert!(start_time.is_finite(), "start time must be finite, got {start_time}");
+        let n_lefs = world.n_lefs();
+        let mut leg_order = Vec::with_capacity(2 * n_lefs);
+        let mut lef_ids = SecondaryMap::with_capacity(n_lefs);
+        let mut leg_ids = SecondaryMap::with_capacity(2 * n_lefs);
+        for (lef_id, &lef_k) in world.lef_order.iter().enumerate() {
+            let lef_id = lef_id as u32;
+            let [left, right] = world.lefs[lef_k].legs;
+            lef_ids.insert(lef_k, lef_id);
+            leg_ids.insert(left, 2 * lef_id);
+            leg_ids.insert(right, 2 * lef_id + 1);
+            leg_order.extend([left, right]);
+        }
+
+        let mut rng = SimRng::seed_from_u64(seed);
+        let mut engine = Engine::new(rates, start_time);
+        engine.initialize(&world, &mut rng);
+        Sim {
+            world,
+            engine,
+            rng,
+            spawn,
+            touched: Touched::default(),
+            leg_order,
+            lef_ids,
+            leg_ids,
+            events: 0,
+        }
     }
 
     // ----- introspection -----
@@ -237,16 +181,36 @@ impl Sim {
     }
 
     pub fn n_lefs(&self) -> usize {
-        self.lef_order.len()
+        self.world.n_lefs()
     }
 
     pub fn n_legs(&self) -> usize {
         self.leg_order.len()
     }
 
-    /// Read-only view of the world, for in-process inspection.
+    /// The current state, read-only.
+    ///
+    /// Between an eviction and the respawn it triggers (at the same
+    /// instant), the world holds an `Evicted` leg. The batch drivers only
+    /// stop there when an event budget runs out mid-chain; [`Sim::step`] can.
     pub fn world(&self) -> &World {
         &self.world
+    }
+
+    /// The current state as a model: the world now, plus the rates and
+    /// spawn rule. `None` if this sim runs a custom spawn rule
+    /// ([`Sim::with_spawn`]), which a [`Model`] can't hold.
+    ///
+    /// Running it with `Sim::with_start_time(model, seed, sim.time())`
+    /// continues from here with fresh randomness. To continue bit for bit,
+    /// clone the sim instead.
+    pub fn model(&self) -> Option<Model> {
+        match self.spawn {
+            SpawnSource::BuiltIn(spawn) => {
+                Some(Model { world: self.world.clone(), rates: self.rates(), spawn })
+            }
+            SpawnSource::Custom(_) => None,
+        }
     }
 
     /// Dense id of a LEF key belonging to this sim.
@@ -272,7 +236,7 @@ impl Sim {
     }
 
     fn lef_legs(&self, lef_id: u32) -> [LegKey; 2] {
-        self.world.lefs[self.lef_order[lef_id as usize]].legs
+        self.world.lefs[self.world.lef_order[lef_id as usize]].legs
     }
 
     /// `[(pos, mobility); 2]` for the left and right legs of a LEF.
@@ -283,19 +247,9 @@ impl Sim {
         })
     }
 
-    /// LEF keys indexed by `lef_id`.
-    pub(crate) fn lef_keys(&self) -> &[LefKey] {
-        &self.lef_order
-    }
-
     /// Leg keys indexed by `leg_id`.
     pub(crate) fn leg_keys(&self) -> &[LegKey] {
         &self.leg_order
-    }
-
-    /// Static tables describing this run (lattice, CTCFs, id mappings).
-    pub fn meta(&self) -> SimMeta {
-        SimMeta::from_sim(self)
     }
 
     /// A [`Recorder`] sized for this sim.
@@ -310,7 +264,7 @@ impl Sim {
     pub fn step(&mut self) -> Option<(Time, Action)> {
         let fired = self.engine.step(
             &mut self.world,
-            &*self.spawn,
+            self.spawn.get(),
             &mut self.rng,
             &mut self.touched,
         );
@@ -434,7 +388,7 @@ impl Sim {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Direction, Site};
+    use crate::model::{Direction, Lattice, Site};
 
     fn two_ctcf_lattice() -> Lattice {
         let mut sites = vec![Site::plain(); 100];
@@ -443,34 +397,30 @@ mod tests {
         Lattice::new(sites).unwrap()
     }
 
-    #[test]
-    fn sim_is_send_and_sync() {
-        fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<Sim>();
+    /// A model with a moving LEF at each of `sites`.
+    fn model_at(sites: &[Position]) -> Model {
+        let mut world = World::new(two_ctcf_lattice());
+        for &p in sites {
+            world.add_lef((p, Mobility::Moving), (p, Mobility::Moving)).unwrap();
+        }
+        Model::new(world, Rates::default(), SpawnRule::UniformNonCtcf).unwrap()
     }
 
     #[test]
-    fn build_rejects_out_of_bounds_position() {
-        let err = Sim::builder(Lattice::plain(10).unwrap()).lef_at(10).build().err();
-        assert_eq!(
-            err,
-            Some(BuildError::PositionOutOfBounds { pos: 10, n_sites: 10 })
-        );
+    fn sim_is_send_sync_and_clone() {
+        fn assert_traits<T: Send + Sync + Clone>() {}
+        assert_traits::<Sim>();
     }
 
     #[test]
-    fn dense_ids_follow_builder_order() {
-        let sim = Sim::builder(Lattice::plain(100).unwrap())
-            .lef_at(10)
-            .lef_at(50)
-            .lefs(3)
-            .build()
-            .unwrap();
-        assert_eq!(sim.n_lefs(), 5);
-        assert_eq!(sim.n_legs(), 10);
+    fn dense_ids_follow_world_order() {
+        let sim = Sim::new(model_at(&[10, 50, 20]), 0);
+        assert_eq!(sim.n_lefs(), 3);
+        assert_eq!(sim.n_legs(), 6);
         assert_eq!(sim.lef_positions(0), (10, 10));
         assert_eq!(sim.lef_positions(1), (50, 50));
-        for (i, &lef_k) in sim.lef_order.iter().enumerate() {
+        assert_eq!(sim.lef_positions(2), (20, 20));
+        for (i, &lef_k) in sim.world.lef_order.iter().enumerate() {
             assert_eq!(sim.lef_id(lef_k), Some(i as u32));
             let [left, right] = sim.world.lefs[lef_k].legs;
             assert_eq!(sim.leg_id(left), Some(2 * i as u32));
@@ -485,18 +435,12 @@ mod tests {
     #[test]
     fn sim_matches_hand_rolled_loop() {
         let seed = 17;
-        let mut sim = Sim::builder(two_ctcf_lattice())
-            .seed(seed)
-            .lef_at(40)
-            .lef_at(60)
-            .build()
-            .unwrap();
+        let model = model_at(&[40, 60]);
+        let mut world = model.world().clone();
+        let mut sim = Sim::new(model, seed);
 
         let mut rng = SimRng::seed_from_u64(seed);
-        let mut world = World::new(two_ctcf_lattice());
-        world.spawn_lef(40, &mut rng);
-        world.spawn_lef(60, &mut rng);
-        let mut engine = Engine::new(Rates::default());
+        let mut engine = Engine::new(Rates::default(), 0.0);
         engine.initialize(&world, &mut rng);
         let mut touched = Touched::default();
 
@@ -505,18 +449,70 @@ mod tests {
             let b = engine.step(&mut world, &SpawnRule::UniformNonCtcf, &mut rng, &mut touched);
             assert_eq!(a.map(|(t, _)| t), b.map(|(t, _)| t));
         }
-        for (i, &lef_k) in sim.lef_order.iter().enumerate() {
-            let [l, r] = world.lefs[lef_k].legs;
-            assert_eq!(
-                sim.lef_positions(i as u32),
-                (world.legs[l].pos, world.legs[r].pos)
-            );
+        assert_eq!(sim.world(), &world);
+    }
+
+    #[test]
+    fn a_clone_continues_bit_for_bit() {
+        let mut sim = Sim::new(model_at(&[40, 60]), 3);
+        sim.run_until(50.0);
+        let mut fork = sim.clone();
+        sim.run_until(500.0);
+        fork.run_until(500.0);
+        assert_eq!(sim.event_count(), fork.event_count());
+        assert_eq!(sim.world(), fork.world());
+    }
+
+    #[test]
+    fn model_reads_back_the_current_state() {
+        let mut sim = Sim::new(model_at(&[40, 60]), 3);
+        assert_eq!(sim.model(), Some(model_at(&[40, 60])));
+        sim.run_until(100.0);
+        let model = sim.model().unwrap();
+        assert_eq!(model.world(), sim.world());
+        assert_eq!(model.rates(), sim.rates());
+
+        // Restarting from it is a valid run from the current time.
+        let mut next = Sim::with_start_time(model, 4, sim.time());
+        assert_eq!(next.time(), 100.0);
+        assert!(next.next_event_time().unwrap() >= 100.0);
+        assert!(next.run_until(200.0).events > 0);
+    }
+
+    #[test]
+    fn custom_spawn_rules_are_checked_and_have_no_model() {
+        /// Always the same site; fine for one LEF.
+        struct Fixed(Position);
+        impl Spawn for Fixed {
+            fn sample(&self, _: &World, _: &mut SimRng) -> Position {
+                self.0
+            }
+            fn check(&self, _: &Lattice, n_lefs: usize) -> Result<(), crate::SpawnError> {
+                if n_lefs <= 1 {
+                    Ok(())
+                } else {
+                    Err(crate::SpawnError::NotEnoughSites { n_lefs, needed: n_lefs, n_plain: 1 })
+                }
+            }
         }
+
+        let one = model_at(&[40]).world().clone();
+        let mut sim = Sim::with_spawn(one, Rates::default(), Fixed(12), 0).unwrap();
+        assert_eq!(sim.model(), None);
+        while !matches!(sim.step(), Some((_, Action::Respawn { .. }))) {}
+        assert_eq!(sim.lef_positions(0), (12, 12));
+        let _fork = sim.clone(); // shares the rule
+
+        let two = model_at(&[40, 60]).world().clone();
+        assert!(matches!(
+            Sim::with_spawn(two, Rates::default(), Fixed(12), 0),
+            Err(ModelError::Spawn(_))
+        ));
     }
 
     #[test]
     fn run_until_fires_events_up_to_and_including_t_end() {
-        let mut sim = Sim::builder(two_ctcf_lattice()).lef_at(50).build().unwrap();
+        let mut sim = Sim::new(model_at(&[50]), 0);
         let report = sim.run_until(25.0);
         assert_eq!(report.stopped, StopReason::ReachedTime);
         assert_eq!(report.time, 25.0);
@@ -527,14 +523,7 @@ mod tests {
 
     #[test]
     fn run_until_composes() {
-        let build = || {
-            Sim::builder(two_ctcf_lattice())
-                .seed(9)
-                .lef_at(45)
-                .lef_at(55)
-                .build()
-                .unwrap()
-        };
+        let build = || Sim::new(model_at(&[45, 55]), 9);
         let mut split = build();
         split.run_until(10.0);
         split.run_until(20.0);
@@ -543,14 +532,12 @@ mod tests {
 
         assert_eq!(split.time(), whole.time());
         assert_eq!(split.event_count(), whole.event_count());
-        for i in 0..2 {
-            assert_eq!(split.lef_positions(i), whole.lef_positions(i));
-        }
+        assert_eq!(split.world(), whole.world());
     }
 
     #[test]
     fn run_until_into_the_past_is_a_no_op() {
-        let mut sim = Sim::builder(two_ctcf_lattice()).lef_at(50).build().unwrap();
+        let mut sim = Sim::new(model_at(&[50]), 0);
         sim.run_until(10.0);
         let events = sim.event_count();
         let report = sim.run_until(5.0);
@@ -561,7 +548,7 @@ mod tests {
 
     #[test]
     fn run_events_fires_exact_budget() {
-        let mut sim = Sim::builder(two_ctcf_lattice()).lef_at(50).build().unwrap();
+        let mut sim = Sim::new(model_at(&[50]), 0);
         let report = sim.run_events(123);
         assert_eq!(report.events, 123);
         assert_eq!(report.stopped, StopReason::ReachedEventCount);
@@ -570,10 +557,19 @@ mod tests {
 
     #[test]
     fn empty_sim_is_exhausted() {
-        let mut sim = Sim::builder(Lattice::plain(10).unwrap()).build().unwrap();
+        let mut sim = Sim::new(model_at(&[]), 0);
         assert_eq!(sim.run_events(5).stopped, StopReason::Exhausted);
         let report = sim.run_until(3.0);
         assert_eq!(report.stopped, StopReason::Exhausted);
         assert_eq!(sim.time(), 3.0);
+    }
+
+    #[test]
+    fn start_time_offsets_the_clock() {
+        let mut sim = Sim::with_start_time(model_at(&[50]), 0, 1000.0);
+        assert_eq!(sim.time(), 1000.0);
+        assert!(sim.next_event_time().unwrap() > 1000.0);
+        let (frames, _) = sim.collect_until(1010.0, SampleMode::every_dt(5.0));
+        assert_eq!(frames.time(), &[1000.0, 1005.0, 1010.0]);
     }
 }

@@ -13,6 +13,7 @@ doctest = false
 
 [dependencies]
 lefsim.workspace = true
+rand.workspace = true
 pyo3 = { version = "0.29", features = ["abi3-py39"] }
 # No buffer_protocol: we only export, and it would need abi3-py311.
 pyo3-arrow = { version = "0.19", default-features = false }

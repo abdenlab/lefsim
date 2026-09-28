@@ -15,7 +15,7 @@ import pytest
 import lefsim
 
 # The golden fingerprint pinned by crates/lefsim/tests/determinism.rs.
-RUST_GOLDEN = 0x93F5538773F568A2
+RUST_GOLDEN = 0xE5A22C6618308528
 
 
 def make_sim(seed=1, n_lefs=8, strength=0.8, **kw):

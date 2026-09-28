@@ -1,10 +1,8 @@
 //! `lefsim.Sim`: the Python face of [`lefsim::Sim`].
 
-use std::collections::HashSet;
-
 use lefsim::{
-    Action, Direction, EventRecorder, Lattice, Observer, Rates, Recorder, RunReport, SampleMode,
-    Site, StopReason, Time,
+    Action, Ctcf, Direction, EventRecorder, Lattice, Model, Observer, Rates, Recorder, RunReport,
+    SampleMode, SpawnRule, StopReason, Time,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -78,6 +76,36 @@ where
         )));
     }
     Ok(many)
+}
+
+/// A world with a moving LEF at each of `lef_sites`, then `n_lefs` more
+/// placed by the uniform spawn rule. With no explicit sites, that's
+/// [`lefsim::populate`]; mixing the two goes away with the new constructor.
+fn initial_world(
+    lattice: Lattice,
+    lef_sites: &[u32],
+    n_lefs: usize,
+    seed: u64,
+) -> Result<lefsim::World, String> {
+    use lefsim::{Mobility::Moving, Spawn};
+    use rand::SeedableRng;
+
+    let rule = SpawnRule::UniformNonCtcf;
+    if lef_sites.is_empty() {
+        return lefsim::populate(lattice, n_lefs, &rule, seed).map_err(|e| e.to_string());
+    }
+    rule.check(&lattice, lef_sites.len() + n_lefs).map_err(|e| e.to_string())?;
+    let mut world = lefsim::World::new(lattice);
+    for &p in lef_sites {
+        world.add_lef((p, Moving), (p, Moving)).map_err(|e| e.to_string())?;
+    }
+    let mut rng = lefsim::SimRng::seed_from_u64(seed);
+    for _ in 0..n_lefs {
+        // The uniform rule only picks plain sites, where landing is Moving.
+        let p = rule.sample(&world, &mut rng);
+        world.add_lef((p, Moving), (p, Moving)).map_err(|e| e.to_string())?;
+    }
+    Ok(world)
 }
 
 fn positive_rate(name: &str, value: Option<f64>, default: f64) -> PyResult<f64> {
@@ -306,37 +334,17 @@ impl PySim {
             None => vec![1.0; n_ctcf],
         };
 
-        let mut sites = vec![Site::plain(); n_sites as usize];
-        let mut seen = HashSet::with_capacity(n_ctcf);
-        for i in 0..n_ctcf {
-            let site = ctcf_sites[i];
-            if site >= n_sites {
-                return Err(value_error(format!(
-                    "CTCF site {site} is outside a lattice of {n_sites} sites"
-                )));
-            }
-            if !seen.insert(site) {
-                return Err(value_error(format!("CTCF site {site} is listed twice")));
-            }
-            let p = strength[i];
-            if !(0.0..=1.0).contains(&p) {
-                return Err(value_error(format!("CTCF strength must be in [0, 1], got {p}")));
-            }
-            sites[site as usize] = Site::ctcf(parse_direction(&captures_from[i])?, p);
-        }
-
-        // The uniform spawn rule rejection-samples a free non-CTCF site, so it
-        // would spin forever if there were none. Each LEF covers at most two
-        // sites, so this bound guarantees a free one at every respawn.
-        let total_lefs = lef_sites.len() + n_lefs;
-        let n_plain = n_sites as usize - n_ctcf;
-        if 2 * total_lefs > n_plain {
-            return Err(value_error(format!(
-                "too many LEFs: {total_lefs} LEFs need at least {} non-CTCF sites, \
-                 the lattice has {n_plain}",
-                2 * total_lefs
-            )));
-        }
+        let ctcfs = (0..n_ctcf)
+            .map(|i| {
+                Ok(Ctcf {
+                    site: ctcf_sites[i],
+                    captures_from: parse_direction(&captures_from[i])?,
+                    strength: strength[i],
+                })
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        let lattice = Lattice::with_ctcfs(n_sites as usize, &ctcfs)
+            .map_err(|e| value_error(e.to_string()))?;
 
         let defaults = Rates::default();
         let rates = Rates {
@@ -349,17 +357,10 @@ impl PySim {
             )?,
         };
 
-        let lattice = Lattice::new(sites).map_err(|e| value_error(e.to_string()))?;
-        let mut builder = lefsim::Sim::builder(lattice)
-            .seed(seed)
-            .rates(rates);
-        for pos in lef_sites {
-            builder = builder.lef_at(pos);
-        }
-        let sim = builder
-            .lefs(n_lefs)
-            .build()
+        let world = initial_world(lattice, &lef_sites, n_lefs, seed).map_err(value_error)?;
+        let model = Model::new(world, rates, SpawnRule::UniformNonCtcf)
             .map_err(|e| value_error(e.to_string()))?;
+        let sim = lefsim::Sim::new(model, seed);
         Ok(PySim { sim: Some(sim), grid: None })
     }
 
@@ -487,7 +488,9 @@ impl PySim {
     /// `legs` as Batches, plus `rates` as a dict.
     fn meta<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let d = PyDict::new(py);
-        for (name, batch) in meta_batches(self.sim()?.meta()).map_err(arrow_error)? {
+        let sim = self.sim()?;
+        let tables = meta_batches(sim.world().lattice(), sim.n_lefs()).map_err(arrow_error)?;
+        for (name, batch) in tables {
             d.set_item(name, PyBatch(batch))?;
         }
         d.set_item("rates", self.rates(py)?)?;

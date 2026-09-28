@@ -8,7 +8,7 @@ import { expect, it } from "vitest";
 import { eventsToArrow, snapshotsToArrow } from "../src/arrow.ts";
 import { Sim } from "../src/index.ts";
 
-const RUST_GOLDEN = 0x93f5538773f568a2n;
+const RUST_GOLDEN = 0xe5a22c6618308528n;
 
 /** FNV-1a, 64-bit, over a byte array. */
 function fnv1a(bytes: Uint8Array, h = 0xcbf29ce484222325n): bigint {

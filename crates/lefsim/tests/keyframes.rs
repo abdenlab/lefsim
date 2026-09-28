@@ -14,12 +14,10 @@ fn lattice(strength: f64) -> Lattice {
 }
 
 fn build(seed: u64, strength: f64) -> Sim {
-    Sim::builder(lattice(strength))
-        .seed(seed)
-        .rates(Rates { step: 1.0, respawn: 0.02, respawn_captured: 0.005 })
-        .lefs(8)
-        .build()
-        .unwrap()
+    let rule = SpawnRule::UniformNonCtcf;
+    let world = populate(lattice(strength), 8, &rule, seed).unwrap();
+    let rates = Rates { step: 1.0, respawn: 0.02, respawn_captured: 0.005 };
+    Sim::new(Model::new(world, rates, rule).unwrap(), seed)
 }
 
 /// `(pos, mobility code)` per leg, indexed by `leg_id`.

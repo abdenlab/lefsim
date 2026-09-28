@@ -2,6 +2,13 @@
 
 use lefsim::*;
 
+/// A sim with one moving LEF with both legs at `pos`.
+fn one_lef(lattice: Lattice, pos: Position, rates: Rates, seed: u64) -> Sim {
+    let mut world = World::new(lattice);
+    world.add_lef((pos, Mobility::Moving), (pos, Mobility::Moving)).unwrap();
+    Sim::new(Model::new(world, rates, SpawnRule::UniformNonCtcf).unwrap(), seed)
+}
+
 /// On an empty lattice with a single LEF spawning at the midpoint, the legs
 /// should — at some point during the run — separate outward from their
 /// starting site. We track the extreme positions reached because the run
@@ -9,19 +16,19 @@ use lefsim::*;
 /// boundary, after which positions reset.
 #[test]
 fn lef_extrudes_outward_on_empty_lattice() {
-    let mut sim = Sim::builder(Lattice::plain(200).unwrap())
-        .seed(7)
-        .rates(Rates {
+    let mut sim = one_lef(
+        Lattice::plain(200).unwrap(),
+        100,
+        Rates {
             step: 1.0,
             // Effectively never within the test horizon (~1e9 expected
             // wait), but a respawn will still fire once step actions are
             // exhausted at the boundaries.
             respawn: 1e-9,
             respawn_captured: 1e-9,
-        })
-        .lef_at(100)
-        .build()
-        .unwrap();
+        },
+        7,
+    );
 
     let (mut leftmost, mut rightmost) = sim.lef_positions(0);
     for _ in 0..400 {
@@ -46,16 +53,16 @@ fn lef_extrudes_outward_on_empty_lattice() {
 fn right_facing_leg_captured_at_compatible_ctcf() {
     let mut sites = vec![Site::plain(); 50];
     sites[20] = Site::ctcf(Direction::Left, 1.0);
-    let mut sim = Sim::builder(Lattice::new(sites).unwrap())
-        .seed(11)
-        .rates(Rates {
+    let mut sim = one_lef(
+        Lattice::new(sites).unwrap(),
+        10,
+        Rates {
             step: 1.0,
             respawn: 1e-12,
             respawn_captured: 1e-12,
-        })
-        .lef_at(10)
-        .build()
-        .unwrap();
+        },
+        11,
+    );
 
     for _ in 0..2000 {
         sim.step().expect("queue should not exhaust within horizon");
@@ -76,16 +83,16 @@ fn eviction_triggers_immediate_respawn() {
     // on contact.
     let mut sites = vec![Site::plain(); 50];
     sites[20] = Site::ctcf(Direction::Right, 1.0);
-    let mut sim = Sim::builder(Lattice::new(sites).unwrap())
-        .seed(13)
-        .rates(Rates {
+    let mut sim = one_lef(
+        Lattice::new(sites).unwrap(),
+        10,
+        Rates {
             step: 1.0,
             respawn: 1e-12,
             respawn_captured: 1e-12,
-        })
-        .lef_at(10)
-        .build()
-        .unwrap();
+        },
+        13,
+    );
 
     for _ in 0..2000 {
         sim.step().expect("queue exhausted before reaching CTCF");

@@ -15,6 +15,7 @@ use crate::model::{Schedule, SimRng, Spawn, Time, World};
 use super::heap::{IndexedHeap, Priority};
 
 /// The event loop. Crate-internal: [`crate::Sim`] is the public driver.
+#[derive(Clone)]
 pub(crate) struct Engine {
     clock: Time,
     pub(crate) rates: Rates,
@@ -22,9 +23,10 @@ pub(crate) struct Engine {
 }
 
 impl Engine {
-    pub(crate) fn new(rates: Rates) -> Self {
+    /// An engine whose clock starts at `start_time`.
+    pub(crate) fn new(rates: Rates, start_time: Time) -> Self {
         Engine {
-            clock: 0.0,
+            clock: start_time,
             rates,
             heap: IndexedHeap::new(),
         }
@@ -142,7 +144,7 @@ mod tests {
         let mut rng = SimRng::seed_from_u64(3);
         world.spawn_lef(40, &mut rng);
         world.spawn_lef(60, &mut rng);
-        let mut engine = Engine::new(Rates::default());
+        let mut engine = Engine::new(Rates::default(), 0.0);
         engine.initialize(&world, &mut rng);
 
         let mut touched = Touched::default();
@@ -161,7 +163,7 @@ mod tests {
         let mut world = World::new(Lattice::plain(50).unwrap());
         let mut rng = SimRng::seed_from_u64(5);
         world.spawn_lef(25, &mut rng);
-        let mut engine = Engine::new(Rates::default());
+        let mut engine = Engine::new(Rates::default(), 0.0);
         engine.initialize(&world, &mut rng);
 
         let next = engine.next_event_time().unwrap();

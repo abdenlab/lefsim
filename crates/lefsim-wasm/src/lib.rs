@@ -14,12 +14,10 @@
 //! Inputs are validated here too. A Rust panic in wasm traps and leaves the
 //! module unusable, so bad input must become a JS exception instead.
 
-use std::collections::HashSet;
-
 use js_sys::{Float64Array, Object, Reflect, Uint32Array, Uint8Array};
 use lefsim::{
-    Direction, EventFrames, EventRecorder, Lattice, LefFrames, Mobility, Rates, Recorder, RunReport, SampleMode,
-    Site, StopReason,
+    Ctcf, Direction, EventFrames, EventRecorder, Lattice, LefFrames, Mobility, Model, Rates, Recorder, RunReport,
+    SampleMode, SpawnRule, StopReason,
 };
 use wasm_bindgen::prelude::*;
 
@@ -118,6 +116,31 @@ fn event_columns(frames: EventFrames) -> Object {
     out
 }
 
+/// A world with a moving LEF at each of `lef_sites`, then `n_lefs` more
+/// placed by the uniform spawn rule. With no explicit sites, that's
+/// [`lefsim::populate`]; mixing the two goes away with the new constructor.
+fn initial_world(lattice: Lattice, lef_sites: &[u32], n_lefs: usize, seed: u64) -> Result<lefsim::World, String> {
+    use lefsim::{Mobility::Moving, Spawn};
+    use rand::SeedableRng;
+
+    let rule = SpawnRule::UniformNonCtcf;
+    if lef_sites.is_empty() {
+        return lefsim::populate(lattice, n_lefs, &rule, seed).map_err(|e| e.to_string());
+    }
+    rule.check(&lattice, lef_sites.len() + n_lefs).map_err(|e| e.to_string())?;
+    let mut world = lefsim::World::new(lattice);
+    for &p in lef_sites {
+        world.add_lef((p, Moving), (p, Moving)).map_err(|e| e.to_string())?;
+    }
+    let mut rng = lefsim::SimRng::seed_from_u64(seed);
+    for _ in 0..n_lefs {
+        // The uniform rule only picks plain sites, where landing is Moving.
+        let p = rule.sample(&world, &mut rng);
+        world.add_lef((p, Moving), (p, Moving)).map_err(|e| e.to_string())?;
+    }
+    Ok(world)
+}
+
 fn grid_mode(dt: f64, t0: f64) -> Result<SampleMode, JsError> {
     if !(dt.is_finite() && dt > 0.0) {
         return Err(JsError::new(&format!("dt must be positive and finite, got {dt}")));
@@ -151,42 +174,17 @@ impl WasmSim {
             return Err(JsError::new("CTCF site, side and strength arrays must have equal length"));
         }
 
-        let mut sites = vec![Site::plain(); n_sites as usize];
-        let mut seen = HashSet::with_capacity(n_ctcf);
-        for i in 0..n_ctcf {
-            let site = ctcf_sites[i];
-            if site >= n_sites {
-                return Err(JsError::new(&format!(
-                    "CTCF site {site} is outside a lattice of {n_sites} sites"
-                )));
-            }
-            if !seen.insert(site) {
-                return Err(JsError::new(&format!("CTCF site {site} is listed twice")));
-            }
-            let side = match ctcf_captures_from[i] {
-                0 => Direction::Left,
-                1 => Direction::Right,
-                other => return Err(JsError::new(&format!("invalid CTCF side code {other}"))),
-            };
-            let p = ctcf_strength[i];
-            if !(0.0..=1.0).contains(&p) {
-                return Err(JsError::new(&format!("CTCF strength must be in [0, 1], got {p}")));
-            }
-            sites[site as usize] = Site::ctcf(side, p);
-        }
-
-        // The uniform spawn rule rejection-samples a free non-CTCF site, so
-        // it would spin forever if none were free. Each LEF covers at most
-        // two sites, so this bound guarantees one at every respawn.
-        let total_lefs = lef_sites.len() + n_lefs as usize;
-        let n_plain = n_sites as usize - n_ctcf;
-        if 2 * total_lefs > n_plain {
-            return Err(JsError::new(&format!(
-                "too many LEFs: {total_lefs} LEFs need at least {} non-CTCF sites, \
-                 the lattice has {n_plain}",
-                2 * total_lefs
-            )));
-        }
+        let ctcfs = (0..n_ctcf)
+            .map(|i| {
+                let captures_from = match ctcf_captures_from[i] {
+                    0 => Direction::Left,
+                    1 => Direction::Right,
+                    other => return Err(JsError::new(&format!("invalid CTCF side code {other}"))),
+                };
+                Ok(Ctcf { site: ctcf_sites[i], captures_from, strength: ctcf_strength[i] })
+            })
+            .collect::<Result<Vec<_>, JsError>>()?;
+        let lattice = Lattice::with_ctcfs(n_sites as usize, &ctcfs).map_err(|e| JsError::new(&e.to_string()))?;
 
         let defaults = Rates::default();
         let rates = Rates {
@@ -199,15 +197,9 @@ impl WasmSim {
             )?,
         };
 
-        let lattice = Lattice::new(sites).map_err(|e| JsError::new(&e.to_string()))?;
-        let mut builder = lefsim::Sim::builder(lattice).seed(seed).rates(rates);
-        for &pos in lef_sites {
-            builder = builder.lef_at(pos);
-        }
-        let sim = builder
-            .lefs(n_lefs as usize)
-            .build()
-            .map_err(|e| JsError::new(&e.to_string()))?;
+        let world = initial_world(lattice, lef_sites, n_lefs as usize, seed).map_err(|e| JsError::new(&e))?;
+        let model = Model::new(world, rates, SpawnRule::UniformNonCtcf).map_err(|e| JsError::new(&e.to_string()))?;
+        let sim = lefsim::Sim::new(model, seed);
 
         let n = sim.n_lefs();
         let state = StateBuffers {
@@ -457,7 +449,10 @@ impl WasmSim {
     /// strength}, lefs: {leftLegId, rightLegId}, legs: {lefId, facing}}`,
     /// columns as typed arrays of the core's codes.
     pub fn meta(&self) -> Object {
-        let m = self.sim.meta();
+        let lattice = self.sim.world().lattice();
+        let kinds: Vec<u8> = lattice.sites().iter().map(|s| s.kind.code()).collect();
+        let ctcfs = lattice.ctcfs();
+        let n = self.sim.n_lefs() as u32;
         let table = |cols: &[(&str, JsValue)]| {
             let obj = Object::new();
             for (k, v) in cols {
@@ -468,30 +463,30 @@ impl WasmSim {
         let out = Object::new();
         set(&out, "nSites", self.sim.n_sites() as u32);
         set(&out, "rates", self.rates());
-        set(&out, "lattice", table(&[("kind", Uint8Array::from(&m.lattice.kind[..]).into())]));
+        set(&out, "lattice", table(&[("kind", Uint8Array::from(&kinds[..]).into())]));
         set(
             &out,
             "ctcfs",
             table(&[
-                ("site", Uint32Array::from(&m.ctcfs.site[..]).into()),
-                ("capturesFrom", Uint8Array::from(&m.ctcfs.captures_from[..]).into()),
-                ("strength", Float64Array::from(&m.ctcfs.strength[..]).into()),
+                ("site", Uint32Array::from(&ctcfs.iter().map(|c| c.site).collect::<Vec<_>>()[..]).into()),
+                ("capturesFrom", Uint8Array::from(&ctcfs.iter().map(|c| c.captures_from.code()).collect::<Vec<_>>()[..]).into()),
+                ("strength", Float64Array::from(&ctcfs.iter().map(|c| c.strength).collect::<Vec<_>>()[..]).into()),
             ]),
         );
         set(
             &out,
             "lefs",
             table(&[
-                ("leftLegId", Uint32Array::from(&m.lefs.left_leg_id[..]).into()),
-                ("rightLegId", Uint32Array::from(&m.lefs.right_leg_id[..]).into()),
+                ("leftLegId", Uint32Array::from(&(0..n).map(|i| 2 * i).collect::<Vec<_>>()[..]).into()),
+                ("rightLegId", Uint32Array::from(&(0..n).map(|i| 2 * i + 1).collect::<Vec<_>>()[..]).into()),
             ]),
         );
         set(
             &out,
             "legs",
             table(&[
-                ("lefId", Uint32Array::from(&m.legs.lef_id[..]).into()),
-                ("facing", Uint8Array::from(&m.legs.facing[..]).into()),
+                ("lefId", Uint32Array::from(&(0..2 * n).map(|i| i / 2).collect::<Vec<_>>()[..]).into()),
+                ("facing", Uint8Array::from(&(0..2 * n).map(|i| [Direction::Left, Direction::Right][i as usize % 2].code()).collect::<Vec<_>>()[..]).into()),
             ]),
         );
         out

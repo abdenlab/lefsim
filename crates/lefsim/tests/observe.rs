@@ -27,12 +27,9 @@ fn build(seed: u64) -> Sim {
 }
 
 fn build_with_strength(seed: u64, strength: f64) -> Sim {
-    Sim::builder(lattice(strength))
-        .seed(seed)
-        .rates(rates())
-        .lefs(8)
-        .build()
-        .unwrap()
+    let rule = SpawnRule::UniformNonCtcf;
+    let world = populate(lattice(strength), 8, &rule, seed).unwrap();
+    Sim::new(Model::new(world, rates(), rule).unwrap(), seed)
 }
 
 type LefState = (Position, Position, u8, u8);
@@ -323,26 +320,20 @@ fn manual_mode_records_only_on_capture() {
 }
 
 #[test]
-fn meta_describes_the_run() {
-    let sim = build(15);
-    let meta = sim.meta();
-    assert_eq!(meta.rates, rates());
-    assert_eq!(meta.lattice.kind.len(), 200);
-    assert_eq!(meta.ctcfs.site, vec![60, 100, 140]);
-    let (left, right) = (Direction::Left.code(), Direction::Right.code());
-    assert_eq!(meta.ctcfs.captures_from, vec![right, right, left]);
-    assert_eq!(meta.ctcfs.strength, vec![0.8; 3]);
-    assert_eq!(
-        meta.lattice.kind.iter().filter(|&&k| k == 1).count(),
-        meta.ctcfs.site.len()
-    );
-
-    for lef in 0..sim.n_lefs() {
-        let (l, r) = (meta.lefs.left_leg_id[lef], meta.lefs.right_leg_id[lef]);
-        assert_eq!(meta.legs.lef_id[l as usize] as usize, lef);
-        assert_eq!(meta.legs.lef_id[r as usize] as usize, lef);
-        assert_eq!(meta.legs.facing[l as usize], left);
-        assert_eq!(meta.legs.facing[r as usize], right);
+fn model_describes_the_run() {
+    let mut sim = build(15);
+    sim.run_until(50.0);
+    let model = sim.model().unwrap();
+    assert_eq!(model.rates(), rates());
+    assert_eq!(model.spawn(), SpawnRule::UniformNonCtcf);
+    let lattice = model.world().lattice();
+    assert_eq!(lattice.len(), 200);
+    let sites: Vec<_> = lattice.ctcfs().iter().map(|c| c.site).collect();
+    assert_eq!(sites, vec![60, 100, 140]);
+    assert_eq!(model.world().lef_states().len(), sim.n_lefs());
+    for (i, row) in state(&sim).into_iter().enumerate() {
+        let ((l, lm), (r, rm)) = model.world().lef_state(i).unwrap();
+        assert_eq!(row, (l, r, lm.code(), rm.code()));
     }
 }
 

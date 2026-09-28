@@ -61,6 +61,7 @@ struct Node {
 /// [`IndexedHeap::update`] with `Priority::NEVER`; the node moves to
 /// the bottom but isn't removed. Matches the fixed-cardinality LEF
 /// model where actions are created once at init and never destroyed.
+#[derive(Clone)]
 pub(super) struct IndexedHeap {
     nodes: Vec<Node>,
     /// Heap index of `Action::Step { leg }`.

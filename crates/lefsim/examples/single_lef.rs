@@ -15,11 +15,12 @@ fn build() -> Sim {
     sites[30] = Site::ctcf(Direction::Right, 1.0);
     sites[70] = Site::ctcf(Direction::Left, 1.0);
 
-    Sim::builder(Lattice::new(sites).expect("valid lattice"))
-        .seed(42)
-        .lef_at(50)
-        .build()
-        .expect("valid setup")
+    let mut world = World::new(Lattice::new(sites).expect("valid lattice"));
+    world
+        .add_lef((50, Mobility::Moving), (50, Mobility::Moving))
+        .expect("valid LEF");
+    let model = Model::new(world, Rates::default(), SpawnRule::UniformNonCtcf).expect("valid model");
+    Sim::new(model, 42)
 }
 
 fn describe(sim: &Sim, action: Action) -> String {

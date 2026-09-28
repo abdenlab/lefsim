@@ -94,7 +94,7 @@ impl Action {
 /// every leg/LEF whose state changed (or whose neighborhood changed in a
 /// way that affects scheduling) into this buffer. The engine then asks
 /// it which actions to reschedule via [`Touched::dependent_actions`].
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct Touched {
     pub(crate) legs: SmallVec<[LegKey; 8]>,
     pub(crate) lefs: SmallVec<[LefKey; 4]>,

@@ -155,22 +155,28 @@ wrong.
 
 ## Quick example
 
-`Sim` is the entry point. It owns the world, the event engine, the RNG, and the
-spawn rule for one run, and `SimBuilder` is the only place LEFs are created.
+A `Model` is a `World` (the lattice and the LEFs on it), its `Rates`, and a
+spawn rule. `Sim` runs a model from a seed: it owns the world, the event engine,
+the RNG, and the spawn rule for one run.
 
 ```rust
 use lefsim::*;
 
 // 100-site lattice with a convergent CTCF pair at 30 and 70.
-let mut sites = vec![Site::plain(); 100];
-sites[30] = Site::ctcf(Direction::Right, 1.0);
-sites[70] = Site::ctcf(Direction::Left, 1.0);
+let lattice = Lattice::with_ctcfs(100, &[
+    Ctcf { site: 30, captures_from: Direction::Right, strength: 1.0 },
+    Ctcf { site: 70, captures_from: Direction::Left, strength: 1.0 },
+])?;
 
-let mut sim = Sim::builder(Lattice::new(sites))
-    .seed(42)
-    .lef_at(50) // one LEF at site 50...
-    .lefs(3) // ...and three more at sites drawn from the spawn rule
-    .build()?;
+// Four LEFs at sites drawn from the spawn rule (placement has its own seed)...
+let rule = SpawnRule::UniformNonCtcf;
+let world = populate(lattice, 4, &rule, 7)?;
+// ...or one by one, each leg with a position and mobility:
+// let mut world = World::new(lattice);
+// world.add_lef((50, Mobility::Moving), (50, Mobility::Moving))?;
+
+let model = Model::new(world, Rates::default(), rule)?;
+let mut sim = Sim::new(model, 42);
 
 // Event by event:
 while let Some((t, action)) = sim.step() {
@@ -183,7 +189,17 @@ sim.run_until(1000.0);
 sim.run_events(10_000);
 ```
 
-Externally, LEFs and legs are identified by dense ids assigned in builder order:
+A world is validated as it's built, so it's always a state the dynamics could
+be in: legs on the lattice and not crossed, no two LEFs on one site, and a
+`Captured` leg only on a CTCF that could have captured it. `Model::new` checks
+the rates and that the spawn rule can always place the LEFs.
+
+`sim.world()` shows the current state, and `sim.model()` returns it as a new
+`Model` (to save, or to restart from with `Sim::with_start_time`). `Sim` is
+`Clone`, and a clone continues the run bit for bit. For a custom spawn rule,
+use `Sim::with_spawn(world, rates, rule, seed)`.
+
+Externally, LEFs and legs are identified by dense ids in the world's LEF order:
 `lef_id` runs over `0..n_lefs`, and `leg_id = 2 * lef_id + side`, where side 0
 is the left-facing leg and side 1 the right-facing one.
 
@@ -215,7 +231,6 @@ sim.run_until_with(500.0, &mut (&mut rec, &mut events));
 
 let frames = rec.frames(); // LefFrames: time, left_pos, right_pos, left_mob, right_mob
 let deltas = events.frames(); // EventFrames: time, leg_id, pos, mob, kind
-let meta = sim.meta(); // static tables: lattice, CTCFs, LEF/leg id mappings
 ```
 
 A grid point `g` records the state after _every_ event at or before `g`. So a
@@ -390,13 +405,14 @@ pnpm test            # vitest, against the real wasm build
 Cargo.toml              workspace
 crates/lefsim/          core crate
   src/model/            the model (never depends on sim/):
-    world.rs              World: the state (lattice + legs and LEFs)
+    mod.rs                Model = World + Rates + SpawnRule
+    world.rs              World: the state (lattice + legs and LEFs), LefStates
     lattice.rs, entity.rs sites and CTCFs; legs, LEFs and their keys
     action.rs             Action, Rates, scheduling and firing rules, CTCF landing
     spawn.rs              Spawn, SpawnRule, populate
   src/sim/              running and observing a model:
-    mod.rs                Sim, SimBuilder, batch drivers
-    record.rs             Recorder, EventRecorder, frames, SimMeta
+    mod.rs                Sim, its constructors, batch drivers
+    record.rs             Recorder, EventRecorder, frames
     engine.rs, heap.rs    event loop and indexed heap (internal)
   examples/single_lef.rs
   tests/

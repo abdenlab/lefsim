@@ -12,7 +12,7 @@ use arrow_array::types::{Float64Type, UInt32Type, UInt8Type};
 use arrow_array::{ArrayRef, DictionaryArray, PrimitiveArray, RecordBatch, StringArray};
 use arrow_buffer::ScalarBuffer;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef};
-use lefsim::{Direction, EventFrames, LefFrames, Mobility, SimMeta, SiteKind};
+use lefsim::{Direction, EventFrames, Lattice, LefFrames, Mobility, SiteKind};
 
 /// Row layout of grid snapshots.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -195,9 +195,16 @@ pub fn events_batch(frames: EventFrames) -> Result<RecordBatch, ArrowError> {
 
 // ----- static metadata -----
 
-/// `(name, batch)` for each metadata table.
-pub fn meta_batches(meta: SimMeta) -> Result<Vec<(&'static str, RecordBatch)>, ArrowError> {
-    let n_sites = meta.lattice.kind.len() as u32;
+/// `(name, batch)` for each metadata table of a run on `lattice` with
+/// `n_lefs` LEFs.
+pub fn meta_batches(
+    lattice: &Lattice,
+    n_lefs: usize,
+) -> Result<Vec<(&'static str, RecordBatch)>, ArrowError> {
+    let kinds: Vec<u8> = lattice.sites().iter().map(|s| s.kind.code()).collect();
+    let ctcf_list = lattice.ctcfs();
+    let n_sites = kinds.len() as u32;
+    let n_lefs = n_lefs as u32;
     let lattice = RecordBatch::try_new(
         schema(
             vec![field("site", DataType::UInt32), field("kind", dict_type())],
@@ -206,7 +213,7 @@ pub fn meta_batches(meta: SimMeta) -> Result<Vec<(&'static str, RecordBatch)>, A
         ),
         vec![
             u32_col((0..n_sites).collect()),
-            dict_col(meta.lattice.kind, &SiteKind::NAMES),
+            dict_col(kinds, &SiteKind::NAMES),
         ],
     )?;
     let ctcfs = RecordBatch::try_new(
@@ -220,12 +227,11 @@ pub fn meta_batches(meta: SimMeta) -> Result<Vec<(&'static str, RecordBatch)>, A
             &[],
         ),
         vec![
-            u32_col(meta.ctcfs.site),
-            dict_col(meta.ctcfs.captures_from, &Direction::NAMES),
-            f64_col(meta.ctcfs.strength),
+            u32_col(ctcf_list.iter().map(|c| c.site).collect()),
+            dict_col(ctcf_list.iter().map(|c| c.captures_from.code()).collect(), &Direction::NAMES),
+            f64_col(ctcf_list.iter().map(|c| c.strength).collect()),
         ],
     )?;
-    let n_lefs = meta.lefs.left_leg_id.len() as u32;
     let lefs = RecordBatch::try_new(
         schema(
             vec![
@@ -238,11 +244,11 @@ pub fn meta_batches(meta: SimMeta) -> Result<Vec<(&'static str, RecordBatch)>, A
         ),
         vec![
             u32_col((0..n_lefs).collect()),
-            u32_col(meta.lefs.left_leg_id),
-            u32_col(meta.lefs.right_leg_id),
+            u32_col((0..n_lefs).map(|i| 2 * i).collect()),
+            u32_col((0..n_lefs).map(|i| 2 * i + 1).collect()),
         ],
     )?;
-    let n_legs = meta.legs.lef_id.len() as u32;
+    let n_legs = 2 * n_lefs;
     let legs = RecordBatch::try_new(
         schema(
             vec![
@@ -255,8 +261,11 @@ pub fn meta_batches(meta: SimMeta) -> Result<Vec<(&'static str, RecordBatch)>, A
         ),
         vec![
             u32_col((0..n_legs).collect()),
-            u32_col(meta.legs.lef_id),
-            dict_col(meta.legs.facing, &Direction::NAMES),
+            u32_col((0..n_legs).map(|i| i / 2).collect()),
+            dict_col(
+                (0..n_legs).map(|i| [Direction::Left, Direction::Right][i as usize % 2].code()).collect(),
+                &Direction::NAMES,
+            ),
         ],
     )?;
     Ok(vec![
