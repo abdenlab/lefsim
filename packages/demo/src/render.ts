@@ -3,9 +3,7 @@
 // Views take a `Frame`: a copy of a LiveState. Whether that state came from a
 // Sim (live) or a Replayer (replay) is invisible here, which is the point.
 
-import { MOBILITY, type LiveState } from "lefsim";
-
-import { BOUNDARIES, CTCFS, N_SITES } from "./model.ts";
+import { MOBILITY, type Lattice, type LiveState } from "lefsim";
 
 export const fmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 export const fmtCompact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
@@ -44,6 +42,46 @@ export function onThemeChange(redraw: () => void) {
   });
 }
 
+// ------------------------------------------------------------------ lattice
+
+/** What the views need to know about the lattice being drawn. */
+interface Geometry {
+  nSites: number;
+  ctcfs: { site: number; left: boolean }[];
+  /** TAD boundaries: one per cluster of neighboring CTCFs (e.g. a convergent pair). */
+  boundaries: number[];
+  /** Loop span drawn at full panel height: the largest TAD. */
+  fullHeightSpan: number;
+}
+
+let geometry: Geometry = { nSites: 2, ctcfs: [], boundaries: [], fullHeightSpan: 1 };
+
+/** Set the lattice every view draws (call before drawing, and on change). */
+export function setLattice(lattice: Lattice) {
+  const { site, capturesFrom } = lattice.ctcfs;
+  const ctcfs = Array.from(site, (s, i) => ({ site: s, left: capturesFrom[i] === 0 })).sort((a, b) => a.site - b.site);
+  // CTCFs within a couple of sites of each other form one boundary.
+  const boundaries: number[] = [];
+  let cluster: number[] = [];
+  const close = () => {
+    if (cluster.length) boundaries.push((cluster[0]! + cluster.at(-1)!) / 2);
+    cluster = [];
+  };
+  for (const c of ctcfs) {
+    if (cluster.length && c.site - cluster.at(-1)! > 2) close();
+    cluster.push(c.site);
+  }
+  close();
+  const edges = [0, ...boundaries, lattice.nSites - 1];
+  const largest = Math.max(...edges.slice(1).map((e, i) => e - edges[i]!));
+  geometry = { nSites: Math.max(2, lattice.nSites), ctcfs, boundaries, fullHeightSpan: Math.max(10, largest) };
+}
+
+/** The lattice size the views are drawing. */
+export function nSites(): number {
+  return geometry.nSites;
+}
+
 // ------------------------------------------------------------------ geometry
 
 /** Size a canvas's backing store to its CSS box at device resolution. */
@@ -62,19 +100,19 @@ export const MARGIN = { left: 8, right: 8, bottom: 30, top: 10 };
 /** Lattice site → x pixel, shared by every panel so they line up. */
 export function xScale(width: number) {
   const inner = width - MARGIN.left - MARGIN.right;
-  return (site: number) => MARGIN.left + (site / (N_SITES - 1)) * inner;
+  return (site: number) => MARGIN.left + (site / (geometry.nSites - 1)) * inner;
 }
 
 /** Pointer x → nearest lattice site. */
 export function siteAt(canvas: HTMLCanvasElement, clientX: number): number {
   const rect = canvas.getBoundingClientRect();
   const inner = rect.width - MARGIN.left - MARGIN.right;
-  return ((clientX - rect.left - MARGIN.left) / inner) * (N_SITES - 1);
+  return ((clientX - rect.left - MARGIN.left) / inner) * (geometry.nSites - 1);
 }
 
 /** TADs as alternating bands between `top` and `bottom`. */
 export function drawTadBands(ctx: CanvasRenderingContext2D, x: (site: number) => number, top: number, bottom: number) {
-  const edges = [0, ...BOUNDARIES.map((b) => b + 0.5), N_SITES - 1];
+  const edges = [0, ...geometry.boundaries, geometry.nSites - 1];
   ctx.fillStyle = colors.band;
   for (let i = 0; i < edges.length - 1; i += 2) {
     ctx.fillRect(x(edges[i]!), top, x(edges[i + 1]!) - x(edges[i]!), bottom - top);
@@ -84,8 +122,8 @@ export function drawTadBands(ctx: CanvasRenderingContext2D, x: (site: number) =>
 /** CTCF chevrons (pointing toward the side each captures from), `size` tall, from `top`. */
 export function drawCtcfs(ctx: CanvasRenderingContext2D, x: (site: number) => number, top: number, size: number) {
   ctx.fillStyle = colors.ink2;
-  for (const c of CTCFS) {
-    const dir = c.capturesFrom === "left" ? -1 : 1;
+  for (const c of geometry.ctcfs) {
+    const dir = c.left ? -1 : 1;
     const cx = x(c.site) + dir * 2;
     ctx.beginPath();
     ctx.moveTo(cx + dir * size * 0.6, top + size / 2);
@@ -130,9 +168,6 @@ export function snapshotOf(state: LiveState): Frame {
 }
 
 // ------------------------------------------------------------------ loop arcs
-
-/** Loop span (sites) drawn at full panel height: about the largest TAD. */
-const FULL_HEIGHT_SPAN = 750;
 
 /** Loops as arcs over the lattice, with a hover readout. */
 export class LoopView {
@@ -191,7 +226,7 @@ export class LoopView {
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(x(0), base + 0.5);
-    ctx.lineTo(x(N_SITES - 1), base + 0.5);
+    ctx.lineTo(x(geometry.nSites - 1), base + 0.5);
     ctx.stroke();
     drawCtcfs(ctx, x, base + 6, 10);
 
@@ -213,7 +248,7 @@ export class LoopView {
         const x2 = x(f.rightPos[i]!);
         const r = (x2 - x1) / 2;
         const span = f.rightPos[i]! - f.leftPos[i]!;
-        const h = Math.min(maxH, Math.max(2, (maxH * span) / FULL_HEIGHT_SPAN));
+        const h = Math.min(maxH, Math.max(2, (maxH * span) / geometry.fullHeightSpan));
         ctx.moveTo(x1, base);
         ctx.ellipse(x1 + r, base, Math.max(r, 0.5), h, 0, Math.PI, 2 * Math.PI);
       }
@@ -269,7 +304,7 @@ export class Kymograph {
 
     // Faint TAD boundaries, so domains read in the kymograph too.
     ctx.fillStyle = colors.rule;
-    for (const b of BOUNDARIES) ctx.fillRect(x(b + 0.5), 0, 1, row);
+    for (const b of geometry.boundaries) ctx.fillRect(x(b), 0, 1, row);
 
     for (let i = 0; i < frame.leftPos.length; i++) {
       ctx.fillStyle = frame.held[i] ? colors.held : colors.extruding;

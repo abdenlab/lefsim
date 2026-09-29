@@ -12,6 +12,7 @@ export default defineConfig({
       input: {
         main: resolve(import.meta.dirname, "index.html"),
         replay: resolve(import.meta.dirname, "replay.html"),
+        parquet: resolve(import.meta.dirname, "parquet.html"),
       },
     },
   },

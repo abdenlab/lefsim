@@ -386,3 +386,53 @@ nav a[aria-current="page"] {
   color: var(--held);
   font-weight: 600;
 }
+
+/* ---------------------------------------------------------------- file page */
+
+#controls input[type="url"] {
+  width: 16em;
+  padding: 5px 8px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+/* A file input dressed as a button. */
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.file-button span {
+  padding: 6px 16px;
+  font-weight: 600;
+  color: var(--ink);
+  border: 1px solid var(--ink-2);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.file-button:focus-within span {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* While a file is dragged over the page. */
+body.dragging main {
+  outline: 2px dashed var(--extruding);
+  outline-offset: 8px;
+  border-radius: 8px;
+}
+
+#error dd {
+  color: var(--held);
+}
+
+code {
+  font-size: 0.9em;
+}
+

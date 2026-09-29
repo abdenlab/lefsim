@@ -127,6 +127,31 @@ function fromModelJson(json: string): { lattice: Lattice; nLefs: number } {
   return { lattice, nLefs: doc.lefs.length };
 }
 
+/**
+ * Where a recording came from, as `Stream.to_parquet` writes it in the
+ * file's `lefsim.run` metadata. `seed` is a string (JSON can't carry every
+ * 64-bit integer to JavaScript); `recordEnd` is where the data actually ends.
+ */
+export interface RunInfo {
+  seed: string;
+  startTime: number;
+  recordStart: number;
+  recordEnd: number | null;
+  lefsimVersion: string;
+}
+
+function runInfo(json: string | undefined): RunInfo | null {
+  if (!json) return null;
+  const r = JSON.parse(json) as Record<string, unknown>;
+  return {
+    seed: String(r.seed),
+    startTime: Number(r.start_time),
+    recordStart: Number(r.record_start),
+    recordEnd: r.record_end === null ? null : Number(r.record_end),
+    lefsimVersion: String(r.lefsim_version),
+  };
+}
+
 /** A keyframed file's row groups: where each starts, in rows and in time. */
 interface RowGroups {
   file: AsyncBuffer;
@@ -151,6 +176,8 @@ interface RowGroups {
 export class ParquetReplayer {
   readonly lattice: Lattice;
   readonly nLefs: number;
+  /** Where the recording came from (`lefsim.run`), or `null` if the file doesn't say. */
+  readonly run: RunInfo | null;
   #source: RowGroups | null;
   #core: Replayer;
   #first = 0;
@@ -159,11 +186,17 @@ export class ParquetReplayer {
   #reads = 0;
 
   /** Use {@link replayerFromParquet}. */
-  constructor(lattice: Lattice, nLefs: number, source: RowGroups | null, core?: Replayer) {
+  constructor(lattice: Lattice, nLefs: number, run: RunInfo | null, source: RowGroups | null, core?: Replayer) {
     this.lattice = lattice;
     this.nLefs = nLefs;
+    this.run = run;
     this.#source = source;
     this.#core = core ?? new Replayer(lattice, nLefs);
+  }
+
+  /** How many row groups the file has (0 for a file read whole). */
+  get rowGroupCount(): number {
+    return this.#source?.starts.length ?? 0;
   }
 
   /** How many row groups have been read so far (0 for a file read whole). */
@@ -345,7 +378,8 @@ export async function replayerFromParquet(source: ParquetSource, options: { latt
   const fromModel = modelJson ? fromModelJson(modelJson) : undefined;
   const lattice = options.lattice ?? fromModel?.lattice;
   if (!lattice) throw new RangeError("the file has no lefsim.model: pass lattice");
-  const recordEnd = runJson ? (JSON.parse(runJson) as { record_end: number | null }).record_end : null;
+  const run = runInfo(runJson);
+  const recordEnd = run?.recordEnd ?? null;
 
   const rows = [0];
   for (const g of metadata.row_groups) rows.push(rows.at(-1)! + Number(g.num_rows));
@@ -361,8 +395,8 @@ export async function replayerFromParquet(source: ParquetSource, options: { latt
     // Not our layout: read everything and re-split at keyframes.
     const all = await readRows(file, metadata, 0, rows.at(-1)!);
     const core = replayerFromRows(all, lattice, { end: recordEnd ?? undefined });
-    return new ParquetReplayer(lattice, core.nLefs, null, core);
+    return new ParquetReplayer(lattice, core.nLefs, run, null, core);
   }
   const end = recordEnd ?? starts.at(-1) ?? Number.NEGATIVE_INFINITY;
-  return new ParquetReplayer(lattice, fromModel.nLefs, { file, metadata, starts, rows, end });
+  return new ParquetReplayer(lattice, fromModel.nLefs, run, { file, metadata, starts, rows, end });
 }

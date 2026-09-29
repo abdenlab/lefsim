@@ -481,12 +481,16 @@ await r.seek(5000); // fetches one row group
 const { leftPos, rightPos } = r.state(); // synchronous, as with a Replayer
 ```
 
-`packages/demo` is a live demo: loop arcs over the lattice and a scrolling
-kymograph, with speed, LEF count and seed controls, plus a leg-occupancy profile
+`packages/demo` has three pages. The live page shows loop arcs over the lattice and a
+scrolling kymograph, with speed, LEF count and seed controls, plus a leg-occupancy profile
 averaged from a second simulation streamed as Arrow batches in the background.
-Its replay page records a run as keyframed chunks and plays it back from a
-`Replayer`, with seeking. The loop and kymograph panels are the same drawing
-code on both pages; only the source of `state()` differs. To run it:
+The replay page records a run as keyframed chunks and plays it back from a
+`Replayer`, with seeking. The Parquet page opens a file written by the Python
+binding (pick it, drop it, or pass `?url=`), reading only the row groups it needs;
+`packages/demo/make_sample.py` writes a sample into `public/sample.parquet`,
+which the page loads by default. The loop and kymograph panels are the same drawing
+code on all three pages, drawn from whatever lattice the source has; only the
+source of `state()` differs. To run it:
 
 ```
 pnpm install

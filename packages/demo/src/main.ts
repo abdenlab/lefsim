@@ -6,23 +6,7 @@ import { init, iterate, Sim } from "lefsim";
 import { toRecordBatches } from "lefsim/arrow";
 
 import { BOUNDARIES, N_SITES, newSim, readRunInputs } from "./model.ts";
-import {
-  $,
-  colors,
-  drawCtcfs,
-  drawTadBands,
-  fit,
-  fmt,
-  fmtCompact,
-  Kymograph,
-  LoopView,
-  onThemeChange,
-  placeTooltip,
-  siteAt,
-  snapshotOf,
-  xScale,
-  type Frame,
-} from "./render.ts";
+import { $, colors, drawCtcfs, drawTadBands, fit, fmt, fmtCompact, Kymograph, LoopView, onThemeChange, placeTooltip, setLattice, siteAt, snapshotOf, type Frame, xScale } from "./render.ts";
 
 /** Cap on events per frame, so a burst can't stall the page. */
 const MAX_EVENTS_PER_FRAME = 40_000;
@@ -74,6 +58,7 @@ function restart() {
   sim?.free();
   const { nLefs, seed } = readRunInputs(nLefsIn, seedIn);
   sim = newSim(nLefs, seed);
+  setLattice(sim.lattice);
   summary.textContent =
     `${nLefs} loop extruders on a ${fmt.format(N_SITES)}-site lattice, split into five TADs ` +
     `by convergent CTCF pairs. Simulated in your browser.`;

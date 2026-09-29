@@ -11,7 +11,7 @@
 import { init, iterate, Replayer, Sim } from "lefsim";
 
 import { N_SITES, newSim, readRunInputs } from "./model.ts";
-import { $, fmt, fmtCompact, Kymograph, LoopView, onThemeChange, snapshotOf, type Frame } from "./render.ts";
+import { $, fmt, fmtCompact, Kymograph, LoopView, onThemeChange, setLattice, snapshotOf, type Frame } from "./render.ts";
 
 /** Length of each recorded run, in simulation time units. */
 const T_END = 50_000;
@@ -74,6 +74,7 @@ async function recordRun() {
     `keyframed event chunks and replayed. The panels are drawn by the live page's code, from a ` +
     `Replayer instead of a Sim.`;
   const sim = newSim(nLefs, seed);
+  setLattice(sim.lattice);
   const r = new Replayer(sim.lattice, sim.nLefs);
   replayer = r;
   recording = true;

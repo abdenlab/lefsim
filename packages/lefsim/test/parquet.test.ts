@@ -28,7 +28,9 @@ describe("replayerFromParquet", () => {
   it("opens from the footer alone, with the lattice and end from the file", async () => {
     const r = await replayerFromParquet(keyframed);
     expect([r.nLefs, r.start, r.end, r.rowGroupsRead, r.ready]).toEqual([config.nLefs, 0, config.tEnd, 0, false]);
+    expect(r.rowGroupCount).toBe(ipcInfo.batches);
     expect(r.lattice).toEqual(lattice);
+    expect(r.run).toMatchObject({ seed: String(config.seed), startTime: 0, recordStart: 0, recordEnd: config.tEnd });
   });
 
   it("seeks anywhere reading at most one row group, matching the live run", async () => {
