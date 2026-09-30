@@ -7,6 +7,11 @@
 //! cross, however many LEFs it has. Both lengths are integers, so distances
 //! are exact.
 //!
+//! Use `hop_length >= step_length`. With shorter hops, reversing back across
+//! a LEF can beat a single step (e.g. three hops across a rosette's junction
+//! instead of one step), which isn't intended; forbidding it is sketched in
+//! the design note but not implemented.
+//!
 //! [`LoopGraph`] contracts the lattice to the leg sites: consecutive legs are
 //! joined by the walk between them, and each rosette gets two one-way
 //! "express lanes" that allow exactly its shortcuts (from a left leg to any

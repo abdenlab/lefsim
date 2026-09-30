@@ -386,13 +386,15 @@ lattice, end=...)`, which accepts any batch boundaries.
 walks the lattice and may also cross LEFs, as loops bring their anchors
 together. Steps and hops have integer lengths you choose (their ratio sets how
 a hop compares with a step), so distances are exact; a rosette, a chain of LEFs
-side by side, takes one hop to cross:
+side by side, takes one hop to cross. Keep hops at least as long as steps
+(`hop_length >= step_length`): with shorter hops, doubling back across a LEF
+can beat a single step.
 
 ```python
 w = sim.world()
-w.effective_distance(100, 2500, step_length=1000, hop_length=100)  # int
-d = w.effective_distances(sites, step_length=1000, hop_length=100)  # all pairs, as scipy's pdist
-times, d = replayer.effective_distances(sites, dt=10.0, step_length=1000, hop_length=100)  # over time
+w.effective_distance(100, 2500, step_length=1, hop_length=1)  # int
+d = w.effective_distances(sites, step_length=1, hop_length=1)  # all pairs, as scipy's pdist
+times, d = replayer.effective_distances(sites, dt=10.0, step_length=1, hop_length=1)  # over time
 ```
 
 Results are `array.array("q")`, which numpy wraps without copying. Many sites
