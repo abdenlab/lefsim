@@ -540,3 +540,31 @@ code {
     margin-top: 8px;
   }
 }
+
+/* ---------------------------------------------------------------- contact page */
+
+/* Narrower, so the square map under the loops fits on screen. */
+.contact-page main {
+  max-width: 820px;
+}
+
+.contact-page #arcs {
+  height: clamp(160px, 22vh, 240px);
+}
+
+#map {
+  aspect-ratio: 1;
+}
+
+#colorbar {
+  height: 40px;
+}
+
+#controls select {
+  padding: 5px 8px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}

@@ -515,7 +515,7 @@ const snaps = await r.snapshots(10);
 effectiveDistancesOver(r.lattice, snaps, sites, lengths); // one row of pairs per snaps.time
 ```
 
-`packages/demo` has four pages. The live page shows loop arcs over the lattice and a
+`packages/demo` has five pages. The live page shows loop arcs over the lattice and a
 scrolling kymograph, with speed, LEF count and seed controls, plus a leg-occupancy profile
 averaged from a second simulation streamed as Arrow batches in the background.
 The replay page records a run as keyframed chunks and plays it back from a
@@ -525,6 +525,9 @@ binding (pick it, drop it, or pass `?url=`), reading only the row groups it need
 which the page loads by default. The effective-distance page places a handful of
 probe sites and editable CTCFs (drag either along the lattice) and lays them out, next to the live loops,
 by their effective distances (step and hop length 1), recomputed every frame. The
+contact-map page draws, under the live loops, the contact probability of every pair of
+lattice bins, `d^(-3/2)` of their effective distance as for a Gaussian chain, recomputed
+every frame (all 4.5 million site pairs of the 3,000-site lattice take about 30 ms). The
 loop panel (and the kymograph, where there is one) is the same drawing code on every
 page, drawn from whatever lattice the source has; only the source of `state()` differs. To run it:
 
