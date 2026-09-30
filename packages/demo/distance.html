@@ -16,7 +16,7 @@
     />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
-  <body>
+  <body class="distance-page">
     <main>
       <nav aria-label="Demos">
         <a href="/">Live simulation</a>
@@ -44,6 +44,14 @@
             Probes
             <input type="number" id="nprobes" min="2" max="12" step="1" value="8" />
           </label>
+          <label title="CTCFs capturing from the left">
+            CTCFs ◀
+            <input type="number" id="nctcf-left" min="0" max="16" step="1" value="4" aria-label="CTCFs capturing from the left" />
+          </label>
+          <label title="CTCFs capturing from the right">
+            CTCFs ▶
+            <input type="number" id="nctcf-right" min="0" max="16" step="1" value="4" aria-label="CTCFs capturing from the right" />
+          </label>
           <label>
             Seed
             <input type="number" id="seed" min="0" step="1" value="1" />
@@ -54,12 +62,12 @@
 
       <div class="split">
         <section class="panel" aria-labelledby="arcs-title">
-          <h2 id="arcs-title">Loops and probes <span class="hint">drag a probe to move it</span></h2>
+          <h2 id="arcs-title">Loops and probes <span class="hint">drag probes and CTCFs (◀ and ▶ lanes) to move them</span></h2>
           <div class="canvas-wrap">
             <canvas id="arcs" role="img" aria-label="Loop arcs over the lattice"></canvas>
             <div id="tooltip" class="tooltip" role="status" hidden></div>
           </div>
-          <canvas id="probes" role="img" aria-label="Probe sites on the lattice; drag to move"></canvas>
+          <canvas id="tracks" role="img" aria-label="Probe sites, and CTCFs in two lanes by the side they capture from; drag to move"></canvas>
         </section>
 
         <section class="panel" aria-labelledby="graph-title">

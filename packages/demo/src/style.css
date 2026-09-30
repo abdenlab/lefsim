@@ -439,6 +439,15 @@ code {
 
 /* ---------------------------------------------------------------- distance page */
 
+/* More controls than the other pages: narrower number fields keep them on one row. */
+.distance-page #controls {
+  gap: 12px 16px;
+}
+
+.distance-page #controls input[type="number"] {
+  width: 4.2em;
+}
+
 /* Loops on the left, the probe layout on the right; stacked when narrow. */
 .split {
   display: grid;
@@ -450,8 +459,8 @@ code {
   height: clamp(220px, 34vh, 360px);
 }
 
-#probes {
-  height: 40px;
+#tracks {
+  height: 92px;
   touch-action: none;
 }
 

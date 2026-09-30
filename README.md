@@ -523,7 +523,7 @@ The replay page records a run as keyframed chunks and plays it back from a
 binding (pick it, drop it, or pass `?url=`), reading only the row groups it needs;
 `packages/demo/make_sample.py` writes a sample into `public/sample.parquet`,
 which the page loads by default. The effective-distance page places a handful of
-probe sites (drag them along the lattice) and lays them out, next to the live loops,
+probe sites and editable CTCFs (drag either along the lattice) and lays them out, next to the live loops,
 by their effective distances (step and hop length 1), recomputed every frame. The
 loop panel (and the kymograph, where there is one) is the same drawing code on every
 page, drawn from whatever lattice the source has; only the source of `state()` differs. To run it:
