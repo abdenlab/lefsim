@@ -448,6 +448,17 @@ code {
   width: 4.2em;
 }
 
+/* Starts the second row of controls: the model's parameters. */
+.distance-page #controls .break {
+  flex-basis: 100%;
+  height: 0;
+}
+
+.distance-page #controls input[id^="rate-"],
+.distance-page #controls #strength {
+  width: 5.5em;
+}
+
 /* Loops on the left, the probe layout on the right; stacked when narrow. */
 .split {
   display: grid;

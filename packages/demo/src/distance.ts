@@ -11,13 +11,12 @@
 // builds a new lattice and carries the LEFs over to it at the current time,
 // so the run continues rather than restarting.
 
-import { createLattice, createModel, createWorld, effectiveDistances, init, MOBILITY, populate, Sim, type Lattice } from "lefsim";
+import { createLattice, createModel, createWorld, effectiveDistances, init, MOBILITY, populate, Sim, type Lattice, type Rates } from "lefsim";
 
 import { N_SITES, RATES, readRunInputs } from "./model.ts";
 import { $, colors, fit, fmt, LoopView, onThemeChange, setLattice, siteAt, snapshotOf, xScale } from "./render.ts";
 
 const LENGTHS = { stepLength: 1, hopLength: 1 };
-const CTCF_STRENGTH = 0.8;
 const MAX_CTCFS = 16;
 const CAPTURED = MOBILITY.indexOf("Captured");
 const MOVING = MOBILITY.indexOf("Moving");
@@ -36,6 +35,10 @@ const nLefsIn = $<HTMLInputElement>("nlefs");
 const nProbesIn = $<HTMLInputElement>("nprobes");
 const nLeftIn = $<HTMLInputElement>("nctcf-left");
 const nRightIn = $<HTMLInputElement>("nctcf-right");
+const stepRateIn = $<HTMLInputElement>("rate-step");
+const respawnIn = $<HTMLInputElement>("rate-respawn");
+const respawnHeldIn = $<HTMLInputElement>("rate-respawn-held");
+const strengthIn = $<HTMLInputElement>("strength");
 const seedIn = $<HTMLInputElement>("seed");
 const summary = $<HTMLParagraphElement>("summary");
 const trackCanvas = $<HTMLCanvasElement>("tracks");
@@ -70,6 +73,9 @@ let ctcfs: { site: number; left: boolean }[] = [
   { site: 1000, left: false },
   { site: 2000, left: true },
 ];
+/** The model's parameters, from their inputs. */
+let rates: Rates = { ...RATES };
+let strength = 0.8;
 let hoveredCtcf = -1;
 let draggingCtcf = -1;
 
@@ -400,7 +406,7 @@ function updateReadout(time: number) {
 function currentLattice(): Lattice {
   return createLattice(
     N_SITES,
-    ctcfs.map((c) => ({ site: c.site, capturesFrom: c.left ? "left" : "right", strength: CTCF_STRENGTH })),
+    ctcfs.map((c) => ({ site: c.site, capturesFrom: c.left ? "left" : "right", strength })),
   );
 }
 
@@ -409,8 +415,9 @@ function restart() {
   const inputs = readRunInputs(nLefsIn, seedIn);
   seed = inputs.seed;
   rebuilds = 0;
+  readParams();
   const lattice = currentLattice();
-  sim = new Sim(createModel(populate(lattice, inputs.nLefs, { seed }), RATES), { seed });
+  sim = new Sim(createModel(populate(lattice, inputs.nLefs, { seed }), rates), { seed });
   setLattice(lattice);
   setProbes(readProbeCount());
   summary.textContent =
@@ -421,12 +428,13 @@ function restart() {
 }
 
 /**
- * After a CTCF change: the same LEFs on the new lattice, continuing from the
+ * After a change to the CTCFs, rates or strength: the same LEFs on the new
+ * model, continuing from the
  * current time. A captured leg stays captured only if a CTCF that can hold
  * it is still at its site (a left leg is held by one capturing from the
  * right, a right leg by one capturing from the left).
  */
-function rebuildLattice() {
+function rebuildModel() {
   const old = sim;
   if (!old) return;
   // Copy the state first: the next call into wasm can detach its views.
@@ -446,9 +454,31 @@ function rebuildLattice() {
     leftMobility: Array.from(leftMob, (m, i) => keep(m, leftPos[i]!, false)),
     rightMobility: Array.from(rightMob, (m, i) => keep(m, rightPos[i]!, true)),
   });
-  sim = new Sim(createModel(world, RATES), { seed: seed + ++rebuilds, startTime: time });
+  sim = new Sim(createModel(world, rates), { seed: seed + ++rebuilds, startTime: time });
   old.free();
   setLattice(lattice);
+}
+
+/**
+ * Read the rates and strength from their inputs. A value the model can't
+ * take (a rate that isn't positive, a strength outside [0, 1]) puts the
+ * input back to the current value.
+ */
+function readParams() {
+  const positive = (input: HTMLInputElement, current: number) => {
+    const v = Number(input.value);
+    if (input.value.trim() !== "" && Number.isFinite(v) && v > 0) return v;
+    input.value = String(current);
+    return current;
+  };
+  rates = {
+    step: positive(stepRateIn, rates.step),
+    respawn: positive(respawnIn, rates.respawn),
+    respawnCaptured: positive(respawnHeldIn, rates.respawnCaptured),
+  };
+  const st = Number(strengthIn.value);
+  if (strengthIn.value.trim() !== "" && st >= 0 && st <= 1) strength = st;
+  else strengthIn.value = String(strength);
 }
 
 /** Add or remove CTCFs of one orientation to match its count input. */
@@ -470,7 +500,7 @@ function setCtcfCount(left: boolean, input: HTMLInputElement) {
     ctcfs.push(c);
     lane.push(c);
   }
-  rebuildLattice();
+  rebuildModel();
   if (!playing) settle();
 }
 
@@ -549,7 +579,7 @@ trackCanvas.addEventListener("pointermove", (e) => {
     const site = siteUnder(e);
     if (ctcfs.some((c) => c.site === site)) return; // one CTCF per site
     ctcfs[draggingCtcf]!.site = site;
-    rebuildLattice();
+    rebuildModel();
     if (!playing) settle();
     return;
   }
@@ -638,6 +668,13 @@ graphCanvas.addEventListener(
   },
   { passive: false },
 );
+for (const input of [stepRateIn, respawnIn, respawnHeldIn, strengthIn]) {
+  input.addEventListener("change", () => {
+    readParams();
+    rebuildModel();
+    if (!playing) settle();
+  });
+}
 nLeftIn.addEventListener("change", () => setCtcfCount(true, nLeftIn));
 nRightIn.addEventListener("change", () => setCtcfCount(false, nRightIn));
 speedIn.addEventListener("input", showSpeed);
