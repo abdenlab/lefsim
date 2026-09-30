@@ -6,6 +6,7 @@
 //! Nothing here depends on [`crate::sim`], which runs and observes a model.
 
 pub mod action;
+pub mod distance;
 pub mod entity;
 pub mod lattice;
 pub mod spawn;
@@ -14,6 +15,7 @@ pub mod world;
 mod serial;
 
 pub use action::{Action, Rates};
+pub use distance::{DistanceError, LoopGraph};
 pub use entity::{Leg, Lef, LefKey, LegKey, Mobility};
 pub use lattice::{Ctcf, Direction, Lattice, LatticeError, Position, Site, SiteKind};
 pub use spawn::{populate, Spawn, SpawnError, SpawnRule};

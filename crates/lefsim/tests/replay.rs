@@ -252,3 +252,25 @@ fn a_log_from_another_lattice_gives_no_world() {
     r.advance_to(100.0);
     assert!(matches!(r.world(), Err(ReplayError::World(_))));
 }
+
+#[test]
+fn effective_distances_over_a_grid_match_each_world() {
+    let mut r = replayer(&record(12, 300.0, 80));
+    let sites = [5, 61, 99, 140, 199];
+    let mode = SampleMode::EveryDt { dt: 7.5, t0: 0.0 };
+    let (times, d) = r.effective_distances(mode, 300.0, &sites, 1000, 100).unwrap();
+    assert_eq!(times.len(), 41);
+    assert_eq!(d.len(), times.len() * 10);
+    let mut check = replayer(&record(12, 300.0, 80));
+    for (i, &t) in times.iter().enumerate() {
+        check.seek(t).unwrap();
+        let expected = LoopGraph::new(&check.world().unwrap(), 1000, 100).unwrap().pairwise(&sites).unwrap();
+        assert_eq!(&d[i * 10..(i + 1) * 10], &expected[..], "t = {t}");
+    }
+    // Bad arguments are reported before anything moves.
+    let mut fresh = replayer(&record(12, 300.0, 80));
+    assert_eq!(fresh.effective_distances(mode, 300.0, &[500], 1, 1).unwrap_err(), DistanceError::SiteOutOfRange { site: 500, n_sites: 200 });
+    assert_eq!(fresh.effective_distances(mode, 300.0, &sites, 0, 1).unwrap_err(), DistanceError::ZeroStepLength);
+    assert!(!fresh.ready());
+}
+

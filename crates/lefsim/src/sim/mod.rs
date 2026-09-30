@@ -21,7 +21,7 @@ mod heap;
 pub mod record;
 mod replay;
 
-pub use replay::{ReplayError, Replayer};
+pub use replay::{distances_over, ReplayError, Replayer};
 
 use std::sync::Arc;
 

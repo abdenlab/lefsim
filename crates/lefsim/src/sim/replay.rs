@@ -4,7 +4,7 @@
 //! The Rust twin of the TS `Replayer` in `packages/lefsim`, with the same
 //! semantics.
 
-use crate::model::{Lattice, LefStates, Mobility, Time, World, WorldError};
+use crate::model::{DistanceError, Lattice, LefStates, LoopGraph, Mobility, Position, Time, World, WorldError};
 
 use super::record::{EventFrames, LefFrames, SampleMode};
 
@@ -320,6 +320,26 @@ impl Replayer {
         frames
     }
 
+    /// For each point of the grid `snapshots(mode, t_end)` would take, the
+    /// effective distance of every pair of `sites` (condensed, as
+    /// [`LoopGraph::pairwise`]): the grid times, and the distances row-major,
+    /// one row of `k(k−1)/2` per time. Leaves the replayer where `snapshots`
+    /// would.
+    pub fn effective_distances(
+        &mut self,
+        mode: SampleMode,
+        t_end: Time,
+        sites: &[Position],
+        step_length: u64,
+        hop_length: u64,
+    ) -> Result<(Vec<Time>, Vec<u64>), DistanceError> {
+        // Check the arguments before moving.
+        LoopGraph::from_legs(self.lattice.len(), &[], &[], step_length, hop_length)?.pairwise(sites)?;
+        let frames = self.snapshots(mode, t_end);
+        let distances = distances_over(&frames, self.lattice.len(), sites, step_length, hop_length)?;
+        Ok((frames.time().to_vec(), distances))
+    }
+
     /// Drop chunks no longer needed to seek to `t` or later, to bound memory
     /// in a long stream. Keeps everything from the last keyframe at or
     /// before `t`, and the current position.
@@ -375,3 +395,24 @@ impl Replayer {
         self.cursor = (c, row);
     }
 }
+
+/// The pairwise effective distances of `sites` in every snapshot of
+/// `frames`, row-major: one row of `k(k−1)/2` per snapshot. One
+/// [`LoopGraph`] per snapshot, straight from its LEF columns.
+pub fn distances_over(
+    frames: &LefFrames,
+    n_sites: usize,
+    sites: &[Position],
+    step_length: u64,
+    hop_length: u64,
+) -> Result<Vec<u64>, DistanceError> {
+    let k = sites.len();
+    let mut out = Vec::with_capacity(frames.n_snapshots() * k * k.saturating_sub(1) / 2);
+    for s in 0..frames.n_snapshots() {
+        let snap = frames.snapshot(s);
+        let graph = LoopGraph::from_legs(n_sites, snap.left_pos, snap.right_pos, step_length, hop_length)?;
+        out.extend(graph.pairwise(sites)?);
+    }
+    Ok(out)
+}
+
