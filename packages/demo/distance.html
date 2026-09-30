@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Effective distance</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 26 A12 14 0 0 1 28 26' fill='none' stroke='%23eb6834' stroke-width='3'/%3E%3Cpath d='M9 26 A5 7 0 0 1 19 26' fill='none' stroke='%232a78d6' stroke-width='3'/%3E%3Cpath d='M2 26.5 H30' stroke='%2355585f' stroke-width='2'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <nav aria-label="Demos">
+        <a href="/">Live simulation</a>
+        <a href="/replay.html">Replay</a>
+        <a href="/parquet.html">Parquet file</a>
+        <a href="/distance.html" aria-current="page">Effective distance</a>
+      </nav>
+      <header>
+        <div class="title">
+          <h1>Effective distance</h1>
+          <p id="summary">Loading the simulator…</p>
+        </div>
+        <form id="controls" autocomplete="off">
+          <button type="button" id="play" disabled>Play</button>
+          <label>
+            Speed
+            <input type="range" id="speed" min="1" max="4" step="0.01" value="2.5" />
+            <output id="speed-out" for="speed"></output>
+          </label>
+          <label>
+            LEFs
+            <input type="number" id="nlefs" min="0" max="700" step="1" value="30" />
+          </label>
+          <label>
+            Probes
+            <input type="number" id="nprobes" min="2" max="12" step="1" value="8" />
+          </label>
+          <label>
+            Seed
+            <input type="number" id="seed" min="0" step="1" value="1" />
+          </label>
+          <button type="submit" id="restart" disabled>Restart</button>
+        </form>
+      </header>
+
+      <div class="split">
+        <section class="panel" aria-labelledby="arcs-title">
+          <h2 id="arcs-title">Loops and probes <span class="hint">drag a probe to move it</span></h2>
+          <div class="canvas-wrap">
+            <canvas id="arcs" role="img" aria-label="Loop arcs over the lattice"></canvas>
+            <div id="tooltip" class="tooltip" role="status" hidden></div>
+          </div>
+          <canvas id="probes" role="img" aria-label="Probe sites on the lattice; drag to move"></canvas>
+        </section>
+
+        <section class="panel" aria-labelledby="graph-title">
+          <h2 id="graph-title">Probes by effective distance <span class="hint">hover a probe for its distances</span></h2>
+          <div class="graph-wrap">
+            <canvas id="graph" role="img" aria-label="Probes laid out so their spacing follows effective distance"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <footer>
+        <dl id="readout">
+          <div><dt>Time</dt><dd id="r-time">0</dd></div>
+          <div><dt>Closest probes</dt><dd id="r-closest">–</dd></div>
+          <div><dt>Layout fit</dt><dd id="r-fit">–</dd></div>
+          <div id="behind" hidden><dt>Playback</dt><dd>falling behind</dd></div>
+        </dl>
+        <ul class="legend" aria-label="Legend">
+          <li><span class="swatch extruding"></span>Extruding</li>
+          <li><span class="swatch held"></span>Held at a boundary</li>
+        </ul>
+      </footer>
+      <p class="note">
+        A path between two sites walks the lattice one step at a time, or hops across a loop from one leg
+        to the other, and a chain of loops side by side takes one hop. Steps and hops both count 1, so
+        with no loops the distance is just the separation. On the right, each pair of probes is joined
+        by a spring as long as its effective distance, and the line links the probes in lattice order.
+      </p>
+    </main>
+    <script type="module" src="/src/distance.ts"></script>
+  </body>
+</html>

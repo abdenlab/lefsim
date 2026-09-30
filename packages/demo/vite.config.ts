@@ -13,6 +13,7 @@ export default defineConfig({
         main: resolve(import.meta.dirname, "index.html"),
         replay: resolve(import.meta.dirname, "replay.html"),
         parquet: resolve(import.meta.dirname, "parquet.html"),
+        distance: resolve(import.meta.dirname, "distance.html"),
       },
     },
   },
