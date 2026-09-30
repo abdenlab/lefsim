@@ -8,7 +8,7 @@ use pyo3_arrow::input::AnyRecordBatch;
 
 use crate::arrow::{code_values, f64_values, frames_batch, state_batch, u32_values};
 use crate::batch::PyBatch;
-use crate::model::{PyLattice, PyWorld, arrow_error, value_error};
+use crate::model::{PyLattice, PyWorld, arrow_error, float_array, int_array, value_error};
 use crate::sim::{grid_mode, parse_layout};
 
 fn replay_error(e: lefsim::ReplayError) -> PyErr {
@@ -170,6 +170,46 @@ impl PyReplayer {
         self.core = lefsim::Replayer::new(self.core.lattice().clone(), self.core.n_lefs());
         self.source.as_mut().expect("a Parquet-backed replayer").loaded = false;
         self.load(py, g)
+    }
+
+    /// The snapshot grid `t0 + k·dt` from `t_start` (or the current time)
+    /// through `t_end` (or the end), walking row groups for a file.
+    fn grid_frames(
+        &mut self,
+        py: Python<'_>,
+        mode: SampleMode,
+        t_start: Option<f64>,
+        t_end: Option<f64>,
+    ) -> PyResult<LefFrames> {
+        if let Some(t) = t_start {
+            self.seek(py, t)?;
+        }
+        let t_end = t_end.unwrap_or(self.end());
+        if t_end.is_nan() {
+            return Err(value_error("t_end is NaN"));
+        }
+        let Some(src) = &self.source else {
+            return Ok(self.core.snapshots(mode, t_end));
+        };
+        if src.starts.is_empty() {
+            return Ok(LefFrames::new(self.core.n_lefs()));
+        }
+        if !src.loaded {
+            self.reopen(py, 0)?;
+        }
+        // Row group by row group: each piece continues the grid.
+        let mut frames = LefFrames::new(self.core.n_lefs());
+        loop {
+            let src = self.source.as_ref().expect("a Parquet-backed replayer");
+            let (last, n, group_end) = (src.last, src.starts.len(), src.group_end(src.last));
+            frames.extend_from(&self.core.snapshots(mode, t_end.min(group_end)));
+            if t_end <= group_end || last + 1 >= n {
+                break;
+            }
+            self.load(py, last + 1)?;
+            self.trim();
+        }
+        Ok(frames)
     }
 
     /// Drop row groups before the one holding the current time.
@@ -449,36 +489,40 @@ impl PyReplayer {
     ) -> PyResult<PyBatch> {
         let mode: SampleMode = grid_mode(dt, t0)?;
         let layout = parse_layout(layout)?;
-        if let Some(t) = t_start {
-            self.seek(py, t)?;
-        }
-        let t_end = t_end.unwrap_or(self.end());
-        if t_end.is_nan() {
-            return Err(value_error("t_end is NaN"));
-        }
-        let Some(src) = &self.source else {
-            let frames = self.core.snapshots(mode, t_end);
-            return Ok(PyBatch(frames_batch(frames, layout).map_err(arrow_error)?));
-        };
-        if src.starts.is_empty() {
-            return Ok(PyBatch(frames_batch(LefFrames::new(self.core.n_lefs()), layout).map_err(arrow_error)?));
-        }
-        if !src.loaded {
-            self.reopen(py, 0)?;
-        }
-        // Row group by row group: each piece continues the grid.
-        let mut frames = LefFrames::new(self.core.n_lefs());
-        loop {
-            let src = self.source.as_ref().expect("a Parquet-backed replayer");
-            let (last, n, group_end) = (src.last, src.starts.len(), src.group_end(src.last));
-            frames.extend_from(&self.core.snapshots(mode, t_end.min(group_end)));
-            if t_end <= group_end || last + 1 >= n {
-                break;
-            }
-            self.load(py, last + 1)?;
-            self.trim();
-        }
+        let frames = self.grid_frames(py, mode, t_start, t_end)?;
         Ok(PyBatch(frames_batch(frames, layout).map_err(arrow_error)?))
+    }
+
+    /// For each point of the grid `snapshots(dt, ...)` would take, the
+    /// effective distance of every pair of `sites` (condensed, as
+    /// `World.effective_distances`). Returns `(times, distances)`:
+    /// `array.array("d")` of grid times, and `array.array("q")` of distances,
+    /// row-major, one row of `k(k-1)/2` per time. A replayer opened with
+    /// `from_parquet` reads row groups as it walks the grid.
+    #[pyo3(signature = (sites, *, dt, t0 = 0.0, t_start = None, t_end = None, step_length, hop_length))]
+    #[allow(clippy::too_many_arguments)]
+    fn effective_distances<'py>(
+        &mut self,
+        py: Python<'py>,
+        sites: Vec<u32>,
+        dt: f64,
+        t0: f64,
+        t_start: Option<f64>,
+        t_end: Option<f64>,
+        step_length: u64,
+        hop_length: u64,
+    ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+        let mode: SampleMode = grid_mode(dt, t0)?;
+        let n_sites = self.core.lattice().len();
+        // Check the arguments before moving.
+        lefsim::LoopGraph::from_legs(n_sites, &[], &[], step_length, hop_length)
+            .and_then(|g| g.pairwise(&sites))
+            .map_err(|e| value_error(e.to_string()))?;
+        let frames = self.grid_frames(py, mode, t_start, t_end)?;
+        let distances = py
+            .detach(|| lefsim::sim::distances_over(&frames, n_sites, &sites, step_length, hop_length))
+            .map_err(|e| value_error(e.to_string()))?;
+        Ok((float_array(py, frames.time())?, int_array(py, &distances)?))
     }
 
     /// Drop data no longer needed to seek to `t` or later.

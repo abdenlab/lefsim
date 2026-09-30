@@ -8,7 +8,7 @@ use arrow_array::RecordBatch;
 use lefsim::{Ctcf, Direction, LefStates, Mobility, SpawnRule};
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyString, PyType};
+use pyo3::types::{PyBytes, PyString, PyType};
 use pyo3_arrow::input::AnyRecordBatch;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -101,6 +101,23 @@ fn to_dict<'py, T: Serialize>(py: Python<'py>, value: &T) -> PyResult<Bound<'py,
 
 fn from_dict<T: DeserializeOwned>(obj: &Bound<'_, PyAny>) -> PyResult<T> {
     pythonize::depythonize(obj).map_err(|e| value_error(e.to_string()))
+}
+
+/// `values` as a standard-library `array.array("q")` (signed 64-bit), which
+/// numpy wraps without copying and without this package depending on it.
+pub fn int_array<'py>(py: Python<'py>, values: &[u64]) -> PyResult<Bound<'py, PyAny>> {
+    let bytes: Vec<u8> = values.iter().flat_map(|&v| (v as i64).to_ne_bytes()).collect();
+    let array = py.import("array")?.call_method1("array", ("q",))?;
+    array.call_method1("frombytes", (PyBytes::new(py, &bytes),))?;
+    Ok(array)
+}
+
+/// `values` as a standard-library `array.array("d")`.
+pub fn float_array<'py>(py: Python<'py>, values: &[f64]) -> PyResult<Bound<'py, PyAny>> {
+    let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_ne_bytes()).collect();
+    let array = py.import("array")?.call_method1("array", ("d",))?;
+    array.call_method1("frombytes", (PyBytes::new(py, &bytes),))?;
+    Ok(array)
 }
 
 /// `__reduce__` through JSON: `(cls.from_json, (json,))`.
@@ -348,6 +365,43 @@ impl PyWorld {
     #[getter]
     fn n_lefs(&self) -> usize {
         self.0.n_lefs()
+    }
+
+    /// The effective distance between sites `a` and `b`: the shortest path
+    /// when a path walks the lattice (`step_length` per step) and may cross
+    /// LEFs (`hop_length` per crossing; a chain of LEFs side by side, a
+    /// rosette, takes one hop). Both lengths are integers, so distances are
+    /// exact; divide by `step_length` for lattice steps.
+    #[pyo3(signature = (a, b, *, step_length, hop_length))]
+    fn effective_distance(&self, py: Python<'_>, a: u32, b: u32, step_length: u64, hop_length: u64) -> PyResult<u64> {
+        py.detach(|| lefsim::LoopGraph::new(&self.0, step_length, hop_length)?.distance(a, b))
+            .map_err(|e| value_error(e.to_string()))
+    }
+
+    /// Effective distances (see `effective_distance`). Without `targets`,
+    /// every pair of `sites`, condensed as `scipy.spatial.distance.pdist`
+    /// (`squareform` makes it a matrix). With `targets`, each of `sites` to
+    /// each of `targets`, row-major. Returns an `array.array("q")`;
+    /// `numpy.asarray` wraps it without copying.
+    #[pyo3(signature = (sites, targets = None, *, step_length, hop_length))]
+    fn effective_distances<'py>(
+        &self,
+        py: Python<'py>,
+        sites: Vec<u32>,
+        targets: Option<Vec<u32>>,
+        step_length: u64,
+        hop_length: u64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let distances = py
+            .detach(|| {
+                let graph = lefsim::LoopGraph::new(&self.0, step_length, hop_length)?;
+                match &targets {
+                    Some(t) => graph.distances(&sites, t),
+                    None => graph.pairwise(&sites),
+                }
+            })
+            .map_err(|e| value_error(e.to_string()))?;
+        int_array(py, &distances)
     }
 
     /// The LEF table: `lef_id`, `left_pos`, `right_pos`, `left_mobility`,

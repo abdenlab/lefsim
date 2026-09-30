@@ -77,6 +77,16 @@ class World:
     def to_arrow(self) -> Batch:
         """The LEF table: ``lef_id``, ``left_pos``, ``right_pos``,
         ``left_mobility``, ``right_mobility``."""
+    def effective_distance(self, a: int, b: int, *, step_length: int, hop_length: int) -> int:
+        """The shortest path between sites ``a`` and ``b`` when a path walks the
+        lattice (``step_length`` per step) and may cross LEFs (``hop_length``
+        per crossing; a rosette of LEFs side by side takes one hop)."""
+    def effective_distances(
+        self, sites: Sequence[int], targets: Optional[Sequence[int]] = None, *, step_length: int, hop_length: int
+    ) -> Any:
+        """Without ``targets``, every pair of ``sites`` (condensed, as scipy's
+        ``pdist``); with ``targets``, sites × targets, row-major. An
+        ``array.array("q")``."""
     def to_dict(self) -> Any:
         """As plain Python data, in the same shape as the JSON."""
     @classmethod
@@ -317,3 +327,17 @@ class Replayer:
         """Decode to the grid ``t0 + k * dt`` from ``t_start`` (default: the
         current time) through ``t_end`` (default: the end of the log)."""
     def trim_before(self, t: float) -> None: ...
+    def effective_distances(
+        self,
+        sites: Sequence[int],
+        *,
+        dt: float,
+        t0: float = 0.0,
+        t_start: Optional[float] = None,
+        t_end: Optional[float] = None,
+        step_length: int,
+        hop_length: int,
+    ) -> tuple[Any, Any]:
+        """``(times, distances)``: the grid times (``array("d")``) and, per time,
+        the condensed pairwise effective distances of ``sites``
+        (``array("q")``, row-major)."""

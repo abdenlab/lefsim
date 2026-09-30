@@ -382,6 +382,23 @@ reads only the row groups each call needs, so a file of any size opens
 instantly. Other Arrow sources load whole with `Replayer.from_arrow(source,
 lattice, end=...)`, which accepts any batch boundaries.
 
+**Effective distance.** The shortest path between two lattice sites when a path
+walks the lattice and may also cross LEFs, as loops bring their anchors
+together. Steps and hops have integer lengths you choose (their ratio sets how
+a hop compares with a step), so distances are exact; a rosette, a chain of LEFs
+side by side, takes one hop to cross:
+
+```python
+w = sim.world()
+w.effective_distance(100, 2500, step_length=1000, hop_length=100)  # int
+d = w.effective_distances(sites, step_length=1000, hop_length=100)  # all pairs, as scipy's pdist
+times, d = replayer.effective_distances(sites, dt=10.0, step_length=1000, hop_length=100)  # over time
+```
+
+Results are `array.array("q")`, which numpy wraps without copying. Many sites
+share work: all pairs take one shortest-path search per distinct nearest leg of
+the sites, so 1,000 sites among 5,000 LEFs take about a second.
+
 Develop with:
 
 ```

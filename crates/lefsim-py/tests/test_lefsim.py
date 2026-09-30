@@ -277,6 +277,75 @@ def test_from_dict_validates():
         lefsim.Model.from_dict(d)
 
 
+# ---------------------------------------------------------------- effective distance
+
+
+def rosette_world():
+    """LEF 1 at 10-20 and LEF 2 at 21-30: linked, a rosette of two."""
+    return lefsim.World(lefsim.Lattice(40), {"left_pos": [10, 21], "right_pos": [20, 30]})
+
+
+def test_effective_distance_follows_the_rosette_rules():
+    w = rosette_world()
+    long_hop = dict(step_length=1, hop_length=5)
+    assert w.effective_distance(10, 30, **long_hop) == 5  # one chain crossing
+    assert w.effective_distance(20, 21, **long_hop) == 1  # the junction step
+    assert w.effective_distance(20, 30, **long_hop) == 6  # the step, then a hop
+    short_hop = dict(step_length=1000, hop_length=100)
+    # With hops shorter than steps, routes with extra hops win.
+    assert [w.effective_distance(a, b, **short_hop) for a, b in [(20, 21), (20, 30), (10, 30), (10, 21)]] == [
+        300,
+        200,
+        100,
+        200,
+    ]
+    assert lefsim.World(lefsim.Lattice(40)).effective_distance(3, 9, step_length=2, hop_length=0) == 12
+
+
+def test_effective_distances_pairs_and_rectangles():
+    import array
+
+    w = make_sim(seed=31).world()
+    sites = [0, 37, 60, 99, 140, 150, 199]
+    lengths = dict(step_length=1000, hop_length=100)
+    pairs = w.effective_distances(sites, **lengths)
+    assert isinstance(pairs, array.array) and pairs.typecode == "q"
+    expected = [w.effective_distance(a, b, **lengths) for i, a in enumerate(sites) for b in sites[i + 1 :]]
+    assert list(pairs) == expected
+    targets = [5, 120]
+    rect = np.asarray(w.effective_distances(sites, targets, **lengths)).reshape(len(sites), len(targets))
+    assert rect.dtype == np.int64
+    assert rect.tolist() == [[w.effective_distance(a, b, **lengths) for b in targets] for a in sites]
+
+
+def test_effective_distance_errors():
+    w = rosette_world()
+    with pytest.raises(ValueError, match="step length must be positive"):
+        w.effective_distance(1, 2, step_length=0, hop_length=1)
+    with pytest.raises(ValueError, match="outside a lattice"):
+        w.effective_distances([1, 40], step_length=1, hop_length=1)
+    with pytest.raises(TypeError):
+        w.effective_distance(1, 2, step_length=1)  # both lengths are required
+
+
+@pytest.mark.parametrize("source", ["memory", "parquet"])
+def test_replayer_effective_distances_match_each_world(tmp_path, source):
+    sites = [5, 61, 99, 140, 199]
+    lengths = dict(step_length=1000, hop_length=100)
+    if source == "parquet":
+        r = lefsim.Replayer.from_parquet(write_run(tmp_path, 32, t_end=300.0))
+    else:
+        r = lefsim.Replayer.from_arrow(keyframed_stream(32, 300.0), make_lattice(), end=300.0)
+    times, d = r.effective_distances(sites, dt=7.5, **lengths)
+    d = np.asarray(d).reshape(len(times), -1)
+    assert d.shape == (41, 10)
+    worlds = live_worlds(32, list(times))
+    for t, row, world in zip(times, d, worlds):
+        assert list(row) == list(world.effective_distances(sites, **lengths)), t
+    with pytest.raises(ValueError, match="outside a lattice"):
+        r.effective_distances([500], dt=1.0, **lengths)
+
+
 # ---------------------------------------------------------------- sim
 
 
