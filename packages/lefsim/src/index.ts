@@ -44,6 +44,7 @@ export {
   SPAWN_RULES,
 } from "./model.ts";
 export type { CtcfColumns, CtcfSpec, LefColumns, LefSpec, Side } from "./model.ts";
+export { effectiveDistance, effectiveDistances, effectiveDistancesOver, type PathLengths } from "./distance.ts";
 
 // ------------------------------------------------------------------ setup
 

@@ -500,6 +500,21 @@ await r.seek(5000); // fetches one row group
 const { leftPos, rightPos } = r.state(); // synchronous, as with a Replayer
 ```
 
+Effective distances work as in Python, on a `World` or on recorded snapshots
+(from `recordUntil` or any replayer's `snapshots`). They come back as
+`Float64Array`s, exact because the lengths are checked so no distance can pass
+2^53:
+
+```ts
+import { effectiveDistance, effectiveDistances, effectiveDistancesOver } from "lefsim";
+
+const lengths = { stepLength: 1, hopLength: 1 };
+effectiveDistance(sim.world(), 100, 2500, lengths); // number
+effectiveDistances(sim.world(), sites, lengths); // all pairs, as scipy's pdist
+const snaps = await r.snapshots(10);
+effectiveDistancesOver(r.lattice, snaps, sites, lengths); // one row of pairs per snaps.time
+```
+
 `packages/demo` has three pages. The live page shows loop arcs over the lattice and a
 scrolling kymograph, with speed, LEF count and seed controls, plus a leg-occupancy profile
 averaged from a second simulation streamed as Arrow batches in the background.

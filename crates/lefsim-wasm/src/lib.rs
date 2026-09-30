@@ -14,10 +14,10 @@
 //! Inputs are validated here too. A Rust panic in wasm traps and leaves the
 //! module unusable, so bad input must become a JS exception instead.
 
-use js_sys::{Float64Array, Object, Reflect, Uint32Array, Uint8Array};
+use js_sys::{Float64Array, Object, Reflect, Uint8Array, Uint32Array};
 use lefsim::{
-    Ctcf, Direction, EventFrames, EventRecorder, Lattice, LefFrames, LefStates, Mobility, Model, Rates, Recorder, RunReport,
-    SampleMode, SpawnRule, StopReason, World,
+    Ctcf, Direction, EventFrames, EventRecorder, Lattice, LefFrames, LefStates, LoopGraph,
+    Mobility, Model, Rates, Recorder, RunReport, SampleMode, SpawnRule, StopReason, World,
 };
 use wasm_bindgen::prelude::*;
 
@@ -47,9 +47,15 @@ fn report_object(report: RunReport) -> Object {
 /// "no limit".
 fn event_budget(n: f64) -> Result<u64, JsError> {
     if n.is_nan() || n < 0.0 {
-        return Err(JsError::new(&format!("event count must be a non-negative number, got {n}")));
+        return Err(JsError::new(&format!(
+            "event count must be a non-negative number, got {n}"
+        )));
     }
-    Ok(if n >= u64::MAX as f64 { u64::MAX } else { n as u64 })
+    Ok(if n >= u64::MAX as f64 {
+        u64::MAX
+    } else {
+        n as u64
+    })
 }
 
 /// Largest accepted chunk size. Bounded recorders preallocate their whole
@@ -85,8 +91,16 @@ fn snapshot_columns(frames: LefFrames) -> Object {
     set(&out, "time", Float64Array::from(&time[..]));
     set(&out, "leftPos", Uint32Array::from(&lefs.left_pos[..]));
     set(&out, "rightPos", Uint32Array::from(&lefs.right_pos[..]));
-    set(&out, "leftMobility", Uint8Array::from(Mobility::as_codes(&lefs.left_mobility)));
-    set(&out, "rightMobility", Uint8Array::from(Mobility::as_codes(&lefs.right_mobility)));
+    set(
+        &out,
+        "leftMobility",
+        Uint8Array::from(Mobility::as_codes(&lefs.left_mobility)),
+    );
+    set(
+        &out,
+        "rightMobility",
+        Uint8Array::from(Mobility::as_codes(&lefs.right_mobility)),
+    );
     set(&out, "nLefs", n_lefs as u32);
     out
 }
@@ -97,7 +111,11 @@ fn event_columns(frames: EventFrames) -> Object {
     set(&out, "time", Float64Array::from(frames.time()));
     set(&out, "legId", Uint32Array::from(frames.leg_id()));
     set(&out, "pos", Uint32Array::from(frames.pos()));
-    set(&out, "mobility", Uint8Array::from(Mobility::as_codes(frames.mob())));
+    set(
+        &out,
+        "mobility",
+        Uint8Array::from(Mobility::as_codes(frames.mob())),
+    );
     set(&out, "kind", Uint8Array::from(frames.kind()));
     out
 }
@@ -107,9 +125,16 @@ fn js_err(e: impl std::fmt::Display) -> JsError {
 }
 
 /// A lattice from its size and CTCF columns (`side` holds `Direction` codes).
-fn lattice_from(n_sites: u32, site: &[u32], side: &[u8], strength: &[f64]) -> Result<Lattice, JsError> {
+fn lattice_from(
+    n_sites: u32,
+    site: &[u32],
+    side: &[u8],
+    strength: &[f64],
+) -> Result<Lattice, JsError> {
     if side.len() != site.len() || strength.len() != site.len() {
-        return Err(JsError::new("CTCF site, side and strength arrays must have equal length"));
+        return Err(JsError::new(
+            "CTCF site, side and strength arrays must have equal length",
+        ));
     }
     let ctcfs = (0..site.len())
         .map(|i| {
@@ -118,7 +143,11 @@ fn lattice_from(n_sites: u32, site: &[u32], side: &[u8], strength: &[f64]) -> Re
                 1 => Direction::Right,
                 other => return Err(JsError::new(&format!("invalid CTCF side code {other}"))),
             };
-            Ok(Ctcf { site: site[i], captures_from, strength: strength[i] })
+            Ok(Ctcf {
+                site: site[i],
+                captures_from,
+                strength: strength[i],
+            })
         })
         .collect::<Result<Vec<_>, JsError>>()?;
     Lattice::with_ctcfs(n_sites as usize, &ctcfs).map_err(js_err)
@@ -126,11 +155,19 @@ fn lattice_from(n_sites: u32, site: &[u32], side: &[u8], strength: &[f64]) -> Re
 
 /// A LEF table from its columns (mobility as `Mobility` codes). Column
 /// lengths are checked by `World::from_lef_states`.
-fn lefs_from(left_pos: &[u32], right_pos: &[u32], left_mob: &[u8], right_mob: &[u8]) -> Result<LefStates, JsError> {
+fn lefs_from(
+    left_pos: &[u32],
+    right_pos: &[u32],
+    left_mob: &[u8],
+    right_mob: &[u8],
+) -> Result<LefStates, JsError> {
     let mobility = |codes: &[u8]| {
         codes
             .iter()
-            .map(|&c| Mobility::from_code(c).ok_or_else(|| JsError::new(&format!("invalid mobility code {c}"))))
+            .map(|&c| {
+                Mobility::from_code(c)
+                    .ok_or_else(|| JsError::new(&format!("invalid mobility code {c}")))
+            })
             .collect::<Result<Vec<_>, JsError>>()
     };
     Ok(LefStates {
@@ -144,7 +181,9 @@ fn lefs_from(left_pos: &[u32], right_pos: &[u32], left_mob: &[u8], right_mob: &[
 fn rule_from(name: &str) -> Result<SpawnRule, JsError> {
     match name {
         "uniform_non_ctcf" => Ok(SpawnRule::UniformNonCtcf),
-        _ => Err(JsError::new(&format!("unknown spawn rule {name:?} (available: \"uniform_non_ctcf\")"))),
+        _ => Err(JsError::new(&format!(
+            "unknown spawn rule {name:?} (available: \"uniform_non_ctcf\")"
+        ))),
     }
 }
 
@@ -153,8 +192,16 @@ fn lefs_object(lefs: &LefStates) -> Object {
     let out = Object::new();
     set(&out, "leftPos", Uint32Array::from(&lefs.left_pos[..]));
     set(&out, "rightPos", Uint32Array::from(&lefs.right_pos[..]));
-    set(&out, "leftMobility", Uint8Array::from(Mobility::as_codes(&lefs.left_mobility)));
-    set(&out, "rightMobility", Uint8Array::from(Mobility::as_codes(&lefs.right_mobility)));
+    set(
+        &out,
+        "leftMobility",
+        Uint8Array::from(Mobility::as_codes(&lefs.left_mobility)),
+    );
+    set(
+        &out,
+        "rightMobility",
+        Uint8Array::from(Mobility::as_codes(&lefs.right_mobility)),
+    );
     out
 }
 
@@ -176,7 +223,11 @@ fn model_from(
     let lattice = lattice_from(n_sites, site, side, strength)?;
     let lefs = lefs_from(left_pos, right_pos, left_mob, right_mob)?;
     let world = World::from_lef_states(lattice, &lefs).map_err(js_err)?;
-    let rates = Rates { step, respawn, respawn_captured };
+    let rates = Rates {
+        step,
+        respawn,
+        respawn_captured,
+    };
     Model::new(world, rates, rule_from(spawn_rule)?).map_err(js_err)
 }
 
@@ -184,7 +235,12 @@ fn model_from(
 
 /// Throws unless the lattice is valid.
 #[wasm_bindgen]
-pub fn check_lattice(n_sites: u32, site: &[u32], side: &[u8], strength: &[f64]) -> Result<(), JsError> {
+pub fn check_lattice(
+    n_sites: u32,
+    site: &[u32],
+    side: &[u8],
+    strength: &[f64],
+) -> Result<(), JsError> {
     lattice_from(n_sites, site, side, strength).map(|_| ())
 }
 
@@ -203,7 +259,9 @@ pub fn check_world(
 ) -> Result<(), JsError> {
     let lattice = lattice_from(n_sites, site, side, strength)?;
     let lefs = lefs_from(left_pos, right_pos, left_mob, right_mob)?;
-    World::from_lef_states(lattice, &lefs).map(|_| ()).map_err(js_err)
+    World::from_lef_states(lattice, &lefs)
+        .map(|_| ())
+        .map_err(js_err)
 }
 
 /// Throws unless the world, rates and spawn rule make a valid model.
@@ -223,8 +281,21 @@ pub fn check_model(
     respawn_captured: f64,
     spawn_rule: &str,
 ) -> Result<(), JsError> {
-    model_from(n_sites, site, side, strength, left_pos, right_pos, left_mob, right_mob, step, respawn, respawn_captured, spawn_rule)
-        .map(|_| ())
+    model_from(
+        n_sites,
+        site,
+        side,
+        strength,
+        left_pos,
+        right_pos,
+        left_mob,
+        right_mob,
+        step,
+        respawn,
+        respawn_captured,
+        spawn_rule,
+    )
+    .map(|_| ())
 }
 
 /// `n_lefs` LEFs placed by the spawn rule, as the LEF columns.
@@ -240,7 +311,8 @@ pub fn populate(
     spawn_rule: &str,
 ) -> Result<Object, JsError> {
     let lattice = lattice_from(n_sites, site, side, strength)?;
-    let world = lefsim::populate(lattice, n_lefs as usize, &rule_from(spawn_rule)?, seed).map_err(js_err)?;
+    let world = lefsim::populate(lattice, n_lefs as usize, &rule_from(spawn_rule)?, seed)
+        .map_err(js_err)?;
     Ok(lefs_object(&world.lef_states()))
 }
 
@@ -260,7 +332,9 @@ fn rates_object(r: Rates) -> Object {
 
 fn grid_mode(dt: f64, t0: f64) -> Result<SampleMode, JsError> {
     if !(dt.is_finite() && dt > 0.0) {
-        return Err(JsError::new(&format!("dt must be positive and finite, got {dt}")));
+        return Err(JsError::new(&format!(
+            "dt must be positive and finite, got {dt}"
+        )));
     }
     if !t0.is_finite() {
         return Err(JsError::new(&format!("t0 must be finite, got {t0}")));
@@ -291,12 +365,31 @@ impl WasmSim {
         start_time: f64,
     ) -> Result<WasmSim, JsError> {
         if !start_time.is_finite() {
-            return Err(JsError::new(&format!("startTime must be finite, got {start_time}")));
+            return Err(JsError::new(&format!(
+                "startTime must be finite, got {start_time}"
+            )));
         }
-        let model = model_from(n_sites, site, side, strength, left_pos, right_pos, left_mob, right_mob, step, respawn, respawn_captured, spawn_rule)?;
+        let model = model_from(
+            n_sites,
+            site,
+            side,
+            strength,
+            left_pos,
+            right_pos,
+            left_mob,
+            right_mob,
+            step,
+            respawn,
+            respawn_captured,
+            spawn_rule,
+        )?;
         let sim = lefsim::Sim::with_start_time(model, seed, start_time);
         let state = sim.world().lef_states();
-        Ok(WasmSim { sim, state, grid: None })
+        Ok(WasmSim {
+            sim,
+            state,
+            grid: None,
+        })
     }
 
     // ----- driving -----
@@ -309,7 +402,11 @@ impl WasmSim {
             return Err(JsError::new("t_end is NaN"));
         }
         let cap = event_budget(max_events)?;
-        Ok(report_object(self.sim.run_until_with_limit(t_end, cap, &mut ())))
+        Ok(report_object(self.sim.run_until_with_limit(
+            t_end,
+            cap,
+            &mut (),
+        )))
     }
 
     /// Fire up to `n` events. Returns `{eventsFired, time, stopped}`.
@@ -327,18 +424,31 @@ impl WasmSim {
     /// call), and `stopped`: "recorder_full" when the chunk filled first;
     /// call again for the next chunk. Consecutive chunks tile the run
     /// exactly. Every event adds a row, so `max_rows` also bounds the work.
-    pub fn record_event_chunk(&mut self, t_end: f64, max_rows: u32, keyframes: bool) -> Result<Object, JsError> {
+    pub fn record_event_chunk(
+        &mut self,
+        t_end: f64,
+        max_rows: u32,
+        keyframes: bool,
+    ) -> Result<Object, JsError> {
         if t_end.is_nan() {
             return Err(JsError::new("t_end is NaN"));
         }
         let n_legs = self.sim.n_legs();
         let min = if keyframes { n_legs + 2 } else { 2 };
         if (max_rows as usize) < min {
-            let why = if keyframes { format!(" with keyframes ({n_legs} legs + 2)") } else { String::new() };
-            return Err(JsError::new(&format!("maxRows must be at least {min}{why}, got {max_rows}")));
+            let why = if keyframes {
+                format!(" with keyframes ({n_legs} legs + 2)")
+            } else {
+                String::new()
+            };
+            return Err(JsError::new(&format!(
+                "maxRows must be at least {min}{why}, got {max_rows}"
+            )));
         }
         if max_rows > MAX_CHUNK_ROWS {
-            return Err(JsError::new(&format!("maxRows must be at most {MAX_CHUNK_ROWS}, got {max_rows}")));
+            return Err(JsError::new(&format!(
+                "maxRows must be at most {MAX_CHUNK_ROWS}, got {max_rows}"
+            )));
         }
         let mut rec = EventRecorder::new().with_max_rows(max_rows as usize);
         if keyframes {
@@ -421,14 +531,25 @@ impl WasmSim {
         self.record(Drive::Events(n), dt, t0, events, keyframes)
     }
 
-    fn record(&mut self, drive: Drive, dt: Option<f64>, t0: f64, events: bool, keyframes: bool) -> Result<Object, JsError> {
+    fn record(
+        &mut self,
+        drive: Drive,
+        dt: Option<f64>,
+        t0: f64,
+        events: bool,
+        keyframes: bool,
+    ) -> Result<Object, JsError> {
         if keyframes && !events {
             return Err(JsError::new("keyframes require events"));
         }
         let mode = dt.map(|dt| grid_mode(dt, t0)).transpose()?;
         let mut deltas = events.then(|| {
             let rec = EventRecorder::new();
-            if keyframes { rec.with_keyframes(self.sim.n_legs()) } else { rec }
+            if keyframes {
+                rec.with_keyframes(self.sim.n_legs())
+            } else {
+                rec
+            }
         });
         let mut grid = mode.map(|m| {
             let mut rec = self.grid_recorder(m);
@@ -449,7 +570,11 @@ impl WasmSim {
             self.grid = grid;
         }
         set(&out, "snapshots", snapshots);
-        set(&out, "events", deltas.map_or(JsValue::NULL, |mut d| event_columns(d.take_frames()).into()));
+        set(
+            &out,
+            "events",
+            deltas.map_or(JsValue::NULL, |mut d| event_columns(d.take_frames()).into()),
+        );
         Ok(out)
     }
 
@@ -501,7 +626,10 @@ impl WasmSim {
 
     /// The LEF table this run started from, copied.
     pub fn initial_lefs(&self) -> Object {
-        let model = self.sim.initial_model().expect("wasm sims use built-in spawn rules");
+        let model = self
+            .sim
+            .initial_model()
+            .expect("wasm sims use built-in spawn rules");
         lefs_object(&model.world().lef_states())
     }
 
@@ -533,7 +661,11 @@ impl WasmSim {
 
     /// An exact fork: a copy that continues the run as this one would.
     pub fn fork(&self) -> WasmSim {
-        WasmSim { sim: self.sim.clone(), state: self.state.clone(), grid: self.grid.clone() }
+        WasmSim {
+            sim: self.sim.clone(),
+            state: self.state.clone(),
+            grid: self.grid.clone(),
+        }
     }
 
     // ----- live state -----
@@ -562,10 +694,98 @@ impl WasmSim {
     }
 }
 
+// ----- effective distance -----
+
+/// Step and hop lengths from JS numbers, checked so every distance is an
+/// exact JS number: a distance is at most the walk between its sites,
+/// `step_length * (n_sites - 1)`.
+fn lengths_from(n_sites: u32, step_length: f64, hop_length: f64) -> Result<(u64, u64), JsError> {
+    const MAX_SAFE: f64 = 9_007_199_254_740_991.0; // 2^53 - 1
+    for (name, v) in [("stepLength", step_length), ("hopLength", hop_length)] {
+        if !(v.fract() == 0.0 && (0.0..=MAX_SAFE).contains(&v)) {
+            return Err(JsError::new(&format!(
+                "{name} must be a non-negative integer, got {v}"
+            )));
+        }
+    }
+    if step_length * f64::from(n_sites.saturating_sub(1)) > MAX_SAFE {
+        return Err(JsError::new(
+            "stepLength is too large: distances on this lattice could exceed 2^53",
+        ));
+    }
+    Ok((step_length as u64, hop_length as u64))
+}
+
+fn distances_array(d: &[u64]) -> Float64Array {
+    let d: Vec<f64> = d.iter().map(|&x| x as f64).collect();
+    Float64Array::from(&d[..])
+}
+
+/// Effective distances in one state. Without `targets`, every pair of
+/// `sites` (condensed upper triangle, row-major); with `targets`, each of
+/// `sites` to each of `targets`, row-major.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn effective_distances(
+    n_sites: u32,
+    left_pos: &[u32],
+    right_pos: &[u32],
+    sites: &[u32],
+    targets: Option<Box<[u32]>>,
+    step_length: f64,
+    hop_length: f64,
+) -> Result<Float64Array, JsError> {
+    if left_pos.len() != right_pos.len() {
+        return Err(JsError::new("leftPos and rightPos must have equal length"));
+    }
+    let (s, h) = lengths_from(n_sites, step_length, hop_length)?;
+    let graph =
+        LoopGraph::from_legs(n_sites as usize, left_pos, right_pos, s, h).map_err(js_err)?;
+    let d = match targets {
+        Some(t) => graph.distances(sites, &t),
+        None => graph.pairwise(sites),
+    };
+    Ok(distances_array(&d.map_err(js_err)?))
+}
+
+/// Every pair of `sites` in each of a series of snapshots (stacked LEF
+/// columns, `n_lefs` per snapshot): one condensed row per snapshot.
+#[wasm_bindgen]
+pub fn effective_distances_over(
+    n_sites: u32,
+    n_lefs: u32,
+    left_pos: &[u32],
+    right_pos: &[u32],
+    sites: &[u32],
+    step_length: f64,
+    hop_length: f64,
+) -> Result<Float64Array, JsError> {
+    let n = n_lefs as usize;
+    if left_pos.len() != right_pos.len() || !left_pos.len().is_multiple_of(n) {
+        return Err(JsError::new(
+            "leftPos and rightPos must hold nLefs entries per snapshot",
+        ));
+    }
+    let (s, h) = lengths_from(n_sites, step_length, hop_length)?;
+    let mut out = Vec::new();
+    if n > 0 {
+        for (l, r) in left_pos.chunks(n).zip(right_pos.chunks(n)) {
+            let graph = LoopGraph::from_legs(n_sites as usize, l, r, s, h).map_err(js_err)?;
+            out.extend(graph.pairwise(sites).map_err(js_err)?);
+        }
+    }
+    Ok(distances_array(&out))
+}
+
 /// Code → name tables from the core, so JS never hardcodes them.
 #[wasm_bindgen]
 pub fn names() -> Object {
-    let to_array = |names: &[&str]| names.iter().map(|&n| JsValue::from_str(n)).collect::<js_sys::Array>();
+    let to_array = |names: &[&str]| {
+        names
+            .iter()
+            .map(|&n| JsValue::from_str(n))
+            .collect::<js_sys::Array>()
+    };
     let obj = Object::new();
     set(&obj, "mobility", to_array(&Mobility::NAMES));
     set(&obj, "direction", to_array(&Direction::NAMES));
