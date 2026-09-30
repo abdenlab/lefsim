@@ -525,8 +525,8 @@ binding (pick it, drop it, or pass `?url=`), reading only the row groups it need
 which the page loads by default. The effective-distance page places a handful of
 probe sites (drag them along the lattice) and lays them out, next to the live loops,
 by their effective distances (step and hop length 1), recomputed every frame. The
-loop and kymograph panels are the same drawing code on every page, drawn from whatever lattice the source has; only the
-source of `state()` differs. To run it:
+loop panel (and the kymograph, where there is one) is the same drawing code on every
+page, drawn from whatever lattice the source has; only the source of `state()` differs. To run it:
 
 ```
 pnpm install
