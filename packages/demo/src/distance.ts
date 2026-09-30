@@ -39,6 +39,9 @@ const nRightIn = $<HTMLInputElement>("nctcf-right");
 const seedIn = $<HTMLInputElement>("seed");
 const summary = $<HTMLParagraphElement>("summary");
 const trackCanvas = $<HTMLCanvasElement>("tracks");
+const fitViewIn = $<HTMLInputElement>("fit-view");
+const scaleIn = $<HTMLInputElement>("scale");
+const scaleOut = $<HTMLOutputElement>("scale-out");
 const graphCanvas = $<HTMLCanvasElement>("graph");
 const rTime = $("r-time");
 const rClosest = $("r-closest");
@@ -181,13 +184,37 @@ function updateView(width: number, height: number) {
     cy: (y0 + y1) / 2,
     scale: Math.min((width - 2 * PAD) / Math.max(x1 - x0, 1), (height - 2 * PAD - 20) / Math.max(y1 - y0, 1)),
   };
-  // Ease the view, so the picture zooms rather than jumps; never let a probe leave it.
-  if (!view) view = target;
+  // Ease the view, so the picture pans and zooms rather than jumps. Fitted,
+  // no probe leaves it; at a fixed scale, it only follows the layout's center.
+  if (!view) view = { ...target, scale: fitView() ? target.scale : fixedScale() };
   else {
     view.cx += 0.15 * (target.cx - view.cx);
     view.cy += 0.15 * (target.cy - view.cy);
-    view.scale = Math.min(view.scale + 0.15 * (target.scale - view.scale), target.scale * 1.02);
+    if (fitView()) view.scale = Math.min(view.scale + 0.15 * (target.scale - view.scale), target.scale * 1.02);
+    else view.scale += 0.3 * (fixedScale() - view.scale);
   }
+  if (fitView()) showScale(view.scale);
+}
+
+// ------------------------------------------------------------------ scale
+
+const fitView = () => fitViewIn.checked;
+/** The fixed scale, in pixels per step, from a log-scale slider. */
+const fixedScale = () => 10 ** Number(scaleIn.value);
+
+function showScale(pxPerStep: number) {
+  scaleOut.value = `${fmt.format(100 * pxPerStep)} px per 100 steps`;
+  // While fitted, the slider follows along, so unticking keeps the current scale.
+  if (fitView()) scaleIn.value = String(Math.log10(pxPerStep));
+}
+
+function setFixedScale(log10Scale: number) {
+  const min = Number(scaleIn.min);
+  const max = Number(scaleIn.max);
+  scaleIn.value = String(Math.max(min, Math.min(max, log10Scale)));
+  fitViewIn.checked = false;
+  showScale(fixedScale());
+  if (!playing) settle(20);
 }
 
 function toScreen(i: number, width: number, height: number): [number, number] {
@@ -589,6 +616,21 @@ nProbesIn.addEventListener("change", () => {
   setProbes(readProbeCount());
   if (!playing) settle();
 });
+fitViewIn.addEventListener("change", () => {
+  if (!fitView()) showScale(fixedScale());
+  if (!playing) settle(20);
+});
+scaleIn.addEventListener("input", () => setFixedScale(Number(scaleIn.value)));
+// Scrolling over the layout zooms it, at a fixed scale.
+graphCanvas.addEventListener(
+  "wheel",
+  (e) => {
+    e.preventDefault();
+    const current = fitView() ? Math.log10(view?.scale ?? fixedScale()) : Number(scaleIn.value);
+    setFixedScale(current - e.deltaY * 0.002);
+  },
+  { passive: false },
+);
 nLeftIn.addEventListener("change", () => setCtcfCount(true, nLeftIn));
 nRightIn.addEventListener("change", () => setCtcfCount(false, nRightIn));
 speedIn.addEventListener("input", showSpeed);

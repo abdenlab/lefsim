@@ -75,6 +75,14 @@
           <div class="graph-wrap">
             <canvas id="graph" role="img" aria-label="Probes laid out so their spacing follows effective distance"></canvas>
           </div>
+          <div class="graph-controls">
+            <label><input type="checkbox" id="fit-view" checked /> Fit to view</label>
+            <label>
+              Scale
+              <input type="range" id="scale" min="-1.5" max="1.5" step="0.01" value="-0.5" />
+              <output id="scale-out" for="scale"></output>
+            </label>
+          </div>
         </section>
       </div>
 
