@@ -13,7 +13,7 @@
 
 import { createLattice, createModel, createWorld, effectiveDistances, init, MOBILITY, populate, Sim, type Lattice } from "lefsim";
 
-import { CTCFS, N_SITES, RATES, readRunInputs } from "./model.ts";
+import { N_SITES, RATES, readRunInputs } from "./model.ts";
 import { $, colors, fit, fmt, LoopView, onThemeChange, setLattice, siteAt, snapshotOf, xScale } from "./render.ts";
 
 const LENGTHS = { stepLength: 1, hopLength: 1 };
@@ -61,8 +61,15 @@ let rebuilds = 0;
 let playing = false;
 let lastFrame: number | undefined;
 
-/** The CTCFs; `left` means it captures from the left (its chevron points left). */
-let ctcfs: { site: number; left: boolean }[] = CTCFS.map((c) => ({ site: c.site, left: c.capturesFrom === "left" }));
+/**
+ * The CTCFs; `left` means it captures from the left (its chevron points
+ * left). To start, one domain in the middle of the lattice: a CTCF holding
+ * left legs at its left edge, one holding right legs at its right edge.
+ */
+let ctcfs: { site: number; left: boolean }[] = [
+  { site: 1000, left: false },
+  { site: 2000, left: true },
+];
 let hoveredCtcf = -1;
 let draggingCtcf = -1;
 
@@ -114,7 +121,7 @@ function setProbes(k: number) {
 }
 
 function readProbeCount(): number {
-  const k = Math.max(2, Math.min(12, Math.floor(Number(nProbesIn.value) || 8)));
+  const k = Math.max(2, Math.min(12, Math.floor(Number(nProbesIn.value) || 3)));
   nProbesIn.value = String(k);
   return k;
 }
