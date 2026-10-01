@@ -556,6 +556,23 @@ code {
   aspect-ratio: 1;
 }
 
+.map-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.map-heading h2 {
+  margin: 0;
+}
+
+.map-heading button {
+  padding: 3px 12px;
+  font-size: 0.875rem;
+}
+
 #colorbar {
   height: 40px;
 }

@@ -1,5 +1,7 @@
 // Contact map demo: a live Sim, and every pair of lattice bins colored by
-// its approximate contact probability, recomputed as the loops change.
+// its approximate contact probability, recomputed as the loops change. The
+// upper triangle is the current state; the lower triangle is the average
+// over simulation time since the last reset.
 //
 // Each bin is represented by its middle site. The contact probability of two
 // sites follows a Gaussian chain, P = d^(-3/2), where d is their effective
@@ -34,6 +36,8 @@ const rBins = $("r-bins");
 const rCompute = $("r-compute");
 const rDraw = $("r-draw");
 const rFps = $("r-fps");
+const rAveraged = $("r-averaged");
+const resetBtn = $<HTMLButtonElement>("reset-average");
 const behind = $("behind");
 
 const loops = new LoopView($<HTMLCanvasElement>("arcs"), $("tooltip"));
@@ -50,6 +54,14 @@ let lastFrame: number | undefined;
 let bin = 10;
 let centers = new Uint32Array(0);
 let dist: Float64Array = new Float64Array(0);
+/**
+ * The time average: for each pair, the sum of P weighted by the simulation
+ * time it held, over `averagedTime`. Each frame's state is weighted by the
+ * time since the previous frame, so pausing adds nothing.
+ */
+let sumP = new Float64Array(0);
+let averagedTime = 0;
+let lastTime: number | undefined;
 /** The map at one pixel per bin, scaled up when drawn. */
 let image: ImageData | undefined;
 const offscreen = document.createElement("canvas");
@@ -117,6 +129,29 @@ function setBins() {
   rBins.textContent = `${fmt.format(k)} × ${fmt.format(k)}, ${fmt.format((k * (k - 1)) / 2)} pairs`;
   buildPixelTable();
   drawColorbar();
+  resetAverage();
+}
+
+function resetAverage() {
+  const k = centers.length;
+  sumP = new Float64Array((k * (k - 1)) / 2);
+  if (means.length !== sumP.length) {
+    means = new Float64Array(sumP.length);
+    meanWords = new Uint32Array(means.buffer);
+  }
+  averagedTime = 0;
+  lastTime = sim?.time;
+}
+
+/** Add the current state to the time average, weighted by the time since the last frame. */
+function accumulate(time: number) {
+  const dt = lastTime === undefined ? 0 : time - lastTime;
+  lastTime = time;
+  if (!(dt > 0)) return;
+  const pOf = pOfDistance;
+  const top = pOf.length - 1;
+  for (let at = 0; at < dist.length; at++) sumP[at]! += pOf[Math.min(dist[at]!, top)]! * dt;
+  averagedTime += dt;
 }
 
 /** Distances between every pair of bins in the current state. */
@@ -134,34 +169,78 @@ function measure(): number {
  * across the lattice, so a table replaces a logarithm per pair.
  */
 let pixelOf = new Uint32Array(0);
+/** The 256 colormap entries as packed pixels. */
+let pixelOfIndex = new Uint32Array(256);
+/** P for each effective distance: `d^(-3/2)`. */
+let pOfDistance = new Float64Array(0);
+/**
+ * Colormap index for any P in (0, 1], keyed by the top 20 bits of its
+ * float64 encoding (exponent and 8 bits of mantissa, about 0.4% apart), so
+ * coloring an average takes a lookup instead of a logarithm.
+ */
+const indexOfBits = new Uint8Array(1 << 20);
+/** Scratch for the averages, and a view of their high 32-bit words. */
+let means = new Float64Array(0);
+let meanWords = new Uint32Array(0);
+const HIGH_WORD = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1 ? 1 : 0;
 
 function buildPixelTable() {
   const [lo, hi] = logRange();
   const scale = 255 / (hi - lo);
   const littleEndian = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+  pixelOfIndex = Uint32Array.from({ length: 256 }, (_, c) => {
+    const [r, g, b] = [FALL[3 * c]!, FALL[3 * c + 1]!, FALL[3 * c + 2]!];
+    return littleEndian ? ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0 : ((r << 24) | (g << 16) | (b << 8) | 255) >>> 0;
+  });
   pixelOf = new Uint32Array(N_SITES);
+  pOfDistance = new Float64Array(N_SITES);
   for (let d = 0; d < N_SITES; d++) {
     // P = d^(-3/2) → log10 P = -1.5 log10 d; the diagonal (d = 0) takes the top.
     const c = d === 0 ? 255 : Math.max(0, Math.min(255, Math.round((-1.5 * Math.log10(d) - lo) * scale)));
-    const [r, g, b] = [FALL[3 * c]!, FALL[3 * c + 1]!, FALL[3 * c + 2]!];
-    pixelOf[d] = littleEndian ? ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0 : ((r << 24) | (g << 16) | (b << 8) | 255) >>> 0;
+    pixelOf[d] = pixelOfIndex[c]!;
+    pOfDistance[d] = d === 0 ? 1 : d ** -1.5;
+  }
+  // Each key's middle value stands for its range.
+  const value = new Float64Array(1);
+  const words = new Uint32Array(value.buffer);
+  for (let key = 0; key < 1 << 20; key++) {
+    words[HIGH_WORD] = (key << 12) | 0x800;
+    words[1 - HIGH_WORD] = 0;
+    const p = value[0]!;
+    const c = p > 0 && Number.isFinite(p) ? Math.round((Math.log10(p) - lo) * scale) : 0;
+    indexOfBits[key] = c < 0 ? 0 : c > 255 ? 255 : c;
   }
 }
 
-/** Color the map image from `dist`, both halves of the symmetric matrix. */
+/**
+ * Color the map image: the current state (`dist`) above the diagonal, the
+ * time average below it (the current state too, until time has passed).
+ */
 function paint() {
   const img = image!;
   const k = centers.length;
   const px = new Uint32Array(img.data.buffer);
   const table = pixelOf;
   const top = table.length - 1;
+  const averaged = averagedTime > 0;
+  if (averaged) {
+    const inv = 1 / averagedTime;
+    for (let n = 0; n < sumP.length; n++) means[n] = sumP[n]! * inv;
+  }
+  const words = meanWords;
+  const keyIndex = indexOfBits;
+  const colors = pixelOfIndex;
   let at = 0;
   for (let i = 0; i < k; i++) {
     px[i * k + i] = table[0]!;
-    for (let j = i + 1; j < k; j++) {
-      const p = table[Math.min(dist[at++]!, top)]!;
-      px[i * k + j] = p;
-      px[j * k + i] = p;
+    for (let j = i + 1; j < k; j++, at++) {
+      const now = table[Math.min(dist[at]!, top)]!;
+      px[i * k + j] = now;
+      if (averaged) {
+        px[j * k + i] = colors[keyIndex[words[2 * at + HIGH_WORD]! >>> 12]!]!;
+      } else {
+        px[j * k + i] = now;
+      }
     }
   }
 }
@@ -231,10 +310,12 @@ function draw() {
   loops.show(f);
   const computeMs = measure();
   const started = performance.now();
+  accumulate(f.time);
   paint();
   drawMap();
   const drawMs = performance.now() - started;
   rTime.textContent = fmt.format(f.time);
+  rAveraged.textContent = averagedTime > 0 ? `${fmt.format(averagedTime)} time units` : "–";
   rCompute.textContent = fmtMs(computeMs);
   rDraw.textContent = fmtMs(drawMs);
   const now = performance.now();
@@ -256,6 +337,7 @@ function restart() {
     `probability of every pair of bins, from the effective distance through the loops. Simulated in your browser.`;
   lastFrame = undefined;
   updates = [];
+  resetAverage();
   draw();
 }
 
@@ -297,12 +379,14 @@ mapCanvas.addEventListener("pointermove", (e) => {
     return;
   }
   // Condensed index of pair (i, j), i < j.
-  const d = dist[i * k - (i * (i + 1)) / 2 + (j - i - 1)]!;
+  const at = i * k - (i * (i + 1)) / 2 + (j - i - 1);
+  const d = dist[at]!;
+  const mean = averagedTime > 0 ? `; averaged, P = ${(sumP[at]! / averagedTime).toExponential(1)}` : "";
   placeTooltip(
     mapTooltip,
     mapCanvas,
     e,
-    `Sites ${fmt.format(a)} and ${fmt.format(b)}: ${fmt.format(b - a)} apart, effective distance ${fmt.format(d)}, P = ${(d ** -1.5).toExponential(1)}`,
+    `Sites ${fmt.format(a)} and ${fmt.format(b)}: ${fmt.format(b - a)} apart. Now: effective distance ${fmt.format(d)}, P = ${(d ** -1.5).toExponential(1)}${mean}`,
   );
 });
 mapCanvas.addEventListener("pointerleave", () => {
@@ -335,6 +419,10 @@ binIn.addEventListener("change", () => {
   draw();
 });
 speedIn.addEventListener("input", showSpeed);
+resetBtn.addEventListener("click", () => {
+  resetAverage();
+  if (!playing) draw();
+});
 
 await init();
 showSpeed();
