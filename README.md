@@ -515,7 +515,7 @@ const snaps = await r.snapshots(10);
 effectiveDistancesOver(r.lattice, snaps, sites, lengths); // one row of pairs per snaps.time
 ```
 
-`packages/demo` has six pages. The live page shows loop arcs over the lattice and a
+`packages/demo` has seven pages. The live page shows loop arcs over the lattice and a
 scrolling kymograph, with speed, LEF count and seed controls, plus a leg-occupancy profile
 averaged from a second simulation streamed as Arrow batches in the background.
 The replay page records a run as keyframed chunks and plays it back from a
@@ -531,7 +531,9 @@ every frame (all 4.5 million site pairs of the 3,000-site lattice take about 30 
 the current state above the diagonal and its time average below. The encounters page follows
 the effective distance between two probes, sampled every time unit, and counts the
 probes' encounters (distance within a threshold you set): their intervals show in the
-kymograph, and their durations build a histogram. These three pages let
+kymograph, and their durations build a histogram. The encounter map does this for every pair of
+lattice bins at once, from two running totals per pair: encounter frequency below the
+diagonal, mean duration above. These four pages let
 you drag and count CTCFs and set the rates and CTCF strength while the run continues. The
 loop panel (and the kymograph, where there is one) is the same drawing code on every
 page, drawn from whatever lattice the source has; only the source of `state()` differs. To run it:

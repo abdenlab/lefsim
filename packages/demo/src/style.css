@@ -669,3 +669,10 @@ code {
     grid-template-areas: "arcs" "hist" "kymo" "trace";
   }
 }
+
+/* ---------------------------------------------------------------- encounter map page */
+
+/* Two colorbars, one per triangle. */
+.encounter-map-page #colorbar {
+  height: 72px;
+}

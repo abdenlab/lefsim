@@ -16,6 +16,7 @@ export default defineConfig({
         distance: resolve(import.meta.dirname, "distance.html"),
         contact: resolve(import.meta.dirname, "contact.html"),
         encounter: resolve(import.meta.dirname, "encounter.html"),
+        "encounter-map": resolve(import.meta.dirname, "encounter-map.html"),
       },
     },
   },

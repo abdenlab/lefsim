@@ -14,7 +14,8 @@ import { effectiveDistances, init } from "lefsim";
 
 import { CtcfLanes, DEFAULT_CTCFS, EditableRun } from "./editable.ts";
 import { N_SITES, readRunInputs, worldOf } from "./model.ts";
-import { $, colors, fit, fmt, LoopView, MARGIN, onThemeChange, placeTooltip, siteAt, snapshotOf, xScale } from "./render.ts";
+import { condensedIndex, drawColorbar as drawBar, FALL, packedColors, SquareMap } from "./heatmap.ts";
+import { $, fit, fmt, LoopView, MARGIN, onThemeChange, placeTooltip, siteAt, snapshotOf, xScale } from "./render.ts";
 
 const LENGTHS = { stepLength: 1, hopLength: 1 };
 /** Cap on events per frame, so a burst can't stall the page. */
@@ -45,7 +46,7 @@ const behind = $("behind");
 
 const loops = new LoopView($<HTMLCanvasElement>("arcs"), $("tooltip"));
 let laneCtx = fit(laneCanvas);
-let mapCtx = fit(mapCanvas);
+const map = new SquareMap(mapCanvas);
 let colorbarCtx = fit(colorbarCanvas);
 
 // ------------------------------------------------------------------ state
@@ -81,9 +82,6 @@ let dist: Float64Array = new Float64Array(0);
 let sumP = new Float64Array(0);
 let averagedTime = 0;
 let lastTime: number | undefined;
-/** The map at one pixel per bin, scaled up when drawn. */
-let image: ImageData | undefined;
-const offscreen = document.createElement("canvas");
 /** Recent map update times, for the rate readout. */
 let updates: number[] = [];
 
@@ -100,34 +98,6 @@ const fmtMs = (ms: number) => (ms < 10 ? `${ms.toFixed(1)} ms` : `${fmt.format(m
 // ------------------------------------------------------------------ colors
 
 /**
- * The "fall" colormap (white through yellow, orange and red to black), as a
- * 256-entry RGB table, interpolated between its stops.
- */
-const FALL = (() => {
-  const stops = [
-    [255, 255, 255],
-    [255, 255, 204],
-    [255, 237, 160],
-    [254, 217, 118],
-    [254, 178, 76],
-    [253, 141, 60],
-    [252, 78, 42],
-    [227, 26, 28],
-    [189, 0, 38],
-    [128, 0, 38],
-    [0, 0, 0],
-  ];
-  const lut = new Uint8Array(256 * 3);
-  for (let i = 0; i < 256; i++) {
-    const t = (i / 255) * (stops.length - 1);
-    const k = Math.min(Math.floor(t), stops.length - 2);
-    const f = t - k;
-    for (let c = 0; c < 3; c++) lut[3 * i + c] = Math.round(stops[k]![c]! * (1 - f) + stops[k + 1]![c]! * f);
-  }
-  return lut;
-})();
-
-/**
  * The color range in log10 P: from the farthest pair of sites to the
  * nearest pair of distinct bins. Distances within a bin (the diagonal) are
  * clamped to the top.
@@ -142,9 +112,7 @@ function setBins() {
   bin = Number(binIn.value);
   const k = Math.ceil(N_SITES / bin);
   centers = Uint32Array.from({ length: k }, (_, i) => Math.min(N_SITES - 1, Math.floor(i * bin + bin / 2)));
-  image = new ImageData(k, k);
-  offscreen.width = k;
-  offscreen.height = k;
+  map.setSize(k);
   rBins.textContent = `${fmt.format(k)} × ${fmt.format(k)}, ${fmt.format((k * (k - 1)) / 2)} pairs`;
   buildPixelTable();
   drawColorbar();
@@ -187,7 +155,7 @@ function measure(): number {
  */
 let pixelOf = new Uint32Array(0);
 /** The 256 colormap entries as packed pixels. */
-let pixelOfIndex = new Uint32Array(256);
+let pixelOfIndex: Uint32Array = new Uint32Array(256);
 /** P for each effective distance: `d^(-3/2)`. */
 let pOfDistance = new Float64Array(0);
 /**
@@ -204,11 +172,7 @@ const HIGH_WORD = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1 ? 1 : 0;
 function buildPixelTable() {
   const [lo, hi] = logRange();
   const scale = 255 / (hi - lo);
-  const littleEndian = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
-  pixelOfIndex = Uint32Array.from({ length: 256 }, (_, c) => {
-    const [r, g, b] = [FALL[3 * c]!, FALL[3 * c + 1]!, FALL[3 * c + 2]!];
-    return littleEndian ? ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0 : ((r << 24) | (g << 16) | (b << 8) | 255) >>> 0;
-  });
+  pixelOfIndex = packedColors(FALL);
   pixelOf = new Uint32Array(N_SITES);
   pOfDistance = new Float64Array(N_SITES);
   for (let d = 0; d < N_SITES; d++) {
@@ -234,9 +198,8 @@ function buildPixelTable() {
  * time average below it (the current state too, until time has passed).
  */
 function paint() {
-  const img = image!;
   const k = centers.length;
-  const px = new Uint32Array(img.data.buffer);
+  const px = map.pixels;
   const table = pixelOf;
   const top = table.length - 1;
   const averaged = averagedTime > 0;
@@ -262,60 +225,13 @@ function paint() {
   }
 }
 
-/** The map's square, aligned with the loop panel's lattice axis. */
-function mapBox() {
-  const { width } = mapCanvas.getBoundingClientRect();
-  const size = width - MARGIN.left - MARGIN.right;
-  return { left: MARGIN.left, top: 0, size };
-}
-
-function drawMap() {
-  const { width, height } = mapCanvas.getBoundingClientRect();
-  const ctx = mapCtx;
-  ctx.clearRect(0, 0, width, height);
-  if (!image) return;
-  offscreen.getContext("2d")!.putImageData(image, 0, 0);
-  const { left, top, size } = mapBox();
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(offscreen, left, top, size, size);
-  ctx.strokeStyle = colors.rule;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(left + 0.5, top + 0.5, size - 1, size - 1);
-}
-
 function drawColorbar() {
   const { width, height } = colorbarCanvas.getBoundingClientRect();
   const ctx = colorbarCtx;
   ctx.clearRect(0, 0, width, height);
   const barW = Math.min(260, width - MARGIN.left - MARGIN.right);
-  const x0 = width - MARGIN.right - barW;
-  const y0 = 8;
-  for (let i = 0; i < barW; i++) {
-    const c = Math.round((i / (barW - 1)) * 255);
-    ctx.fillStyle = `rgb(${FALL[3 * c]}, ${FALL[3 * c + 1]}, ${FALL[3 * c + 2]})`;
-    ctx.fillRect(x0 + i, y0, 1, 10);
-  }
-  ctx.strokeStyle = colors.rule;
-  ctx.strokeRect(x0 + 0.5, y0 + 0.5, barW - 1, 9);
-  // Ticks at each power of ten in range.
   const [lo, hi] = logRange();
-  ctx.font = "11px 'Atkinson Hyperlegible Next', system-ui, sans-serif";
-  ctx.fillStyle = colors.muted;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  for (let e = Math.ceil(lo); e <= Math.floor(hi); e++) {
-    const tx = x0 + ((e - lo) / (hi - lo)) * (barW - 1);
-    ctx.fillRect(tx, y0 + 10, 1, 3);
-    ctx.fillText(e === 0 ? "1" : `10${superscript(e)}`, tx, y0 + 15);
-  }
-  ctx.textAlign = "right";
-  ctx.textBaseline = "middle";
-  ctx.fillText("P", x0 - 8, y0 + 5);
-}
-
-function superscript(n: number): string {
-  const digits = "⁰¹²³⁴⁵⁶⁷⁸⁹";
-  return (n < 0 ? "⁻" : "") + String(Math.abs(n)).split("").map((d) => digits[Number(d)]).join("");
+  drawBar(ctx, { x0: width - MARGIN.right - barW, y0: 8, width: barW, lut: FALL, lo, hi, label: "P" });
 }
 
 // ------------------------------------------------------------------ frames
@@ -331,7 +247,7 @@ function draw() {
   const started = performance.now();
   accumulate(f.time);
   paint();
-  drawMap();
+  map.draw();
   const drawMs = performance.now() - started;
   rTime.textContent = fmt.format(f.time);
   rAveraged.textContent = averagedTime > 0 ? `${fmt.format(averagedTime)} time units` : "–";
@@ -427,15 +343,13 @@ laneCanvas.addEventListener("pointerleave", () => {
 // ------------------------------------------------------------------ hover
 
 mapCanvas.addEventListener("pointermove", (e) => {
-  const rect = mapCanvas.getBoundingClientRect();
-  const { left, top, size } = mapBox();
-  const k = centers.length;
-  const col = Math.floor(((e.clientX - rect.left - left) / size) * k);
-  const row = Math.floor(((e.clientY - rect.top - top) / size) * k);
-  if (col < 0 || row < 0 || col >= k || row >= k || dist.length === 0) {
+  const cell = map.cellAt(e);
+  if (!cell || dist.length === 0) {
     mapTooltip.hidden = true;
     return;
   }
+  const [row, col] = cell;
+  const k = centers.length;
   const [i, j] = row < col ? [row, col] : [col, row];
   const a = centers[i]!;
   const b = centers[j]!;
@@ -443,8 +357,7 @@ mapCanvas.addEventListener("pointermove", (e) => {
     placeTooltip(mapTooltip, mapCanvas, e, `Bin at site ${fmt.format(a)}`);
     return;
   }
-  // Condensed index of pair (i, j), i < j.
-  const at = i * k - (i * (i + 1)) / 2 + (j - i - 1);
+  const at = condensedIndex(i, j, k);
   const d = dist[at]!;
   const mean = averagedTime > 0 ? `; averaged, P = ${(sumP[at]! / averagedTime).toExponential(1)}` : "";
   placeTooltip(
@@ -464,15 +377,14 @@ new ResizeObserver(() => {
   loops.resize();
   laneCtx = fit(laneCanvas);
   drawLanes();
-  mapCtx = fit(mapCanvas);
+  map.resize();
   colorbarCtx = fit(colorbarCanvas);
   drawColorbar();
-  drawMap();
 }).observe(mapCanvas);
 onThemeChange(() => {
   loops.draw();
   drawLanes();
-  drawMap();
+  map.draw();
   drawColorbar();
 });
 
