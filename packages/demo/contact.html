@@ -16,7 +16,7 @@
     />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
-  <body class="contact-page">
+  <body class="contact-page model-controls">
     <main>
       <nav aria-label="Demos">
         <a href="/">Live simulation</a>
@@ -52,20 +52,46 @@
               <option value="50">50 sites</option>
             </select>
           </label>
+          <label title="CTCFs capturing from the left">
+            CTCFs ◀
+            <input type="number" id="nctcf-left" min="0" max="16" step="1" aria-label="CTCFs capturing from the left" />
+          </label>
+          <label title="CTCFs capturing from the right">
+            CTCFs ▶
+            <input type="number" id="nctcf-right" min="0" max="16" step="1" aria-label="CTCFs capturing from the right" />
+          </label>
           <label>
             Seed
             <input type="number" id="seed" min="0" step="1" value="1" />
           </label>
           <button type="submit" id="restart" disabled>Restart</button>
+          <span class="break" aria-hidden="true"></span>
+          <label title="Steps per time unit of a moving, unblocked leg">
+            Step rate
+            <input type="number" id="rate-step" min="0" step="any" />
+          </label>
+          <label title="Respawns per time unit of a LEF with neither leg held">
+            Respawn rate
+            <input type="number" id="rate-respawn" min="0" step="any" />
+          </label>
+          <label title="Respawns per time unit of a LEF with a leg held at a CTCF">
+            Respawn rate when held
+            <input type="number" id="rate-respawn-held" min="0" step="any" />
+          </label>
+          <label title="Chance that a CTCF captures (or evicts) a leg arriving at it">
+            CTCF strength
+            <input type="number" id="strength" min="0" max="1" step="0.05" />
+          </label>
         </form>
       </header>
 
       <section class="panel" aria-labelledby="arcs-title">
-        <h2 id="arcs-title">Loops</h2>
+        <h2 id="arcs-title">Loops <span class="hint">drag CTCFs (◀ and ▶ lanes) to move them</span></h2>
         <div class="canvas-wrap">
           <canvas id="arcs" role="img" aria-label="Loop arcs over the lattice"></canvas>
           <div id="tooltip" class="tooltip" role="status" hidden></div>
         </div>
+        <canvas id="lanes" role="img" aria-label="CTCFs in two lanes by the side they capture from; drag to move"></canvas>
       </section>
 
       <section class="panel" aria-labelledby="map-title">

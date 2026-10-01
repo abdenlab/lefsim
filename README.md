@@ -527,7 +527,9 @@ probe sites and editable CTCFs (drag either along the lattice) and lays them out
 by their effective distances (step and hop length 1), recomputed every frame. The
 contact-map page draws, under the live loops, the contact probability of every pair of
 lattice bins, `d^(-3/2)` of their effective distance as for a Gaussian chain, recomputed
-every frame (all 4.5 million site pairs of the 3,000-site lattice take about 30 ms). The
+every frame (all 4.5 million site pairs of the 3,000-site lattice take about 30 ms), with
+the current state above the diagonal and its time average below. Both of these pages let
+you drag and count CTCFs and set the rates and CTCF strength while the run continues. The
 loop panel (and the kymograph, where there is one) is the same drawing code on every
 page, drawn from whatever lattice the source has; only the source of `state()` differs. To run it:
 

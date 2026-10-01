@@ -7,12 +7,14 @@
 // sites follows a Gaussian chain, P = d^(-3/2), where d is their effective
 // distance (steps and hops across loops, each of length 1). The map is drawn
 // under the loop arcs on the same x axis, so a loop's legs line up with the
-// corner of the square it makes.
+// corner of the square it makes. The CTCFs, rates and strength are editable
+// while it runs (see `editable.ts`); the average carries on across changes.
 
-import { effectiveDistances, init, type Sim } from "lefsim";
+import { effectiveDistances, init } from "lefsim";
 
-import { N_SITES, newSim, readRunInputs } from "./model.ts";
-import { $, colors, fit, fmt, LoopView, MARGIN, onThemeChange, placeTooltip, setLattice, snapshotOf } from "./render.ts";
+import { CtcfLanes, EditableRun } from "./editable.ts";
+import { CTCFS, N_SITES, readRunInputs } from "./model.ts";
+import { $, colors, fit, fmt, LoopView, MARGIN, onThemeChange, placeTooltip, siteAt, snapshotOf, xScale } from "./render.ts";
 
 const LENGTHS = { stepLength: 1, hopLength: 1 };
 /** Cap on events per frame, so a burst can't stall the page. */
@@ -28,6 +30,7 @@ const nLefsIn = $<HTMLInputElement>("nlefs");
 const binIn = $<HTMLSelectElement>("bin");
 const seedIn = $<HTMLInputElement>("seed");
 const summary = $<HTMLParagraphElement>("summary");
+const laneCanvas = $<HTMLCanvasElement>("lanes");
 const mapCanvas = $<HTMLCanvasElement>("map");
 const mapTooltip = $("map-tooltip");
 const colorbarCanvas = $<HTMLCanvasElement>("colorbar");
@@ -41,12 +44,28 @@ const resetBtn = $<HTMLButtonElement>("reset-average");
 const behind = $("behind");
 
 const loops = new LoopView($<HTMLCanvasElement>("arcs"), $("tooltip"));
+let laneCtx = fit(laneCanvas);
 let mapCtx = fit(mapCanvas);
 let colorbarCtx = fit(colorbarCanvas);
 
 // ------------------------------------------------------------------ state
 
-let sim: Sim | undefined;
+/** The run and its editable model, starting from five TADs split by convergent CTCF pairs. */
+const run = new EditableRun(
+  CTCFS.map((c) => ({ site: c.site, left: c.capturesFrom === "left" })),
+  {
+    nLeft: $<HTMLInputElement>("nctcf-left"),
+    nRight: $<HTMLInputElement>("nctcf-right"),
+    step: $<HTMLInputElement>("rate-step"),
+    respawn: $<HTMLInputElement>("rate-respawn"),
+    respawnHeld: $<HTMLInputElement>("rate-respawn-held"),
+    strength: $<HTMLInputElement>("strength"),
+  },
+);
+run.onChange = () => {
+  if (!playing) draw();
+};
+const lanes = new CtcfLanes(run, 0);
 let playing = false;
 let lastFrame: number | undefined;
 
@@ -140,7 +159,7 @@ function resetAverage() {
     meanWords = new Uint32Array(means.buffer);
   }
   averagedTime = 0;
-  lastTime = sim?.time;
+  lastTime = run.sim?.time;
 }
 
 /** Add the current state to the time average, weighted by the time since the last frame. */
@@ -159,7 +178,8 @@ function measure(): number {
   const started = performance.now();
   // The live state has the LEF columns a World needs; it's used at once,
   // before the next call into the sim.
-  dist = effectiveDistances({ lattice: sim!.lattice, lefs: sim!.state() }, centers, LENGTHS);
+  const sim = run.sim!;
+  dist = effectiveDistances({ lattice: sim.lattice, lefs: sim.state() }, centers, LENGTHS);
   return performance.now() - started;
 }
 
@@ -305,9 +325,11 @@ function superscript(n: number): string {
 
 /** Recompute and redraw everything from the sim's current state. */
 function draw() {
+  const sim = run.sim;
   if (!sim) return;
   const f = snapshotOf(sim.state());
   loops.show(f);
+  drawLanes();
   const computeMs = measure();
   const started = performance.now();
   accumulate(f.time);
@@ -328,12 +350,10 @@ function draw() {
 }
 
 function restart() {
-  sim?.free();
   const { nLefs, seed } = readRunInputs(nLefsIn, seedIn);
-  sim = newSim(nLefs, seed);
-  setLattice(sim.lattice);
+  run.restart(nLefs, seed);
   summary.textContent =
-    `${nLefs} loop extruders on a ${fmt.format(N_SITES)}-site lattice split into five TADs, and the contact ` +
+    `${nLefs} loop extruders on a ${fmt.format(N_SITES)}-site lattice, and the contact ` +
     `probability of every pair of bins, from the effective distance through the loops. Simulated in your browser.`;
   lastFrame = undefined;
   updates = [];
@@ -350,6 +370,7 @@ function setPlaying(on: boolean) {
 }
 
 function frame(now: number) {
+  const sim = run.sim;
   if (!playing || !sim) return;
   const dt = lastFrame === undefined ? 0 : Math.min((now - lastFrame) / 1000, 0.1);
   lastFrame = now;
@@ -358,6 +379,53 @@ function frame(now: number) {
   draw();
   requestAnimationFrame(frame);
 }
+
+// ------------------------------------------------------------------ CTCF lanes
+
+function drawLanes() {
+  const { width, height } = laneCanvas.getBoundingClientRect();
+  laneCtx.clearRect(0, 0, width, height);
+  lanes.draw(laneCtx, xScale(width));
+}
+
+function laneAt(e: PointerEvent): number {
+  const rect = laneCanvas.getBoundingClientRect();
+  return lanes.at(e.clientX - rect.left, e.clientY - rect.top, xScale(rect.width));
+}
+
+laneCanvas.addEventListener("pointerdown", (e) => {
+  lanes.dragging = laneAt(e);
+  if (lanes.dragging < 0) return;
+  laneCanvas.setPointerCapture(e.pointerId);
+  laneCanvas.style.cursor = "grabbing";
+  e.preventDefault();
+});
+laneCanvas.addEventListener("pointermove", (e) => {
+  if (lanes.dragging >= 0) {
+    const site = Math.round(Math.max(0, Math.min(N_SITES - 1, siteAt(laneCanvas, e.clientX))));
+    if (run.moveCtcf(lanes.dragging, site) && !playing) draw();
+    return;
+  }
+  const near = laneAt(e);
+  laneCanvas.style.cursor = near >= 0 ? "grab" : "";
+  if (near !== lanes.hovered) {
+    lanes.hovered = near;
+    drawLanes();
+  }
+});
+const endDrag = () => {
+  lanes.dragging = -1;
+  laneCanvas.style.cursor = "";
+  drawLanes();
+};
+laneCanvas.addEventListener("pointerup", endDrag);
+laneCanvas.addEventListener("pointercancel", endDrag);
+laneCanvas.addEventListener("pointerleave", () => {
+  if (lanes.dragging < 0 && lanes.hovered >= 0) {
+    lanes.hovered = -1;
+    drawLanes();
+  }
+});
 
 // ------------------------------------------------------------------ hover
 
@@ -397,6 +465,8 @@ mapCanvas.addEventListener("pointerleave", () => {
 
 new ResizeObserver(() => {
   loops.resize();
+  laneCtx = fit(laneCanvas);
+  drawLanes();
   mapCtx = fit(mapCanvas);
   colorbarCtx = fit(colorbarCanvas);
   drawColorbar();
@@ -404,6 +474,7 @@ new ResizeObserver(() => {
 }).observe(mapCanvas);
 onThemeChange(() => {
   loops.draw();
+  drawLanes();
   drawMap();
   drawColorbar();
 });

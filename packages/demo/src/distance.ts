@@ -7,19 +7,16 @@
 // length is its effective distance, relaxed a few sweeps per frame from the
 // previous positions, so it moves smoothly as loops grow and dissolve.
 //
-// The CTCFs are editable too, in two lanes by orientation. Changing them
-// builds a new lattice and carries the LEFs over to it at the current time,
-// so the run continues rather than restarting.
+// The CTCFs, rates and strength are editable while it runs (see
+// `editable.ts`).
 
-import { createLattice, createModel, createWorld, effectiveDistances, init, MOBILITY, populate, Sim, type Lattice, type Rates } from "lefsim";
+import { effectiveDistances, init } from "lefsim";
 
-import { N_SITES, RATES, readRunInputs } from "./model.ts";
-import { $, colors, fit, fmt, LoopView, onThemeChange, setLattice, siteAt, snapshotOf, xScale } from "./render.ts";
+import { CtcfLanes, EditableRun } from "./editable.ts";
+import { N_SITES, readRunInputs } from "./model.ts";
+import { $, colors, fit, fmt, LoopView, onThemeChange, siteAt, snapshotOf, xScale } from "./render.ts";
 
 const LENGTHS = { stepLength: 1, hopLength: 1 };
-const MAX_CTCFS = 16;
-const CAPTURED = MOBILITY.indexOf("Captured");
-const MOVING = MOBILITY.indexOf("Moving");
 /** Cap on events per frame, so a burst can't stall the page. */
 const MAX_EVENTS_PER_FRAME = 40_000;
 /** Stress sweeps over all pairs per frame. */
@@ -33,12 +30,6 @@ const speedIn = $<HTMLInputElement>("speed");
 const speedOut = $<HTMLOutputElement>("speed-out");
 const nLefsIn = $<HTMLInputElement>("nlefs");
 const nProbesIn = $<HTMLInputElement>("nprobes");
-const nLeftIn = $<HTMLInputElement>("nctcf-left");
-const nRightIn = $<HTMLInputElement>("nctcf-right");
-const stepRateIn = $<HTMLInputElement>("rate-step");
-const respawnIn = $<HTMLInputElement>("rate-respawn");
-const respawnHeldIn = $<HTMLInputElement>("rate-respawn-held");
-const strengthIn = $<HTMLInputElement>("strength");
 const seedIn = $<HTMLInputElement>("seed");
 const summary = $<HTMLParagraphElement>("summary");
 const trackCanvas = $<HTMLCanvasElement>("tracks");
@@ -57,27 +48,30 @@ let graphCtx = fit(graphCanvas);
 
 // ------------------------------------------------------------------ state
 
-let sim: Sim | undefined;
-let seed = 0;
-/** Lattice rebuilds since the last restart; varies the continued run's seed. */
-let rebuilds = 0;
+/**
+ * The run and its editable model. To start, one domain in the middle of the
+ * lattice: a CTCF holding left legs at its left edge, one holding right legs
+ * at its right edge.
+ */
+const run = new EditableRun(
+  [
+    { site: 1000, left: false },
+    { site: 2000, left: true },
+  ],
+  {
+    nLeft: $<HTMLInputElement>("nctcf-left"),
+    nRight: $<HTMLInputElement>("nctcf-right"),
+    step: $<HTMLInputElement>("rate-step"),
+    respawn: $<HTMLInputElement>("rate-respawn"),
+    respawnHeld: $<HTMLInputElement>("rate-respawn-held"),
+    strength: $<HTMLInputElement>("strength"),
+  },
+);
+run.onChange = () => {
+  if (!playing) settle();
+};
 let playing = false;
 let lastFrame: number | undefined;
-
-/**
- * The CTCFs; `left` means it captures from the left (its chevron points
- * left). To start, one domain in the middle of the lattice: a CTCF holding
- * left legs at its left edge, one holding right legs at its right edge.
- */
-let ctcfs: { site: number; left: boolean }[] = [
-  { site: 1000, left: false },
-  { site: 2000, left: true },
-];
-/** The model's parameters, from their inputs. */
-let rates: Rates = { ...RATES };
-let strength = 0.8;
-let hoveredCtcf = -1;
-let draggingCtcf = -1;
 
 /** Probe sites, in probe order (a probe keeps its color when dragged past another). */
 let probes: number[] = [];
@@ -133,6 +127,7 @@ function readProbeCount(): number {
 }
 
 function measure() {
+  const sim = run.sim;
   if (!sim) return;
   // The live state has the LEF columns a World needs; it's used at once,
   // before the next call into the sim.
@@ -328,7 +323,7 @@ function drawGraph() {
 
 /** The tracks under the loop panel, top to bottom: probes, then a lane per CTCF orientation. */
 const PROBE_ROW = { top: 0, bottom: 40 };
-const CTCF_ROWS = { left: { top: 40, bottom: 66 }, right: { top: 66, bottom: 92 } };
+const lanes = new CtcfLanes(run, PROBE_ROW.bottom);
 
 /** Probe markers and CTCF lanes, aligned with the loop panel. */
 function drawTracks() {
@@ -336,28 +331,7 @@ function drawTracks() {
   const ctx = trackCtx;
   const x = xScale(width);
   ctx.clearRect(0, 0, width, height);
-
-  // Lanes: a faint band each; the chevrons in it say which way it faces.
-  for (const row of [CTCF_ROWS.left, CTCF_ROWS.right]) {
-    ctx.fillStyle = colors.band;
-    ctx.fillRect(x(0), row.top + 2, x(N_SITES - 1) - x(0), row.bottom - row.top - 4);
-  }
-
-  // CTCF chevrons, pointing toward the side each captures from.
-  ctcfs.forEach((c, i) => {
-    const row = c.left ? CTCF_ROWS.left : CTCF_ROWS.right;
-    const cy = (row.top + row.bottom) / 2;
-    const size = i === hoveredCtcf || i === draggingCtcf ? 16 : 12;
-    const dir = c.left ? -1 : 1;
-    const px = x(c.site);
-    ctx.beginPath();
-    ctx.moveTo(px + dir * size * 0.6, cy);
-    ctx.lineTo(px, cy - size / 2);
-    ctx.lineTo(px, cy + size / 2);
-    ctx.closePath();
-    ctx.fillStyle = colors.ink2;
-    ctx.fill();
-  });
+  lanes.draw(ctx, x);
 
   // Probes: a stem up to the lattice, and a handle.
   probes.forEach((s, i) => {
@@ -376,6 +350,7 @@ function drawTracks() {
 }
 
 function draw() {
+  const sim = run.sim;
   if (!sim) return;
   const f = snapshotOf(sim.state());
   loops.show(f);
@@ -403,105 +378,15 @@ function updateReadout(time: number) {
 
 // ------------------------------------------------------------------ loop
 
-function currentLattice(): Lattice {
-  return createLattice(
-    N_SITES,
-    ctcfs.map((c) => ({ site: c.site, capturesFrom: c.left ? "left" : "right", strength })),
-  );
-}
-
 function restart() {
-  sim?.free();
   const inputs = readRunInputs(nLefsIn, seedIn);
-  seed = inputs.seed;
-  rebuilds = 0;
-  readParams();
-  const lattice = currentLattice();
-  sim = new Sim(createModel(populate(lattice, inputs.nLefs, { seed }), rates), { seed });
-  setLattice(lattice);
+  run.restart(inputs.nLefs, inputs.seed);
   setProbes(readProbeCount());
   summary.textContent =
     `${inputs.nLefs} loop extruders on a ${fmt.format(N_SITES)}-site lattice, and ${probes.length} probe sites laid out ` +
     `by how far apart the loops make them. Simulated in your browser.`;
   lastFrame = undefined;
   draw();
-}
-
-/**
- * After a change to the CTCFs, rates or strength: the same LEFs on the new
- * model, continuing from the
- * current time. A captured leg stays captured only if a CTCF that can hold
- * it is still at its site (a left leg is held by one capturing from the
- * right, a right leg by one capturing from the left).
- */
-function rebuildModel() {
-  const old = sim;
-  if (!old) return;
-  // Copy the state first: the next call into wasm can detach its views.
-  const st = old.state();
-  const time = old.time;
-  const leftPos = st.leftPos.slice();
-  const rightPos = st.rightPos.slice();
-  const leftMob = st.leftMobility.slice();
-  const rightMob = st.rightMobility.slice();
-  const capturesLeftAt = new Map(ctcfs.map((c) => [c.site, c.left]));
-  const keep = (mob: number, site: number, needsLeft: boolean) =>
-    mob === CAPTURED && capturesLeftAt.get(site) === needsLeft ? CAPTURED : MOVING;
-  const lattice = currentLattice();
-  const world = createWorld(lattice, {
-    leftPos,
-    rightPos,
-    leftMobility: Array.from(leftMob, (m, i) => keep(m, leftPos[i]!, false)),
-    rightMobility: Array.from(rightMob, (m, i) => keep(m, rightPos[i]!, true)),
-  });
-  sim = new Sim(createModel(world, rates), { seed: seed + ++rebuilds, startTime: time });
-  old.free();
-  setLattice(lattice);
-}
-
-/**
- * Read the rates and strength from their inputs. A value the model can't
- * take (a rate that isn't positive, a strength outside [0, 1]) puts the
- * input back to the current value.
- */
-function readParams() {
-  const positive = (input: HTMLInputElement, current: number) => {
-    const v = Number(input.value);
-    if (input.value.trim() !== "" && Number.isFinite(v) && v > 0) return v;
-    input.value = String(current);
-    return current;
-  };
-  rates = {
-    step: positive(stepRateIn, rates.step),
-    respawn: positive(respawnIn, rates.respawn),
-    respawnCaptured: positive(respawnHeldIn, rates.respawnCaptured),
-  };
-  const st = Number(strengthIn.value);
-  if (strengthIn.value.trim() !== "" && st >= 0 && st <= 1) strength = st;
-  else strengthIn.value = String(strength);
-}
-
-/** Add or remove CTCFs of one orientation to match its count input. */
-function setCtcfCount(left: boolean, input: HTMLInputElement) {
-  const n = Math.max(0, Math.min(MAX_CTCFS, Math.floor(Number(input.value) || 0)));
-  input.value = String(n);
-  let lane = ctcfs.filter((c) => c.left === left);
-  while (lane.length > n) {
-    const last = lane.at(-1)!;
-    ctcfs = ctcfs.filter((c) => c !== last);
-    lane = lane.slice(0, -1);
-  }
-  while (lane.length < n) {
-    // A new CTCF goes in the middle of the widest stretch without one.
-    const sites = [-1, ...ctcfs.map((c) => c.site).sort((a, b) => a - b), N_SITES];
-    let best = 0;
-    for (let i = 1; i < sites.length - 1; i++) if (sites[i + 1]! - sites[i]! > sites[best + 1]! - sites[best]!) best = i;
-    const c = { site: Math.round((sites[best]! + sites[best + 1]!) / 2), left };
-    ctcfs.push(c);
-    lane.push(c);
-  }
-  rebuildModel();
-  if (!playing) settle();
 }
 
 function setPlaying(on: boolean) {
@@ -512,6 +397,7 @@ function setPlaying(on: boolean) {
 }
 
 function frame(now: number) {
+  const sim = run.sim;
   if (!playing || !sim) return;
   const dt = lastFrame === undefined ? 0 : Math.min((now - lastFrame) / 1000, 0.1);
   lastFrame = now;
@@ -546,11 +432,7 @@ function markerAt(e: PointerEvent): { probe: number; ctcf: number } {
     return best;
   };
   if (my < PROBE_ROW.bottom) return { probe: nearest(probes), ctcf: -1 };
-  const left = my < CTCF_ROWS.left.bottom;
-  // Only this lane's CTCFs, mapped back to their index in `ctcfs`.
-  const lane = ctcfs.flatMap((c, i) => (c.left === left ? [i] : []));
-  const k = nearest(lane.map((i) => ctcfs[i]!.site));
-  return { probe: -1, ctcf: k < 0 ? -1 : lane[k]! };
+  return { probe: -1, ctcf: lanes.at(mx, my, x) };
 }
 
 function siteUnder(e: PointerEvent): number {
@@ -560,8 +442,8 @@ function siteUnder(e: PointerEvent): number {
 trackCanvas.addEventListener("pointerdown", (e) => {
   const m = markerAt(e);
   dragging = m.probe;
-  draggingCtcf = m.ctcf;
-  if (dragging < 0 && draggingCtcf < 0) return;
+  lanes.dragging = m.ctcf;
+  if (dragging < 0 && lanes.dragging < 0) return;
   trackCanvas.setPointerCapture(e.pointerId);
   trackCanvas.style.cursor = "grabbing";
   e.preventDefault();
@@ -575,34 +457,30 @@ trackCanvas.addEventListener("pointermove", (e) => {
     if (!playing) settle();
     return;
   }
-  if (draggingCtcf >= 0) {
-    const site = siteUnder(e);
-    if (ctcfs.some((c) => c.site === site)) return; // one CTCF per site
-    ctcfs[draggingCtcf]!.site = site;
-    rebuildModel();
-    if (!playing) settle();
+  if (lanes.dragging >= 0) {
+    if (run.moveCtcf(lanes.dragging, siteUnder(e)) && !playing) settle();
     return;
   }
   const m = markerAt(e);
   trackCanvas.style.cursor = m.probe >= 0 || m.ctcf >= 0 ? "grab" : "";
-  if (m.probe !== hovered || m.ctcf !== hoveredCtcf) {
+  if (m.probe !== hovered || m.ctcf !== lanes.hovered) {
     hovered = m.probe;
-    hoveredCtcf = m.ctcf;
+    lanes.hovered = m.ctcf;
     if (!playing) draw();
   }
 });
 const endDrag = () => {
   dragging = -1;
-  draggingCtcf = -1;
+  lanes.dragging = -1;
   trackCanvas.style.cursor = "";
   if (!playing) settle();
 };
 trackCanvas.addEventListener("pointerup", endDrag);
 trackCanvas.addEventListener("pointercancel", endDrag);
 trackCanvas.addEventListener("pointerleave", () => {
-  if (dragging < 0 && draggingCtcf < 0 && (hovered >= 0 || hoveredCtcf >= 0)) {
+  if (dragging < 0 && lanes.dragging < 0 && (hovered >= 0 || lanes.hovered >= 0)) {
     hovered = -1;
-    hoveredCtcf = -1;
+    lanes.hovered = -1;
     if (!playing) draw();
   }
 });
@@ -636,11 +514,11 @@ new ResizeObserver(() => {
   loops.resize();
   trackCtx = fit(trackCanvas);
   graphCtx = fit(graphCanvas);
-  if (sim) draw();
+  if (run.sim) draw();
 }).observe($("arcs"));
 new ResizeObserver(() => {
   graphCtx = fit(graphCanvas);
-  if (sim) draw();
+  if (run.sim) draw();
 }).observe(graphCanvas);
 onThemeChange(() => draw());
 
@@ -668,15 +546,6 @@ graphCanvas.addEventListener(
   },
   { passive: false },
 );
-for (const input of [stepRateIn, respawnIn, respawnHeldIn, strengthIn]) {
-  input.addEventListener("change", () => {
-    readParams();
-    rebuildModel();
-    if (!playing) settle();
-  });
-}
-nLeftIn.addEventListener("change", () => setCtcfCount(true, nLeftIn));
-nRightIn.addEventListener("change", () => setCtcfCount(false, nRightIn));
 speedIn.addEventListener("input", showSpeed);
 
 await init();
