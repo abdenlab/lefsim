@@ -39,7 +39,7 @@
           </label>
           <label>
             LEFs
-            <input type="number" id="nlefs" min="0" max="700" step="1" value="30" />
+            <input type="number" id="nlefs" min="0" max="700" step="1" value="10" />
           </label>
           <label>
             Bin size
@@ -124,6 +124,8 @@
         plotted, from its value between the farthest sites (white) to its value between neighboring bins (black).
         Above the diagonal is the current state. Below it is the average over simulation time since the last
         reset (or restart, or change of bin size), each frame's state weighted by the time it covers.
+        The lattice's ends evict: a leg that reaches one makes its LEF respawn, as if an outward-facing CTCF
+        sat at each end.
       </p>
     </main>
     <script type="module" src="/src/contact.ts"></script>

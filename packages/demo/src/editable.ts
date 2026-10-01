@@ -5,6 +5,11 @@
 //
 // A change builds a new model and carries the LEFs over to it at the current
 // time, so the run continues rather than restarting.
+//
+// The lattice's ends evict: each holds an implicit CTCF facing outward, at
+// full strength (capturing from the left at site 0, from the right at the
+// last site), so a leg reaching an end makes its LEF respawn rather than
+// being held there. They aren't drawn, dragged or counted.
 
 import { createLattice, createModel, createWorld, MOBILITY, populate, Sim, type Lattice, type Rates } from "lefsim";
 
@@ -20,6 +25,19 @@ export interface CtcfMark {
   site: number;
   left: boolean;
 }
+
+/** The pages' starting CTCFs: `>` `>` `<`, a domain with a second right-facing CTCF inside it. */
+export const DEFAULT_CTCFS: CtcfMark[] = [
+  { site: 750, left: false },
+  { site: 1500, left: false },
+  { site: 2250, left: true },
+];
+
+/** The implicit evicting CTCFs at the lattice's ends. */
+const END_CTCFS = [
+  { site: 0, capturesFrom: "left" as const, strength: 1 },
+  { site: N_SITES - 1, capturesFrom: "right" as const, strength: 1 },
+];
 
 /** The inputs an editable run reads, by role. */
 export interface ModelInputs {
@@ -64,11 +82,18 @@ export class EditableRun {
     inputs.nRight.addEventListener("change", () => this.#setCount(false, inputs.nRight));
   }
 
+  /** The lattice the sim runs on: the CTCFs, and the evicting ends. */
   lattice(): Lattice {
-    return createLattice(
-      N_SITES,
-      this.ctcfs.map((c) => ({ site: c.site, capturesFrom: c.left ? "left" : "right", strength: this.strength })),
-    );
+    return createLattice(N_SITES, [...this.#ctcfSpecs(), ...END_CTCFS]);
+  }
+
+  /** The lattice the views draw: without the implicit ends, which aren't domain boundaries. */
+  #drawnLattice(): Lattice {
+    return createLattice(N_SITES, this.#ctcfSpecs());
+  }
+
+  #ctcfSpecs() {
+    return this.ctcfs.map((c) => ({ site: c.site, capturesFrom: c.left ? ("left" as const) : ("right" as const), strength: this.strength }));
   }
 
   /** A new run: `nLefs` LEFs placed with `seed`, and run with it, on the current model. */
@@ -79,7 +104,7 @@ export class EditableRun {
     this.#readParams();
     const lattice = this.lattice();
     this.sim = new Sim(createModel(populate(lattice, nLefs, { seed }), this.rates), { seed });
-    setLattice(lattice);
+    setLattice(this.#drawnLattice());
   }
 
   /**
@@ -110,12 +135,12 @@ export class EditableRun {
     });
     this.sim = new Sim(createModel(world, this.rates), { seed: this.#seed + ++this.#rebuilds, startTime: time });
     old.free();
-    setLattice(lattice);
+    setLattice(this.#drawnLattice());
   }
 
-  /** Move CTCF `i` to `site` and rebuild; false if another CTCF is there. */
+  /** Move CTCF `i` to `site` and rebuild; false if another CTCF (or an end) is there. */
   moveCtcf(i: number, site: number): boolean {
-    if (this.ctcfs.some((c) => c.site === site)) return false;
+    if (site <= 0 || site >= N_SITES - 1 || this.ctcfs.some((c) => c.site === site)) return false;
     this.ctcfs[i]!.site = site;
     this.rebuild();
     return true;
@@ -155,8 +180,8 @@ export class EditableRun {
       lane = lane.slice(0, -1);
     }
     while (lane.length < n) {
-      // A new CTCF goes in the middle of the widest stretch without one.
-      const sites = [-1, ...this.ctcfs.map((c) => c.site).sort((a, b) => a - b), N_SITES];
+      // A new CTCF goes in the middle of the widest stretch without one (the ends count as CTCFs).
+      const sites = [0, ...this.ctcfs.map((c) => c.site).sort((a, b) => a - b), N_SITES - 1];
       let best = 0;
       for (let i = 1; i < sites.length - 1; i++) if (sites[i + 1]! - sites[i]! > sites[best + 1]! - sites[best]!) best = i;
       const c = { site: Math.round((sites[best]! + sites[best + 1]!) / 2), left };

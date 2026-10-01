@@ -12,8 +12,8 @@
 
 import { effectiveDistances, init } from "lefsim";
 
-import { CtcfLanes, EditableRun } from "./editable.ts";
-import { CTCFS, N_SITES, readRunInputs } from "./model.ts";
+import { CtcfLanes, DEFAULT_CTCFS, EditableRun } from "./editable.ts";
+import { N_SITES, readRunInputs } from "./model.ts";
 import { $, colors, fit, fmt, LoopView, MARGIN, onThemeChange, placeTooltip, siteAt, snapshotOf, xScale } from "./render.ts";
 
 const LENGTHS = { stepLength: 1, hopLength: 1 };
@@ -50,9 +50,9 @@ let colorbarCtx = fit(colorbarCanvas);
 
 // ------------------------------------------------------------------ state
 
-/** The run and its editable model, starting from five TADs split by convergent CTCF pairs. */
+/** The run and its editable model. */
 const run = new EditableRun(
-  CTCFS.map((c) => ({ site: c.site, left: c.capturesFrom === "left" })),
+  DEFAULT_CTCFS,
   {
     nLeft: $<HTMLInputElement>("nctcf-left"),
     nRight: $<HTMLInputElement>("nctcf-right"),

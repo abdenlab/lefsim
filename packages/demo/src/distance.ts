@@ -12,7 +12,7 @@
 
 import { effectiveDistances, init } from "lefsim";
 
-import { CtcfLanes, EditableRun } from "./editable.ts";
+import { CtcfLanes, DEFAULT_CTCFS, EditableRun } from "./editable.ts";
 import { N_SITES, readRunInputs } from "./model.ts";
 import { $, colors, fit, fmt, LoopView, onThemeChange, siteAt, snapshotOf, xScale } from "./render.ts";
 
@@ -48,16 +48,9 @@ let graphCtx = fit(graphCanvas);
 
 // ------------------------------------------------------------------ state
 
-/**
- * The run and its editable model. To start, one domain in the middle of the
- * lattice: a CTCF holding left legs at its left edge, one holding right legs
- * at its right edge.
- */
+/** The run and its editable model. */
 const run = new EditableRun(
-  [
-    { site: 1000, left: false },
-    { site: 2000, left: true },
-  ],
+  DEFAULT_CTCFS,
   {
     nLeft: $<HTMLInputElement>("nctcf-left"),
     nRight: $<HTMLInputElement>("nctcf-right"),

@@ -120,7 +120,9 @@
         A path between two sites walks the lattice one step at a time, or hops across a loop from one leg
         to the other, and a chain of loops side by side takes one hop. Steps and hops both count 1, so
         with no loops the distance is just the separation. On the right, each pair of probes is joined
-        by a spring as long as its effective distance, and the line links the probes in lattice order.
+        by a spring as long as its effective distance, and the line links the probes in lattice order. The
+        lattice's ends evict: a leg that reaches one makes its LEF respawn, as if an outward-facing CTCF sat at
+        each end.
       </p>
     </main>
     <script type="module" src="/src/distance.ts"></script>
