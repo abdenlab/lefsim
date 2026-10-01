@@ -1,7 +1,7 @@
 // The model both demo pages simulate: a 3,000-site lattice split into five
 // TADs by convergent CTCF pairs.
 
-import { createLattice, createModel, populate, Sim } from "lefsim";
+import { createLattice, createModel, populate, Sim, type World } from "lefsim";
 
 export const N_SITES = 3000;
 export const BOUNDARIES = [600, 1300, 1800, 2500];
@@ -19,6 +19,19 @@ export function newSim(nLefs: number, seed: number): Sim {
   const lattice = createLattice(N_SITES, CTCFS);
   const model = createModel(populate(lattice, nLefs, { seed }), RATES);
   return new Sim(model, { seed });
+}
+
+/**
+ * The sim's current state as a World, with copied columns. The live state's
+ * arrays are views into wasm memory, which the next wasm call can detach
+ * (if it grows memory), so they're copied before being passed to one.
+ */
+export function worldOf(sim: Sim): World {
+  const s = sim.state();
+  return {
+    lattice: sim.lattice,
+    lefs: { leftPos: s.leftPos.slice(), rightPos: s.rightPos.slice(), leftMobility: s.leftMobility.slice(), rightMobility: s.rightMobility.slice() },
+  };
 }
 
 /** Clamp the LEF-count and seed inputs to valid values (and write them back). */

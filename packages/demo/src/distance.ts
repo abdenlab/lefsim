@@ -13,7 +13,7 @@
 import { effectiveDistances, init } from "lefsim";
 
 import { CtcfLanes, DEFAULT_CTCFS, EditableRun } from "./editable.ts";
-import { N_SITES, readRunInputs } from "./model.ts";
+import { N_SITES, readRunInputs, worldOf } from "./model.ts";
 import { $, colors, fit, fmt, LoopView, onThemeChange, siteAt, snapshotOf, xScale } from "./render.ts";
 
 const LENGTHS = { stepLength: 1, hopLength: 1 };
@@ -122,9 +122,7 @@ function readProbeCount(): number {
 function measure() {
   const sim = run.sim;
   if (!sim) return;
-  // The live state has the LEF columns a World needs; it's used at once,
-  // before the next call into the sim.
-  const d = effectiveDistances({ lattice: sim.lattice, lefs: sim.state() }, probes, { ...LENGTHS, targets: probes });
+  const d = effectiveDistances(worldOf(sim), probes, { ...LENGTHS, targets: probes });
   dist.set(d);
 }
 

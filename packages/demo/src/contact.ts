@@ -13,7 +13,7 @@
 import { effectiveDistances, init } from "lefsim";
 
 import { CtcfLanes, DEFAULT_CTCFS, EditableRun } from "./editable.ts";
-import { N_SITES, readRunInputs } from "./model.ts";
+import { N_SITES, readRunInputs, worldOf } from "./model.ts";
 import { $, colors, fit, fmt, LoopView, MARGIN, onThemeChange, placeTooltip, siteAt, snapshotOf, xScale } from "./render.ts";
 
 const LENGTHS = { stepLength: 1, hopLength: 1 };
@@ -176,10 +176,7 @@ function accumulate(time: number) {
 /** Distances between every pair of bins in the current state. */
 function measure(): number {
   const started = performance.now();
-  // The live state has the LEF columns a World needs; it's used at once,
-  // before the next call into the sim.
-  const sim = run.sim!;
-  dist = effectiveDistances({ lattice: sim.lattice, lefs: sim.state() }, centers, LENGTHS);
+  dist = effectiveDistances(worldOf(run.sim!), centers, LENGTHS);
   return performance.now() - started;
 }
 

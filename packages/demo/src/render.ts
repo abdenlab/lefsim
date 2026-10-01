@@ -29,6 +29,7 @@ function palette() {
     band: v("--band"),
     extruding: v("--extruding"),
     held: v("--held"),
+    probe: v("--probe"),
   };
 }
 
@@ -287,7 +288,8 @@ export class Kymograph {
     this.#ctx.fillRect(0, 0, width, height);
   }
 
-  push(frame: Frame) {
+  /** Add `frame` as the newest row; `under` draws on that row (1 px tall, at y 0) before the legs. */
+  push(frame: Frame, under?: (ctx: CanvasRenderingContext2D, x: (site: number) => number) => void) {
     const canvas = this.#canvas;
     const ctx = this.#ctx;
     const { width } = canvas.getBoundingClientRect();
@@ -305,6 +307,7 @@ export class Kymograph {
     // Faint TAD boundaries, so domains read in the kymograph too.
     ctx.fillStyle = colors.rule;
     for (const b of geometry.boundaries) ctx.fillRect(x(b), 0, 1, row);
+    under?.(ctx, x);
 
     for (let i = 0; i < frame.leftPos.length; i++) {
       ctx.fillStyle = frame.held[i] ? colors.held : colors.extruding;

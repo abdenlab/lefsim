@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Encounters</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 26 A12 14 0 0 1 28 26' fill='none' stroke='%23eb6834' stroke-width='3'/%3E%3Cpath d='M9 26 A5 7 0 0 1 19 26' fill='none' stroke='%232a78d6' stroke-width='3'/%3E%3Cpath d='M2 26.5 H30' stroke='%2355585f' stroke-width='2'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="encounter-page model-controls">
+    <main>
+      <nav aria-label="Demos">
+        <a href="/">Live simulation</a>
+        <a href="/replay.html">Replay</a>
+        <a href="/parquet.html">Parquet file</a>
+        <a href="/distance.html">Effective distance</a>
+        <a href="/contact.html">Contact map</a>
+        <a href="/encounter.html" aria-current="page">Encounters</a>
+      </nav>
+      <header>
+        <div class="title">
+          <h1>Encounters</h1>
+          <p id="summary">Loading the simulator…</p>
+        </div>
+        <form id="controls" autocomplete="off">
+          <button type="button" id="play" disabled>Play</button>
+          <label>
+            Speed
+            <input type="range" id="speed" min="1" max="4" step="0.01" value="2.5" />
+            <output id="speed-out" for="speed"></output>
+          </label>
+          <label>
+            LEFs
+            <input type="number" id="nlefs" min="0" max="700" step="1" value="10" />
+          </label>
+          <label title="CTCFs capturing from the left">
+            CTCFs ◀
+            <input type="number" id="nctcf-left" min="0" max="16" step="1" aria-label="CTCFs capturing from the left" />
+          </label>
+          <label title="CTCFs capturing from the right">
+            CTCFs ▶
+            <input type="number" id="nctcf-right" min="0" max="16" step="1" aria-label="CTCFs capturing from the right" />
+          </label>
+          <label>
+            Seed
+            <input type="number" id="seed" min="0" step="1" value="1" />
+          </label>
+          <button type="submit" id="restart" disabled>Restart</button>
+          <span class="break" aria-hidden="true"></span>
+          <label title="Steps per time unit of a moving, unblocked leg">
+            Step rate
+            <input type="number" id="rate-step" min="0" step="any" />
+          </label>
+          <label title="Respawns per time unit of a LEF with neither leg held">
+            Respawn rate
+            <input type="number" id="rate-respawn" min="0" step="any" />
+          </label>
+          <label title="Respawns per time unit of a LEF with a leg held at a CTCF">
+            Respawn rate when held
+            <input type="number" id="rate-respawn-held" min="0" step="any" />
+          </label>
+          <label title="Chance that a CTCF captures (or evicts) a leg arriving at it">
+            CTCF strength
+            <input type="number" id="strength" min="0" max="1" step="0.05" />
+          </label>
+          <span class="break" aria-hidden="true"></span>
+          <label title="The probes are in an encounter while their effective distance is at most this">
+            Encounter within
+            <input type="range" id="threshold" min="0" max="1000" step="5" value="100" />
+            <output id="threshold-out" for="threshold"></output>
+          </label>
+        </form>
+      </header>
+
+      <div class="encounter-grid">
+        <section class="panel arcs-cell" aria-labelledby="arcs-title">
+          <h2 id="arcs-title">Loops and probes <span class="hint">drag the probes and CTCFs (◀ and ▶ lanes) to move them</span></h2>
+          <div class="canvas-wrap">
+            <canvas id="arcs" role="img" aria-label="Loop arcs over the lattice"></canvas>
+            <div id="tooltip" class="tooltip" role="status" hidden></div>
+          </div>
+          <canvas id="tracks" role="img" aria-label="The two probes, and CTCFs in two lanes by the side they capture from; drag to move"></canvas>
+        </section>
+
+        <section class="panel hist-cell" aria-labelledby="hist-title">
+          <div class="map-heading">
+            <h2 id="hist-title">Encounter durations</h2>
+            <button type="button" id="reset-stats">Reset</button>
+          </div>
+          <div class="hist-wrap">
+            <canvas id="hist" role="img" aria-label="Histogram of encounter durations, log-spaced bins"></canvas>
+          </div>
+        </section>
+
+        <section class="panel kymo-cell" aria-labelledby="kymo-title">
+          <h2 id="kymo-title">Leg positions over time <span class="hint">newest at top; probes in purple, joined during an encounter</span></h2>
+          <div class="canvas-wrap">
+            <canvas id="kymo" role="img" aria-label="Kymograph of leg positions over time, with the probes and their encounters"></canvas>
+          </div>
+        </section>
+
+        <section class="panel trace-cell" aria-labelledby="trace-title">
+          <h2 id="trace-title">Effective distance</h2>
+          <div class="canvas-wrap">
+            <canvas id="trace" role="img" aria-label="Effective distance between the probes over time, rows aligned with the kymograph"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <footer>
+        <dl id="readout">
+          <div><dt>Time</dt><dd id="r-time">0</dd></div>
+          <div><dt>Distance now</dt><dd id="r-distance">–</dd></div>
+          <div><dt>Encounters</dt><dd id="r-count">0</dd></div>
+          <div><dt>Mean duration</dt><dd id="r-mean">–</dd></div>
+          <div><dt>Time in encounter</dt><dd id="r-fraction">–</dd></div>
+          <div id="behind" hidden><dt>Playback</dt><dd>falling behind</dd></div>
+        </dl>
+        <ul class="legend" aria-label="Legend">
+          <li><span class="swatch extruding"></span>Extruding</li>
+          <li><span class="swatch held"></span>Held at a boundary</li>
+          <li><span class="swatch probe"></span>Probes</li>
+        </ul>
+      </footer>
+      <p class="note">
+        The effective distance between the probes counts lattice steps and hops across loops (a chain of loops
+        side by side takes one hop), each 1, and is checked every time unit of simulation time. While it's at
+        most the threshold, the probes are in an encounter; each encounter's duration is added to the histogram
+        when it ends. Beside the kymograph, on the same rows, the distance runs from 0 up to the probes'
+        separation (which it never exceeds), with the threshold as a dotted line. Moving a probe or the threshold starts the statistics afresh; changes to the model don't,
+        so press Reset to see only the new model. The lattice's ends evict: a leg that reaches one makes its LEF
+        respawn.
+      </p>
+    </main>
+    <script type="module" src="/src/encounter.ts"></script>
+  </body>
+</html>
