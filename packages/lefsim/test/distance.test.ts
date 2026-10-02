@@ -14,13 +14,13 @@ const s = lengths.stepLength;
 const h = lengths.hopLength;
 
 describe("effectiveDistance", () => {
-  it("walks, hops and crosses a rosette in one hop", () => {
+  it("walks, hops, and crosses a rosette at a hop per LEF with free junctions", () => {
     const d = (a: number, b: number) => effectiveDistance(rosette, a, b, lengths);
     expect(d(20, 21)).toBe(s); // the junction step
     expect(d(20, 30)).toBe(s + h);
-    expect(d(10, 30)).toBe(h); // over the chain
+    expect(d(10, 30)).toBe(2 * h); // over the chain: a hop per LEF, the junction free
     expect(d(10, 21)).toBe(h + s);
-    expect(d(5, 35)).toBe(5 * s + h + 5 * s);
+    expect(d(5, 35)).toBe(5 * s + 2 * h + 5 * s);
     expect(d(35, 5)).toBe(d(5, 35));
     expect(d(40, 40)).toBe(0);
     expect(effectiveDistance(createWorld(lattice), 5, 35, lengths)).toBe(30 * s);

@@ -80,7 +80,8 @@ class World:
     def effective_distance(self, a: int, b: int, *, step_length: int, hop_length: int) -> int:
         """The shortest path between sites ``a`` and ``b`` when a path walks the
         lattice (``step_length`` per step) and may cross LEFs (``hop_length``
-        per crossing; a rosette of LEFs side by side takes one hop)."""
+        per crossing; across a rosette of LEFs side by side, a hop per LEF and
+        the junctions between them free)."""
     def effective_distances(
         self, sites: Sequence[int], targets: Optional[Sequence[int]] = None, *, step_length: int, hop_length: int
     ) -> Any:

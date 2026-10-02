@@ -5,7 +5,8 @@
  *
  * A path walks at `stepLength` per lattice step and crosses a LEF, from one
  * leg to the other, at `hopLength`. A rosette (a chain of LEFs side by side,
- * one's right leg next to the next's left leg) takes a single hop to cross.
+ * one's right leg next to the next's left leg) costs a hop per LEF to cross,
+ * and the junctions between its LEFs are free.
  * Both lengths are integers, so distances are exact. Keep hops at least as
  * long as steps: with shorter hops, doubling back across a LEF can beat a
  * single step.

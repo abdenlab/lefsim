@@ -369,8 +369,8 @@ impl PyWorld {
 
     /// The effective distance between sites `a` and `b`: the shortest path
     /// when a path walks the lattice (`step_length` per step) and may cross
-    /// LEFs (`hop_length` per crossing; a chain of LEFs side by side, a
-    /// rosette, takes one hop). Both lengths are integers, so distances are
+    /// LEFs (`hop_length` per crossing; across a chain of LEFs side by side,
+    /// a rosette, a hop per LEF and the junctions between them free). Both lengths are integers, so distances are
     /// exact; divide by `step_length` for lattice steps.
     #[pyo3(signature = (a, b, *, step_length, hop_length))]
     fn effective_distance(&self, py: Python<'_>, a: u32, b: u32, step_length: u64, hop_length: u64) -> PyResult<u64> {

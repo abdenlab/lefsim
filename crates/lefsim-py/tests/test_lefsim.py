@@ -288,16 +288,16 @@ def rosette_world():
 def test_effective_distance_follows_the_rosette_rules():
     w = rosette_world()
     long_hop = dict(step_length=1, hop_length=5)
-    assert w.effective_distance(10, 30, **long_hop) == 5  # one chain crossing
+    assert w.effective_distance(10, 30, **long_hop) == 10  # across the chain: a hop per LEF, the junction free
     assert w.effective_distance(20, 21, **long_hop) == 1  # the junction step
     assert w.effective_distance(20, 30, **long_hop) == 6  # the step, then a hop
     short_hop = dict(step_length=1000, hop_length=100)
     # With hops shorter than steps, routes with extra hops win.
     assert [w.effective_distance(a, b, **short_hop) for a, b in [(20, 21), (20, 30), (10, 30), (10, 21)]] == [
+        400,
         300,
         200,
-        100,
-        200,
+        300,
     ]
     assert lefsim.World(lefsim.Lattice(40)).effective_distance(3, 9, step_length=2, hop_length=0) == 12
 

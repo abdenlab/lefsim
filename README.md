@@ -385,8 +385,9 @@ lattice, end=...)`, which accepts any batch boundaries.
 **Effective distance.** The shortest path between two lattice sites when a path
 walks the lattice and may also cross LEFs, as loops bring their anchors
 together. Steps and hops have integer lengths you choose (their ratio sets how
-a hop compares with a step), so distances are exact; a rosette, a chain of LEFs
-side by side, takes one hop to cross. Keep hops at least as long as steps
+a hop compares with a step), so distances are exact. A rosette, a chain of LEFs
+side by side, costs a hop per LEF to cross, and the junctions between its LEFs are
+free. Keep hops at least as long as steps
 (`hop_length >= step_length`): with shorter hops, doubling back across a LEF
 can beat a single step.
 

@@ -3,20 +3,21 @@
 //!
 //! A path walks at `step_length` per lattice step and crosses a LEF, from one
 //! leg to the other, at `hop_length`. A **rosette** (a chain of LEFs side by
-//! side, one's right leg next to the next's left leg) takes a single hop to
-//! cross, however many LEFs it has. Both lengths are integers, so distances
-//! are exact.
+//! side, one's right leg next to the next's left leg) costs one hop per LEF
+//! crossed, and its junctions are free: crossing `k` linked LEFs costs
+//! `k * hop_length`, without the steps between them. Both lengths are
+//! integers, so distances are exact.
 //!
 //! Use `hop_length >= step_length`. With shorter hops, reversing back across
-//! a LEF can beat a single step (e.g. three hops across a rosette's junction
+//! a LEF can beat a single step (e.g. four hops around a rosette's junction
 //! instead of one step), which isn't intended; forbidding it is sketched in
 //! the design note but not implemented.
 //!
 //! [`LoopGraph`] contracts the lattice to the leg sites: consecutive legs are
 //! joined by the walk between them, and each rosette gets two one-way
-//! "express lanes" that allow exactly its shortcuts (from a left leg to any
-//! right leg at or after it along the chain, and back). A site enters the
-//! network through its nearest leg on each side. See
+//! "express lanes" that carry a path across its LEFs (from a left leg to any
+//! right leg at or after it along the chain, and back), a hop per LEF. A site
+//! enters the network through its nearest leg on each side. See
 //! `_scratch/design-effective-distance.md` for the reasoning.
 
 use std::cmp::Reverse;
@@ -124,18 +125,19 @@ impl LoopGraph {
             edges.push((k as u32 + 1, k as u32, walk));
         }
         for lef in 0..n_lefs {
-            // Rightward: enter from the left leg, move on along the chain,
-            // leave at a right leg.
+            // Rightward: enter from the left leg (a hop across this LEF), move
+            // on along the chain (a hop across each further LEF, the junction
+            // free), leave at a right leg.
             edges.push((left_node(lef), rightward(lef), hop_length));
             edges.push((rightward(lef), right_node(lef), 0));
             if next[lef] != u32::MAX {
-                edges.push((rightward(lef), rightward(next[lef] as usize), 0));
+                edges.push((rightward(lef), rightward(next[lef] as usize), hop_length));
             }
             // Leftward: the mirror image.
             edges.push((right_node(lef), leftward(lef), hop_length));
             edges.push((leftward(lef), left_node(lef), 0));
             if prev[lef] != u32::MAX {
-                edges.push((leftward(lef), leftward(prev[lef] as usize), 0));
+                edges.push((leftward(lef), leftward(prev[lef] as usize), hop_length));
             }
         }
 
@@ -326,8 +328,8 @@ mod tests {
     use crate::model::{Lattice, Mobility, SimRng};
 
     /// Every pair's distance by brute force: the full site graph (steps of
-    /// `s`), plus an explicit edge of length `h` for every allowed shortcut
-    /// (`l_i` to `r_j` for `i <= j` along each rosette), all-pairs by
+    /// `s`), plus an explicit edge for every chain crossing (`l_i` to `r_j`
+    /// for `i <= j` along each rosette, `h` per LEF crossed), all-pairs by
     /// Floyd–Warshall. Independent of the lanes, so it checks them.
     fn brute_force(n_sites: usize, lefs: &[(u32, u32)], s: u64, h: u64) -> Vec<Vec<u64>> {
         let inf = u64::MAX / 4;
@@ -350,10 +352,11 @@ mod tests {
                 chain.push(b);
             }
             for (x, &i) in chain.iter().enumerate() {
-                for &j in &chain[x..] {
+                for (y, &j) in chain.iter().enumerate().skip(x) {
                     let (l, r) = (lefs[i].0 as usize, lefs[j].1 as usize);
-                    d[l][r] = d[l][r].min(h);
-                    d[r][l] = d[r][l].min(h);
+                    let hops = h * (y - x + 1) as u64;
+                    d[l][r] = d[l][r].min(hops);
+                    d[r][l] = d[r][l].min(hops);
                 }
             }
         }
@@ -445,27 +448,31 @@ mod tests {
     }
 
     #[test]
-    fn a_rosette_takes_one_hop_however_long() {
-        let (s, h) = (10, 3);
+    fn a_rosette_takes_a_hop_per_lef_and_its_junctions_are_free() {
+        let (s, h) = (10, 30);
         for k in 1..6u32 {
             // k LEFs side by side: [1, 10], [11, 20], ...
             let lefs: Vec<(u32, u32)> = (0..k).map(|i| (10 * i + 1, 10 * i + 10)).collect();
             let g = graph(10 * k as usize + 2, &lefs, s, h);
-            assert_eq!(g.distance(1, 10 * k).unwrap(), h, "k = {k}");
+            assert_eq!(g.distance(1, 10 * k).unwrap(), u64::from(k) * h, "k = {k}");
         }
+        // Not linked (two sites apart), the step between is paid.
+        let g = graph(40, &[(1, 10), (12, 20)], s, h);
+        assert_eq!(g.distance(1, 20).unwrap(), 2 * h + 2 * s);
     }
 
     #[test]
     fn the_junction_rules() {
-        // LEF 1 at 10-20, LEF 2 at 21-30, as in the design's table. When a
-        // hop is shorter than a step, routes with extra hops win: r1 to l2
-        // can go back across LEF 1, over the chain, and back across LEF 2.
-        for &(s, h) in &[(1, 0), (1, 1), (1000, 100), (1, 5)] {
+        // LEF 1 at 10-20, LEF 2 at 21-30, as in the design's table: with
+        // hops at least as long as steps, s, s + h, 2h and h + s. When a hop
+        // is shorter than a step, routes with extra hops win: r1 to l2 can go
+        // back across LEF 1, over the chain, and back across LEF 2.
+        for &(s, h) in &[(1, 1), (1, 5), (3, 7), (1, 0), (1000, 100)] {
             let g = graph(40, &[(10, 20), (21, 30)], s, h);
-            assert_eq!(g.distance(20, 21).unwrap(), s.min(3 * h), "r1 to l2");
-            assert_eq!(g.distance(20, 30).unwrap(), (s + h).min(2 * h).min(10 * s), "r1 to r2");
-            assert_eq!(g.distance(10, 30).unwrap(), h.min(20 * s), "l1 to r2");
-            assert_eq!(g.distance(10, 21).unwrap(), (h + s).min(2 * h).min(11 * s), "l1 to l2");
+            assert_eq!(g.distance(20, 21).unwrap(), s.min(4 * h), "r1 to l2");
+            assert_eq!(g.distance(20, 30).unwrap(), (s + h).min(3 * h).min(10 * s), "r1 to r2");
+            assert_eq!(g.distance(10, 30).unwrap(), (2 * h).min(20 * s), "l1 to r2");
+            assert_eq!(g.distance(10, 21).unwrap(), (h + s).min(3 * h).min(11 * s), "l1 to l2");
         }
         // Two sites apart: no link, two hops and the walk between.
         let g = graph(40, &[(10, 20), (22, 30)], 1, 1);
