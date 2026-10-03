@@ -20,7 +20,7 @@ import pytest
 import lefsim
 
 # The golden fingerprint pinned by crates/lefsim/tests/determinism.rs.
-RUST_GOLDEN = 0xE5A22C6618308528
+RUST_GOLDEN = 0x1B52B58EBE898456
 
 FIXTURES = pathlib.Path(__file__).parents[3] / "packages" / "lefsim" / "test" / "fixtures"
 

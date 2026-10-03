@@ -117,3 +117,22 @@ fn eviction_triggers_immediate_respawn() {
     }
     panic!("never observed eviction");
 }
+
+#[test]
+fn a_fresh_lefs_right_leg_moves_on_when_the_leg_ahead_leaves() {
+    // LEF A is freshly placed at 4 (both legs on one site), its left leg
+    // blocked by C's right leg at 3 and its right leg by B's right leg at 5.
+    // When B's right leg steps on, A's right leg must be rescheduled too,
+    // although A's left leg shares its site.
+    for seed in 0..10 {
+        let mut world = World::new(Lattice::plain(30).unwrap());
+        world.add_lef((1, Mobility::Moving), (5, Mobility::Moving)).unwrap(); // B
+        world.add_lef((2, Mobility::Moving), (3, Mobility::Moving)).unwrap(); // C
+        world.add_lef((4, Mobility::Moving), (4, Mobility::Moving)).unwrap(); // A
+        let rates = Rates { step: 1.0, respawn: 1e-12, respawn_captured: 1e-12 };
+        let mut sim = Sim::new(Model::new(world, rates, SpawnRule::UniformNonCtcf).unwrap(), seed);
+        sim.run_until(200.0);
+        let (_, (a_right, _)) = sim.world().lef_state(2).unwrap();
+        assert!(a_right > 5, "seed {seed}: A's right leg stuck at {a_right}");
+    }
+}

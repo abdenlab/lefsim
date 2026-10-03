@@ -58,8 +58,14 @@
  },
  "lefs": [
   {
-   "left_pos": 377,
-   "right_pos": 423,
+   "left_pos": 25,
+   "right_pos": 32,
+   "left_mobility": "captured",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 33,
+   "right_pos": 79,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
@@ -70,112 +76,106 @@
    "right_mobility": "captured"
   },
   {
-   "left_pos": 399,
-   "right_pos": 422,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 427,
-   "right_pos": 457,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 26,
-   "right_pos": 75,
-   "left_mobility": "moving",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 81,
-   "right_pos": 124,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 176,
-   "right_pos": 224,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 461,
-   "right_pos": 474,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 225,
-   "right_pos": 235,
-   "left_mobility": "captured",
-   "right_mobility": "moving"
-  },
-  {
    "left_pos": 376,
    "right_pos": 424,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
-   "left_pos": 236,
-   "right_pos": 275,
+   "left_pos": 325,
+   "right_pos": 375,
+   "left_mobility": "captured",
+   "right_mobility": "captured"
+  },
+  {
+   "left_pos": 126,
+   "right_pos": 174,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 34,
+   "right_pos": 75,
    "left_mobility": "moving",
    "right_mobility": "captured"
   },
   {
-   "left_pos": 277,
+   "left_pos": 327,
+   "right_pos": 373,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 225,
+   "right_pos": 275,
+   "left_mobility": "captured",
+   "right_mobility": "captured"
+  },
+  {
+   "left_pos": 276,
+   "right_pos": 324,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 127,
+   "right_pos": 143,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 90,
+   "right_pos": 108,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 144,
+   "right_pos": 173,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 80,
+   "right_pos": 110,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 81,
+   "right_pos": 109,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 326,
    "right_pos": 374,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
-   "left_pos": 25,
-   "right_pos": 80,
-   "left_mobility": "captured",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 460,
-   "right_pos": 475,
-   "left_mobility": "moving",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 82,
-   "right_pos": 123,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 378,
-   "right_pos": 398,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 426,
-   "right_pos": 458,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 327,
-   "right_pos": 337,
+   "left_pos": 111,
+   "right_pos": 124,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
    "left_pos": 425,
-   "right_pos": 459,
+   "right_pos": 475,
    "left_mobility": "captured",
+   "right_mobility": "captured"
+  },
+  {
+   "left_pos": 407,
+   "right_pos": 407,
+   "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
-   "left_pos": 276,
-   "right_pos": 375,
+   "left_pos": 226,
+   "right_pos": 229,
    "left_mobility": "moving",
-   "right_mobility": "captured"
+   "right_mobility": "moving"
   }
  ],
  "rates": {

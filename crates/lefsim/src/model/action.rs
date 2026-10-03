@@ -5,7 +5,7 @@ use rand::distributions::OpenClosed01;
 use smallvec::SmallVec;
 
 use super::entity::{LefKey, LegKey, Mobility};
-use super::lattice::{Direction, SiteKind};
+use super::lattice::{Direction, Position, SiteKind};
 use super::spawn::Spawn;
 use super::world::World;
 use super::{Schedule, SimRng, Time};
@@ -197,16 +197,17 @@ fn fire_step(
         .shift(old_pos)
         .expect("step scheduled at lattice boundary");
 
-    // Identify rear and post neighbors for rescheduling.
-    let rear_neighbor = facing
-        .opposite()
-        .shift(old_pos)
-        .filter(|p| (*p as usize) < world.lattice.len())
-        .and_then(|p| world.legs_at(p).first().copied());
-    let post_neighbor = facing
-        .shift(new_pos)
-        .filter(|p| (*p as usize) < world.lattice.len())
-        .and_then(|p| world.legs_at(p).first().copied());
+    // The legs whose way ahead this step changes: those behind the old site
+    // (no longer blocked) and those beyond the new one (now blocked). Every
+    // leg at each site, since a freshly placed LEF has both legs on one site
+    // and either may be the one affected.
+    let neighbors_at = |p: Option<Position>| -> SmallVec<[LegKey; 2]> {
+        p.filter(|p| (*p as usize) < world.lattice.len())
+            .map(|p| world.legs_at(p).iter().copied().collect())
+            .unwrap_or_default()
+    };
+    let rear_neighbors = neighbors_at(facing.opposite().shift(old_pos));
+    let post_neighbors = neighbors_at(facing.shift(new_pos));
 
     // Mutate occupancy and the leg. The landing_mobility roll happens here,
     // exactly once per actual move — never in scheduling.
@@ -226,16 +227,7 @@ fn fire_step(
     // Tell the engine what to reschedule.
     touched.legs.push(leg_k);
     touched.lefs.push(lef_k);
-    if let Some(n) = rear_neighbor
-        && n != leg_k
-    {
-        touched.legs.push(n);
-    }
-    if let Some(n) = post_neighbor
-        && n != leg_k
-    {
-        touched.legs.push(n);
-    }
+    touched.legs.extend(rear_neighbors.into_iter().chain(post_neighbors).filter(|&n| n != leg_k));
 }
 
 fn fire_respawn(
