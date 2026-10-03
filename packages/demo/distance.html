@@ -65,11 +65,11 @@
             Step rate
             <input type="number" id="rate-step" min="0" step="any" />
           </label>
-          <label title="Respawns per time unit of a LEF with a leg able to move (the basal rate)">
+          <label title="Respawns per time unit of a LEF with both legs free to move (the basal rate)">
             Respawn rate
             <input type="number" id="rate-respawn" min="0" step="any" />
           </label>
-          <label title="Respawns per time unit of a LEF with both legs stalled: blocked by a leg ahead or the lattice's end, or stopped at a CTCF reached from behind">
+          <label title="Respawns per time unit of a LEF with either leg stalled: blocked by a leg ahead or the lattice's end, or stopped at a CTCF reached from behind">
             Respawn rate when stalled
             <input type="number" id="rate-respawn-stalled" min="0" step="any" />
           </label>
@@ -126,7 +126,7 @@
         A path between two sites walks the lattice one step at a time, or hops across a loop from one leg
         to the other, and across a chain of loops side by side the junctions between them are free. Steps and hops both count 1, so
         with no loops the distance is just the separation. On the right, each pair of probes is joined
-        by a spring as long as its effective distance, and the line links the probes in lattice order. A leg that reaches a CTCF from behind, or the lattice's end, stalls there; a LEF with both legs stalled unloads faster.
+        by a spring as long as its effective distance, and the line links the probes in lattice order. A leg that reaches a CTCF from behind, or the lattice's end, stalls there; a LEF with either leg stalled unloads faster.
       </p>
     </main>
     <script type="module" src="/src/distance.ts"></script>

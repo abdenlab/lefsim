@@ -115,11 +115,11 @@ class Rates:
         """Step rate of a moving, unblocked leg."""
     @property
     def respawn(self) -> float:
-        """Basal respawn rate: a LEF with a leg able to move."""
+        """Basal respawn rate: a LEF with both legs free to move."""
     @property
     def respawn_stalled(self) -> float:
-        """Respawn rate of an immobilized LEF: both legs stalled (blocked by a
-        leg ahead or the lattice's end, or stopped at a CTCF reached from behind)."""
+        """Respawn rate of a stalled LEF: either leg stalled (blocked by a leg
+        ahead or the lattice's end, or stopped at a CTCF reached from behind)."""
     @property
     def respawn_captured(self) -> float:
         """Respawn rate of a LEF with a captured leg, whatever the other leg does."""

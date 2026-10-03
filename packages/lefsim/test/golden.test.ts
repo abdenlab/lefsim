@@ -9,7 +9,7 @@ import { eventsToArrow, snapshotsToArrow } from "../src/arrow.ts";
 import { Sim } from "../src/index.ts";
 import { makeSim, type Setup } from "./helpers.ts";
 
-const RUST_GOLDEN = 0xcd4d7b0f261fb1e3n;
+const RUST_GOLDEN = 0x69865133d61c9448n;
 
 /** FNV-1a, 64-bit, over a byte array. */
 function fnv1a(bytes: Uint8Array, h = 0xcbf29ce484222325n): bigint {

@@ -130,8 +130,8 @@ Arenas:
   wait at:
   - `rates.respawn_captured` if either leg is `Captured`, whatever the other
     does: capture protects a LEF.
-  - `rates.respawn_stalled` if both legs are stalled (each `Stalled`, or
-    `Moving` but blocked): the LEF is immobilized.
+  - `rates.respawn_stalled` if either leg is stalled (`Stalled`, or `Moving`
+    but blocked).
   - `rates.respawn`, the basal rate, otherwise.
 
   Since blocking depends on neighbors, a step or respawn reschedules the

@@ -16,11 +16,11 @@ use super::{Schedule, SimRng, Time};
 pub struct Rates {
     /// Step rate of a moving, unblocked leg.
     pub step: f64,
-    /// Respawn rate of a LEF with at least one leg able to move (the basal rate).
+    /// Respawn rate of a LEF with both legs free to move (the basal rate).
     pub respawn: f64,
-    /// Respawn rate of an immobilized LEF: both legs stalled, whether
-    /// blocked (a leg directly ahead, or the lattice's end) or stopped at a
-    /// CTCF reached from behind.
+    /// Respawn rate of a stalled LEF: either leg stalled, whether blocked (a
+    /// leg directly ahead, or the lattice's end) or stopped at a CTCF reached
+    /// from behind.
     pub respawn_stalled: f64,
     /// Respawn rate of a LEF with at least one leg captured, whatever the
     /// other leg is doing: capture protects a LEF from faster unloading.
@@ -29,7 +29,7 @@ pub struct Rates {
 
 impl Default for Rates {
     /// Reasonable demo rates: stepping is the fast process; respawns take
-    /// thousands of steps; immobilized LEFs unload ten times faster, and
+    /// thousands of steps; stalled LEFs unload ten times faster, and
     /// captured ones at the basal rate.
     fn default() -> Self {
         Rates {
@@ -189,12 +189,12 @@ fn schedule_respawn(
 
 /// A LEF's respawn rate in the current state: `respawn_captured` if either
 /// leg is captured (capture protects, whatever the other leg is doing), else
-/// `respawn_stalled` if both legs are stalled (immobilized), else `respawn`.
+/// `respawn_stalled` if either leg is stalled, else `respawn`.
 fn respawn_rate(lef_k: LefKey, world: &World, rates: &Rates) -> f64 {
     let legs = world.lefs[lef_k].legs;
     if legs.iter().any(|&l| world.legs[l].mobility == Mobility::Captured) {
         rates.respawn_captured
-    } else if legs.iter().all(|&l| stalled(world, l)) {
+    } else if legs.iter().any(|&l| stalled(world, l)) {
         rates.respawn_stalled
     } else {
         rates.respawn
@@ -435,18 +435,19 @@ mod tests {
         };
         // Both legs free: basal.
         assert_eq!(rate(&[((5, Moving), (8, Moving))], 0), RATES.respawn);
-        // One leg blocked, the other free: still basal.
-        assert_eq!(rate(&[((5, Moving), (8, Moving)), ((9, Moving), (12, Moving))], 0), RATES.respawn);
-        // Both blocked, by the lattice's end and by a leg ahead: immobilized.
-        assert_eq!(rate(&[((0, Moving), (8, Moving)), ((9, Moving), (12, Moving))], 0), RATES.respawn_stalled);
-        // The middle of a rosette of three: blocked on both sides.
+        // One leg blocked by a leg ahead, the other free: stalled.
+        assert_eq!(rate(&[((5, Moving), (8, Moving)), ((9, Moving), (12, Moving))], 0), RATES.respawn_stalled);
+        // One leg blocked by the lattice's end, the other free: stalled.
+        assert_eq!(rate(&[((0, Moving), (8, Moving))], 0), RATES.respawn_stalled);
+        // A rosette: every LEF has a leg blocked at a junction.
         let rosette = [((2, Moving), (5, Moving)), ((6, Moving), (9, Moving)), ((10, Moving), (13, Moving))];
-        assert_eq!(rate(&rosette, 1), RATES.respawn_stalled);
-        assert_eq!(rate(&rosette, 0), RATES.respawn); // its left leg is free
-        // Stalled at the CTCF (reached from behind) and blocked: immobilized.
-        assert_eq!(rate(&[((20, Stalled), (25, Moving)), ((26, Moving), (28, Moving))], 0), RATES.respawn_stalled);
-        // Stalled at the CTCF, the other leg free: basal.
-        assert_eq!(rate(&[((20, Stalled), (25, Moving))], 0), RATES.respawn);
+        for lef in 0..3 {
+            assert_eq!(rate(&rosette, lef), RATES.respawn_stalled, "LEF {lef}");
+        }
+        // Stalled at the CTCF (reached from behind), the other leg free: stalled.
+        assert_eq!(rate(&[((20, Stalled), (25, Moving))], 0), RATES.respawn_stalled);
+        // Two LEFs side by side but not touching: both free.
+        assert_eq!(rate(&[((5, Moving), (8, Moving)), ((10, Moving), (12, Moving))], 1), RATES.respawn);
         // Captured protects, even with the other leg blocked by the end.
         assert_eq!(rate(&[((0, Moving), (20, Captured))], 0), RATES.respawn_captured);
     }

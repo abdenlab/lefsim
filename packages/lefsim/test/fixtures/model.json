@@ -58,124 +58,124 @@
  },
  "lefs": [
   {
-   "left_pos": 226,
-   "right_pos": 258,
+   "left_pos": 96,
+   "right_pos": 111,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
-   "left_pos": 78,
-   "right_pos": 110,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 76,
-   "right_pos": 124,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 86,
-   "right_pos": 99,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 126,
-   "right_pos": 173,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 259,
-   "right_pos": 274,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 366,
-   "right_pos": 403,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 326,
-   "right_pos": 355,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 325,
-   "right_pos": 475,
-   "left_mobility": "captured",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 425,
-   "right_pos": 474,
-   "left_mobility": "captured",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 75,
-   "right_pos": 175,
-   "left_mobility": "stalled",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 77,
-   "right_pos": 123,
+   "left_pos": 185,
+   "right_pos": 203,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
    "left_pos": 25,
-   "right_pos": 74,
+   "right_pos": 44,
    "left_mobility": "captured",
    "right_mobility": "moving"
   },
   {
-   "left_pos": 176,
-   "right_pos": 176,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 404,
-   "right_pos": 424,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 125,
-   "right_pos": 174,
-   "left_mobility": "captured",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 28,
-   "right_pos": 38,
+   "left_pos": 327,
+   "right_pos": 368,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
    "left_pos": 225,
-   "right_pos": 275,
+   "right_pos": 274,
+   "left_mobility": "captured",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 434,
+   "right_pos": 443,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 275,
+   "right_pos": 375,
+   "left_mobility": "moving",
+   "right_mobility": "captured"
+  },
+  {
+   "left_pos": 325,
+   "right_pos": 374,
+   "left_mobility": "captured",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 227,
+   "right_pos": 264,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 136,
+   "right_pos": 154,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 425,
+   "right_pos": 450,
+   "left_mobility": "captured",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 476,
+   "right_pos": 499,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 134,
+   "right_pos": 174,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 266,
+   "right_pos": 273,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 125,
+   "right_pos": 175,
    "left_mobility": "captured",
    "right_mobility": "captured"
   },
   {
-   "left_pos": 27,
-   "right_pos": 72,
+   "left_pos": 451,
+   "right_pos": 475,
+   "left_mobility": "moving",
+   "right_mobility": "captured"
+  },
+  {
+   "left_pos": 226,
+   "right_pos": 265,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
-   "left_pos": 282,
-   "right_pos": 282,
+   "left_pos": 296,
+   "right_pos": 324,
    "left_mobility": "moving",
    "right_mobility": "moving"
+  },
+  {
+   "left_pos": 276,
+   "right_pos": 295,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 45,
+   "right_pos": 75,
+   "left_mobility": "moving",
+   "right_mobility": "captured"
   }
  ],
  "rates": {

@@ -72,11 +72,11 @@
             Step rate
             <input type="number" id="rate-step" min="0" step="any" />
           </label>
-          <label title="Respawns per time unit of a LEF with a leg able to move (the basal rate)">
+          <label title="Respawns per time unit of a LEF with both legs free to move (the basal rate)">
             Respawn rate
             <input type="number" id="rate-respawn" min="0" step="any" />
           </label>
-          <label title="Respawns per time unit of a LEF with both legs stalled: blocked by a leg ahead or the lattice's end, or stopped at a CTCF reached from behind">
+          <label title="Respawns per time unit of a LEF with either leg stalled: blocked by a leg ahead or the lattice's end, or stopped at a CTCF reached from behind">
             Respawn rate when stalled
             <input type="number" id="rate-respawn-stalled" min="0" step="any" />
           </label>
@@ -130,7 +130,7 @@
         plotted, from its value between the farthest sites (white) to its value between neighboring bins (black).
         Above the diagonal is the current state. Below it is the average over simulation time since the last
         reset (or restart, or change of bin size), each frame's state weighted by the time it covers.
-        A leg that reaches a CTCF from behind, or the lattice's end, stalls there; a LEF with both legs stalled unloads faster.
+        A leg that reaches a CTCF from behind, or the lattice's end, stalls there; a LEF with either leg stalled unloads faster.
       </p>
     </main>
     <script type="module" src="/src/contact.ts"></script>

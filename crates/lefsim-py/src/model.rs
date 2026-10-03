@@ -457,9 +457,9 @@ pub fn populate(lattice: &PyLattice, n_lefs: usize, seed: u64, spawn_rule: &str)
 // ===================================================================
 
 /// Event rates (per unit time): `step` for a moving, unblocked leg;
-/// `respawn`, the basal rate, for a LEF with a leg able to move;
-/// `respawn_stalled` for an immobilized LEF (both legs stalled: blocked by a
-/// leg ahead or the lattice's end, or stopped at a CTCF reached from behind);
+/// `respawn`, the basal rate, for a LEF with both legs free to move;
+/// `respawn_stalled` for a stalled LEF (either leg stalled: blocked by a leg
+/// ahead or the lattice's end, or stopped at a CTCF reached from behind);
 /// `respawn_captured` for a LEF with a captured leg, whatever the other leg
 /// does. Checked (positive and finite) by `Model`.
 #[pyclass(module = "lefsim", name = "Rates", frozen, eq, skip_from_py_object)]

@@ -86,11 +86,11 @@ export type StopReason = "reached_time" | "reached_event_count" | "exhausted" | 
 export interface Rates {
   /** Step rate of a moving, unblocked leg. */
   step: number;
-  /** Basal respawn rate: a LEF with a leg able to move. */
+  /** Basal respawn rate: a LEF with both legs free to move. */
   respawn: number;
   /**
-   * Respawn rate of an immobilized LEF: both legs stalled (blocked by a leg
-   * ahead or the lattice's end, or stopped at a CTCF reached from behind).
+   * Respawn rate of a stalled LEF: either leg stalled (blocked by a leg ahead
+   * or the lattice's end, or stopped at a CTCF reached from behind).
    */
   respawnStalled: number;
   /** Respawn rate of a LEF with a captured leg, whatever the other leg does. */
