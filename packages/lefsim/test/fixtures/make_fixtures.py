@@ -26,7 +26,7 @@ config = {
     "ctcfStrength": 0.7,
     "nLefs": 20,
     "seed": 0x5EED,
-    "rates": {"step": 1.0, "respawn": 0.01, "respawnCaptured": 0.002},
+    "rates": {"step": 1.0, "respawn": 0.01, "respawnStalled": 0.05, "respawnCaptured": 0.002},
     "tEnd": 1000.0,
 }
 
@@ -39,7 +39,12 @@ def make_sim(config):
     rates = config["rates"]
     model = lefsim.Model(
         lefsim.populate(lattice, config["nLefs"], seed=config["seed"]),
-        lefsim.Rates(rates["step"], rates["respawn"], rates["respawnCaptured"]),
+        lefsim.Rates(
+            step=rates["step"],
+            respawn=rates["respawn"],
+            respawn_stalled=rates["respawnStalled"],
+            respawn_captured=rates["respawnCaptured"],
+        ),
     )
     return lefsim.Sim(model, seed=config["seed"])
 

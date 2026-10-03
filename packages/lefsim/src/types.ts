@@ -3,7 +3,7 @@
  */
 
 /** Mobility names, indexed by the codes in {@link LiveState} mobility arrays. */
-export const MOBILITY = ["Moving", "Captured", "Evicted"] as const;
+export const MOBILITY = ["Moving", "Captured", "Stalled"] as const;
 export type Mobility = (typeof MOBILITY)[number];
 
 /** Direction names, indexed by the codes in {@link Ctcfs} `capturesFrom`. */
@@ -86,9 +86,14 @@ export type StopReason = "reached_time" | "reached_event_count" | "exhausted" | 
 export interface Rates {
   /** Step rate of a moving, unblocked leg. */
   step: number;
-  /** Respawn rate of a LEF with no leg captured. */
+  /** Basal respawn rate: a LEF with a leg able to move. */
   respawn: number;
-  /** Respawn rate of a LEF with at least one leg captured. */
+  /**
+   * Respawn rate of an immobilized LEF: both legs stalled (blocked by a leg
+   * ahead or the lattice's end, or stopped at a CTCF reached from behind).
+   */
+  respawnStalled: number;
+  /** Respawn rate of a LEF with a captured leg, whatever the other leg does. */
   respawnCaptured: number;
 }
 

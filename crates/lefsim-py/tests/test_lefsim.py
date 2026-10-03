@@ -20,11 +20,11 @@ import pytest
 import lefsim
 
 # The golden fingerprint pinned by crates/lefsim/tests/determinism.rs.
-RUST_GOLDEN = 0x1B52B58EBE898456
+RUST_GOLDEN = 0xCD4D7B0F261FB1E3
 
 FIXTURES = pathlib.Path(__file__).parents[3] / "packages" / "lefsim" / "test" / "fixtures"
 
-RATES = lefsim.Rates(step=1.0, respawn=0.02, respawn_captured=0.005)
+RATES = lefsim.Rates(step=1.0, respawn=0.02, respawn_stalled=0.1, respawn_captured=0.005)
 
 
 def make_lattice(strength=0.8):
@@ -177,7 +177,10 @@ def test_a_sim_state_is_a_world():
         ({"left_pos": [5], "right_pos": [7], "left_mobility": ["captured"]}, "not a CTCF"),
         # A left-facing leg can't be captured by a CTCF capturing from the left.
         ({"left_pos": [140], "right_pos": [150], "left_mobility": ["captured"]}, "can't be captured"),
-        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["evicted"]}, "Evicted"),
+        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["stalled"]}, "not a CTCF"),
+        # A right-facing leg isn't stalled by a CTCF capturing from the left: it's captured.
+        ({"left_pos": [130], "right_pos": [140], "right_mobility": ["stalled"]}, "can't be stalled"),
+        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["evicted"]}, "mobility must be"),
         ({"left_pos": [5], "right_pos": [7], "right_mobility": ["stuck"]}, "mobility must be"),
         ({"left_pos": [5]}, "missing column"),
         ({"left_pos": [5, 6], "right_pos": [7]}, "different lengths"),
@@ -199,8 +202,8 @@ def test_world_rejects_non_tables():
 
 def test_rates_default_to_the_core():
     r = lefsim.Rates()
-    assert (r.step, r.respawn, r.respawn_captured) == (1.0, 1e-3, 1e-4)
-    assert lefsim.Rates(respawn=0.5) == lefsim.Rates(1.0, 0.5, 1e-4)
+    assert (r.step, r.respawn, r.respawn_stalled, r.respawn_captured) == (1.0, 1e-3, 1e-2, 1e-3)
+    assert lefsim.Rates(respawn=0.5) == lefsim.Rates(1.0, 0.5, 1e-2, 1e-3)
 
 
 def test_model_parts():
@@ -218,6 +221,7 @@ def test_model_parts():
     [
         (lefsim.Rates(step=0.0), "step rate must be positive"),
         (lefsim.Rates(respawn=float("nan")), "respawn rate must be positive"),
+        (lefsim.Rates(respawn_stalled=0.0), "respawn_stalled rate"),
         (lefsim.Rates(respawn_captured=-1.0), "respawn_captured rate"),
     ],
 )
@@ -237,10 +241,10 @@ def test_model_checks_the_spawn_rule():
 def test_model_json_round_trip_and_shape():
     model = make_model(n_lefs=2)
     doc = json.loads(model.to_json(indent=2))
-    assert doc["format"] == "lefsim.model" and doc["version"] == 1
+    assert doc["format"] == "lefsim.model" and doc["version"] == 2
     assert doc["lattice"]["n_sites"] == 200
     assert doc["lattice"]["ctcfs"][0] == {"site": 60, "captures_from": "right", "strength": 0.8}
-    assert doc["rates"] == {"step": 1.0, "respawn": 0.02, "respawn_captured": 0.005}
+    assert doc["rates"] == {"step": 1.0, "respawn": 0.02, "respawn_stalled": 0.1, "respawn_captured": 0.005}
     assert doc["spawn"] == {"rule": "uniform_non_ctcf"}
     rows = table(model.world.to_arrow()).drop_columns(["lef_id"]).to_pylist()
     assert doc["lefs"] == [{k: v.lower() if isinstance(v, str) else v for k, v in r.items()} for r in rows]
@@ -451,7 +455,7 @@ def test_python_reproduces_the_rust_golden_stream():
     sides = ["right" if i % 100 == 25 else "left" for i in sites]
     lattice = lefsim.Lattice(500, {"site": sites, "captures_from": sides, "strength": 0.7})
     world = lefsim.populate(lattice, 20, seed=0x5EED)
-    model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=0.01, respawn_captured=0.002))
+    model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=0.01, respawn_stalled=0.05, respawn_captured=0.002))
     rec = lefsim.Sim(model, seed=0x5EED).record_events(50_000, dt=5.0, events=True)
     assert rec.n_events == 50_000
 
@@ -556,13 +560,17 @@ def test_event_chunks_open_with_keyframes_and_tile_the_run():
     assert replayer.world_at(300.0) == sim.world()
 
 
-def test_snapshots_never_show_evicted():
+def test_stalled_legs_stay_on_ctcfs():
     rec = make_sim(seed=4, strength=1.0).record_until(500.0, dt=0.25, events=True)
-    ev = table(rec.events)
-    assert "Evicted" in ev["mobility"].to_pylist()
+    assert "Stalled" in table(rec.events)["mobility"].to_pylist()
     snaps = table(rec.snapshots)
-    assert "Evicted" not in snaps["left_mobility"].to_pylist()
-    assert "Evicted" not in snaps["right_mobility"].to_pylist()
+    stalled = [
+        p
+        for side in ("left", "right")
+        for p, m in zip(snaps[f"{side}_pos"].to_pylist(), snaps[f"{side}_mobility"].to_pylist())
+        if m == "Stalled"
+    ]
+    assert stalled and set(stalled) <= {60, 100, 140}  # make_lattice's CTCFs
 
 
 @pytest.mark.parametrize(
@@ -621,7 +629,7 @@ def test_batch_is_readable_by_every_consumer():
 
     pdf = batch.to_pandas()
     assert isinstance(pdf, pd.DataFrame) and len(pdf) == expected.num_rows
-    assert set(pdf["left_mobility"].astype(str)) <= {"Moving", "Captured", "Evicted"}
+    assert set(pdf["left_mobility"].astype(str)) <= {"Moving", "Captured", "Stalled"}
 
     got = duckdb.sql("select count(*), max(time) from batch").fetchone()
     assert got == (expected.num_rows, 20.0)
@@ -632,7 +640,7 @@ def test_categoricals_carry_names():
     ev = table(rec.events)
     assert ev.schema.field("action").type == pa.dictionary(pa.uint8(), pa.string())
     assert set(ev["action"].to_pylist()) == {"Step", "Respawn"}
-    assert set(ev["mobility"].to_pylist()) <= {"Moving", "Captured", "Evicted"}
+    assert set(ev["mobility"].to_pylist()) <= {"Moving", "Captured", "Stalled"}
 
 
 def test_batch_metadata_and_repr():
@@ -1099,7 +1107,12 @@ def test_replayer_reproduces_the_cross_language_fixture():
     rates = config["rates"]
     model = lefsim.Model(
         lefsim.populate(lattice, config["nLefs"], seed=config["seed"]),
-        lefsim.Rates(rates["step"], rates["respawn"], rates["respawnCaptured"]),
+        lefsim.Rates(
+            step=rates["step"],
+            respawn=rates["respawn"],
+            respawn_stalled=rates["respawnStalled"],
+            respawn_captured=rates["respawnCaptured"],
+        ),
     )
     with ipc.open_stream(FIXTURES / "python_events.arrows") as reader:
         r = lefsim.Replayer.from_arrow(reader, lattice)

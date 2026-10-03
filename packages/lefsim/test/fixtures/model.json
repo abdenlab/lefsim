@@ -1,6 +1,6 @@
 {
  "format": "lefsim.model",
- "version": 1,
+ "version": 2,
  "lattice": {
   "n_sites": 500,
   "ctcfs": [
@@ -58,50 +58,104 @@
  },
  "lefs": [
   {
-   "left_pos": 25,
-   "right_pos": 32,
-   "left_mobility": "captured",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 33,
-   "right_pos": 79,
+   "left_pos": 226,
+   "right_pos": 258,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
-   "left_pos": 125,
-   "right_pos": 175,
-   "left_mobility": "captured",
-   "right_mobility": "captured"
+   "left_pos": 78,
+   "right_pos": 110,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
   },
   {
-   "left_pos": 376,
-   "right_pos": 424,
+   "left_pos": 76,
+   "right_pos": 124,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 86,
+   "right_pos": 99,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 126,
+   "right_pos": 173,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 259,
+   "right_pos": 274,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 366,
+   "right_pos": 403,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 326,
+   "right_pos": 355,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
    "left_pos": 325,
-   "right_pos": 375,
+   "right_pos": 475,
    "left_mobility": "captured",
    "right_mobility": "captured"
   },
   {
-   "left_pos": 126,
-   "right_pos": 174,
+   "left_pos": 425,
+   "right_pos": 474,
+   "left_mobility": "captured",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 75,
+   "right_pos": 175,
+   "left_mobility": "stalled",
+   "right_mobility": "captured"
+  },
+  {
+   "left_pos": 77,
+   "right_pos": 123,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
-   "left_pos": 34,
-   "right_pos": 75,
-   "left_mobility": "moving",
-   "right_mobility": "captured"
+   "left_pos": 25,
+   "right_pos": 74,
+   "left_mobility": "captured",
+   "right_mobility": "moving"
   },
   {
-   "left_pos": 327,
-   "right_pos": 373,
+   "left_pos": 176,
+   "right_pos": 176,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 404,
+   "right_pos": 424,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 125,
+   "right_pos": 174,
+   "left_mobility": "captured",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 28,
+   "right_pos": 38,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
@@ -112,68 +166,14 @@
    "right_mobility": "captured"
   },
   {
-   "left_pos": 276,
-   "right_pos": 324,
+   "left_pos": 27,
+   "right_pos": 72,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
-   "left_pos": 127,
-   "right_pos": 143,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 90,
-   "right_pos": 108,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 144,
-   "right_pos": 173,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 80,
-   "right_pos": 110,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 81,
-   "right_pos": 109,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 326,
-   "right_pos": 374,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 111,
-   "right_pos": 124,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 425,
-   "right_pos": 475,
-   "left_mobility": "captured",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 407,
-   "right_pos": 407,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 226,
-   "right_pos": 229,
+   "left_pos": 282,
+   "right_pos": 282,
    "left_mobility": "moving",
    "right_mobility": "moving"
   }
@@ -181,6 +181,7 @@
  "rates": {
   "step": 1.0,
   "respawn": 0.01,
+  "respawn_stalled": 0.05,
   "respawn_captured": 0.002
  },
  "spawn": {

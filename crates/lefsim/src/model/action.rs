@@ -16,21 +16,27 @@ use super::{Schedule, SimRng, Time};
 pub struct Rates {
     /// Step rate of a moving, unblocked leg.
     pub step: f64,
-    /// Respawn rate when both legs are simply moving.
+    /// Respawn rate of a LEF with at least one leg able to move (the basal rate).
     pub respawn: f64,
-    /// Respawn rate when at least one leg is captured (longer lifetime).
+    /// Respawn rate of an immobilized LEF: both legs stalled, whether
+    /// blocked (a leg directly ahead, or the lattice's end) or stopped at a
+    /// CTCF reached from behind.
+    pub respawn_stalled: f64,
+    /// Respawn rate of a LEF with at least one leg captured, whatever the
+    /// other leg is doing: capture protects a LEF from faster unloading.
     pub respawn_captured: f64,
-    // Eviction is treated as an immediate respawn (dt = 0); no rate field.
 }
 
 impl Default for Rates {
     /// Reasonable demo rates: stepping is the fast process; respawns take
-    /// thousands of steps; captured LEFs hang around an order of magnitude longer.
+    /// thousands of steps; immobilized LEFs unload ten times faster, and
+    /// captured ones at the basal rate.
     fn default() -> Self {
         Rates {
             step: 1.0,
             respawn: 1e-3,
-            respawn_captured: 1e-4,
+            respawn_stalled: 1e-2,
+            respawn_captured: 1e-3,
         }
     }
 }
@@ -137,6 +143,27 @@ impl Touched {
 
 // ----- per-variant schedule implementations -----
 
+/// Whether a leg's way ahead is obstructed: another leg on the next site in
+/// its facing direction, or the lattice's end. Derived from positions, never
+/// stored, so it can't go stale as neighbors move.
+fn blocked(world: &World, leg_k: LegKey) -> bool {
+    let leg = &world.legs[leg_k];
+    match leg.facing.shift(leg.pos) {
+        Some(target) if (target as usize) < world.lattice.len() => world.occupied(target),
+        _ => true,
+    }
+}
+
+/// Whether a leg counts as stalled for its LEF's respawn rate: stopped at a
+/// CTCF (stored), or moving but blocked (derived).
+fn stalled(world: &World, leg_k: LegKey) -> bool {
+    match world.legs[leg_k].mobility {
+        Mobility::Stalled => true,
+        Mobility::Moving => blocked(world, leg_k),
+        Mobility::Captured => false,
+    }
+}
+
 fn schedule_step(
     leg_k: LegKey,
     world: &World,
@@ -144,17 +171,7 @@ fn schedule_step(
     now: Time,
     rng: &mut SimRng,
 ) -> Schedule {
-    let leg = &world.legs[leg_k];
-    if leg.mobility != Mobility::Moving {
-        return Schedule::Never;
-    }
-    let Some(target) = leg.facing.shift(leg.pos) else {
-        return Schedule::Never;
-    };
-    if (target as usize) >= world.lattice.len() {
-        return Schedule::Never;
-    }
-    if world.occupied(target) {
+    if world.legs[leg_k].mobility != Mobility::Moving || blocked(world, leg_k) {
         return Schedule::Never;
     }
     Schedule::At(now + sample_exponential(rng, rates.step))
@@ -167,18 +184,21 @@ fn schedule_respawn(
     now: Time,
     rng: &mut SimRng,
 ) -> Schedule {
-    let [a, b] = world.lefs[lef_k].legs;
-    let m1 = world.legs[a].mobility;
-    let m2 = world.legs[b].mobility;
-    use Mobility::*;
-    let rate = match (m1, m2) {
-        // Either leg evicted -> respawn immediately.
-        (Evicted, _) | (_, Evicted) => return Schedule::At(now),
-        // Either captured -> longer lifetime.
-        (Captured, _) | (_, Captured) => rates.respawn_captured,
-        _ => rates.respawn,
-    };
-    Schedule::At(now + sample_exponential(rng, rate))
+    Schedule::At(now + sample_exponential(rng, respawn_rate(lef_k, world, rates)))
+}
+
+/// A LEF's respawn rate in the current state: `respawn_captured` if either
+/// leg is captured (capture protects, whatever the other leg is doing), else
+/// `respawn_stalled` if both legs are stalled (immobilized), else `respawn`.
+fn respawn_rate(lef_k: LefKey, world: &World, rates: &Rates) -> f64 {
+    let legs = world.lefs[lef_k].legs;
+    if legs.iter().any(|&l| world.legs[l].mobility == Mobility::Captured) {
+        rates.respawn_captured
+    } else if legs.iter().all(|&l| stalled(world, l)) {
+        rates.respawn_stalled
+    } else {
+        rates.respawn
+    }
 }
 
 // ----- per-variant fire implementations -----
@@ -327,11 +347,11 @@ pub(crate) fn land_lef(kind: SiteKind, rng: &mut SimRng) -> [Mobility; 2] {
 ///
 /// # Invariant
 ///
-/// **Only call this once per actual landing.** Capture and eviction are
+/// **Only call this once per actual landing.** Capture and stalling are
 /// modeled as events that fire *on the act of stepping onto a site* — not
 /// as facts derivable from position. Calling this function on a leg that
 /// hasn't moved would give it repeated, independent chances of being
-/// captured/evicted, which is physically wrong: a leg standing still on a
+/// captured/stalled, which is physically wrong: a leg standing still on a
 /// CTCF that already failed to capture it must not get fresh rolls each
 /// time the scheduler revisits it.
 ///
@@ -347,7 +367,7 @@ pub(crate) fn land_lef(kind: SiteKind, rng: &mut SimRng) -> [Mobility; 2] {
 /// - `Plain` sites: always returns `Moving`.
 /// - `Ctcf { captures_from, strength }`:
 ///   - With probability `strength`: capture if `arrived_from == captures_from`,
-///     otherwise evict.
+///     otherwise stall.
 ///   - With probability `1 - strength`: pass through (`Moving`).
 pub(crate) fn resolve_mobility(
     site: SiteKind,
@@ -362,7 +382,7 @@ pub(crate) fn resolve_mobility(
             } else if arrived_from == captures_from {
                 Mobility::Captured
             } else {
-                Mobility::Evicted
+                Mobility::Stalled
             }
         }
     }
@@ -391,6 +411,57 @@ mod tests {
         );
     }
 
+    /// Distinct rates, so the chosen one names the rule that chose it.
+    const RATES: Rates = Rates { step: 1.0, respawn: 1.0, respawn_stalled: 2.0, respawn_captured: 3.0 };
+
+    /// A LEF as `((left_pos, mobility), (right_pos, mobility))`.
+    type LefSpec = ((u32, Mobility), (u32, Mobility));
+
+    /// 30 sites, a CTCF capturing from the left at 20 (it captures
+    /// right-facing legs, and stalls left-facing ones).
+    fn world_with(lefs: &[LefSpec]) -> (World, Vec<LefKey>) {
+        let lattice = Lattice::with_ctcfs(30, &[crate::model::Ctcf { site: 20, captures_from: Direction::Left, strength: 1.0 }]).unwrap();
+        let mut world = World::new(lattice);
+        let keys = lefs.iter().map(|&(l, r)| world.add_lef(l, r).unwrap()).collect();
+        (world, keys)
+    }
+
+    #[test]
+    fn respawn_rate_follows_the_legs() {
+        use Mobility::{Captured, Moving, Stalled};
+        let rate = |lefs: &[LefSpec], which: usize| {
+            let (world, keys) = world_with(lefs);
+            respawn_rate(keys[which], &world, &RATES)
+        };
+        // Both legs free: basal.
+        assert_eq!(rate(&[((5, Moving), (8, Moving))], 0), RATES.respawn);
+        // One leg blocked, the other free: still basal.
+        assert_eq!(rate(&[((5, Moving), (8, Moving)), ((9, Moving), (12, Moving))], 0), RATES.respawn);
+        // Both blocked, by the lattice's end and by a leg ahead: immobilized.
+        assert_eq!(rate(&[((0, Moving), (8, Moving)), ((9, Moving), (12, Moving))], 0), RATES.respawn_stalled);
+        // The middle of a rosette of three: blocked on both sides.
+        let rosette = [((2, Moving), (5, Moving)), ((6, Moving), (9, Moving)), ((10, Moving), (13, Moving))];
+        assert_eq!(rate(&rosette, 1), RATES.respawn_stalled);
+        assert_eq!(rate(&rosette, 0), RATES.respawn); // its left leg is free
+        // Stalled at the CTCF (reached from behind) and blocked: immobilized.
+        assert_eq!(rate(&[((20, Stalled), (25, Moving)), ((26, Moving), (28, Moving))], 0), RATES.respawn_stalled);
+        // Stalled at the CTCF, the other leg free: basal.
+        assert_eq!(rate(&[((20, Stalled), (25, Moving))], 0), RATES.respawn);
+        // Captured protects, even with the other leg blocked by the end.
+        assert_eq!(rate(&[((0, Moving), (20, Captured))], 0), RATES.respawn_captured);
+    }
+
+    #[test]
+    fn a_blocked_or_held_leg_never_steps() {
+        let mut rng = SimRng::seed_from_u64(0);
+        let (world, keys) = world_with(&[((20, Mobility::Stalled), (25, Mobility::Moving)), ((26, Mobility::Moving), (29, Mobility::Moving))]);
+        let [stalled_leg, blocked_leg] = world.lefs[keys[0]].legs;
+        let [_, edge_leg] = world.lefs[keys[1]].legs;
+        for leg in [stalled_leg, blocked_leg, edge_leg] {
+            assert!(matches!(Action::Step { leg }.schedule(&world, &RATES, 0.0, &mut rng), Schedule::Never));
+        }
+    }
+
     #[test]
     fn plain_site_always_moving() {
         let mut rng = SimRng::seed_from_u64(0);
@@ -417,13 +488,13 @@ mod tests {
     }
 
     #[test]
-    fn strength_1_evicts_leg_arriving_on_other_side() {
+    fn strength_1_stalls_leg_arriving_on_other_side() {
         let mut rng = SimRng::seed_from_u64(0);
-        // CTCF's capture side is its right side; the left side evicts.
+        // CTCF's capture side is its right side; the left side stalls.
         let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: 1.0 };
         assert_eq!(
             resolve_mobility(site, Direction::Left, &mut rng),
-            Mobility::Evicted
+            Mobility::Stalled
         );
     }
 

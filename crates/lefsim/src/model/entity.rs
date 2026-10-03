@@ -24,17 +24,20 @@ new_key_type! {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum Mobility {
-    /// Free to step in `facing` direction (subject to extrinsic blocking).
+    /// Free to step in `facing` direction (subject to extrinsic blocking:
+    /// a leg directly ahead, or the lattice's end).
     Moving = 0,
-    /// Pinned by a same-orientation CTCF.
+    /// Held by a CTCF it reached from the CTCF's capture side. Protects its
+    /// LEF from faster unloading.
     Captured = 1,
-    /// Knocked off by an opposite-orientation CTCF; awaits immediate respawn.
-    Evicted = 2,
+    /// Stopped by a CTCF it reached from the CTCF's other side. Can't step
+    /// again (steps only go forward) until its LEF respawns.
+    Stalled = 2,
 }
 
 impl Mobility {
     /// Names indexed by [`Mobility::code`].
-    pub const NAMES: [&str; 3] = ["Moving", "Captured", "Evicted"];
+    pub const NAMES: [&str; 3] = ["Moving", "Captured", "Stalled"];
 
     /// Stable `u8` encoding: the index into [`Mobility::NAMES`].
     pub fn code(self) -> u8 {
@@ -56,7 +59,7 @@ impl Mobility {
         match code {
             0 => Some(Mobility::Moving),
             1 => Some(Mobility::Captured),
-            2 => Some(Mobility::Evicted),
+            2 => Some(Mobility::Stalled),
             _ => None,
         }
     }

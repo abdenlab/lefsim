@@ -25,7 +25,7 @@ const TADS: Setup = {
     { site: b + 1, capturesFrom: "right" as const, strength: 0.8 },
   ]),
   nLefs: 20,
-  rates: { step: 1, respawn: 0.002, respawnCaptured: 0.0004 },
+  rates: { step: 1, respawn: 0.002, respawnStalled: 0.02, respawnCaptured: 0.0004 },
 };
 
 const make = (seed = 1, extra: Partial<Setup> = {}) => makeSim({ ...TADS, seed, ...extra });
@@ -81,7 +81,7 @@ describe("building a model", () => {
 
   it("createModel fills missing rates with the core's defaults", () => {
     const model = createModel(createWorld(createLattice(100)));
-    expect(model.rates).toEqual({ step: 1, respawn: 1e-3, respawnCaptured: 1e-4 });
+    expect(model.rates).toEqual({ step: 1, respawn: 1e-3, respawnStalled: 1e-2, respawnCaptured: 1e-3 });
     expect(model.spawnRule).toBe("uniform_non_ctcf");
   });
 
@@ -101,7 +101,10 @@ describe("building a model", () => {
     [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 5 }, { leftPos: 5, rightPos: 6 }]), /already occupied/],
     [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "captured" }]), /not a CTCF/],
     [() => createWorld(lattice10(), [{ leftPos: 3, rightPos: 5, leftMobility: "captured" }]), /can't be captured/],
-    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "stuck" }]), /"moving" or "captured" or "evicted"/],
+    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "stalled" }]), /not a CTCF/],
+    // The CTCF at 3 captures from the left: it captures right-facing legs, so it can't stall one.
+    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 3, rightMobility: "stalled" }]), /can't be stalled/],
+    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "stuck" }]), /"moving" or "captured" or "stalled"/],
     [() => createWorld(lattice10(), { leftPos: [1, 2], rightPos: [3] }), /different lengths/],
     [() => populate(lattice10(), 6), /too many LEFs/],
     [() => populate(lattice10(), -1), /nLefs/],
@@ -110,6 +113,7 @@ describe("building a model", () => {
     [() => populate(lattice10(), 1, { seed: 2n ** 64n }), /seed/],
     [() => createModel(createWorld(lattice10()), { step: 0 }), /step rate must be positive/],
     [() => createModel(createWorld(lattice10()), { respawn: Number.NaN }), /respawn rate must be positive/],
+    [() => createModel(createWorld(lattice10()), { respawnStalled: 0 }), /respawn_stalled rate must be positive/],
     [() => createModel(createWorld(lattice10()), {}, { spawnRule: "anywhere" as "uniform_non_ctcf" }), /unknown spawn rule/],
     [() => new Sim(makeModel({ nSites: 10 }), { startTime: Number.POSITIVE_INFINITY }), /startTime/],
   ] as [() => unknown, RegExp][])("rejects case %#", (build, message) => {
@@ -119,7 +123,7 @@ describe("building a model", () => {
   it("new Sim checks the model too, so a hand-edited one can't slip through", () => {
     const world = createWorld(createLattice(10), [{ leftPos: 1, rightPos: 2 }]);
     world.lefs.leftPos[0] = 5; // now crossed
-    const model = { world, rates: { step: 1, respawn: 1, respawnCaptured: 1 }, spawnRule: "uniform_non_ctcf" } as const;
+    const model = { world, rates: { step: 1, respawn: 1, respawnStalled: 1, respawnCaptured: 1 }, spawnRule: "uniform_non_ctcf" } as const;
     expect(() => new Sim(model)).toThrow(/right of the right leg/);
   });
 
@@ -147,9 +151,9 @@ describe("JSON", () => {
     const doc = structuredClone(modelFixture) as typeof modelFixture;
     doc.lefs = [{ left_pos: 10, right_pos: 12 }] as typeof doc.lefs;
     expect(Array.from(modelFromJson(JSON.stringify(doc)).world.lefs.leftMobility)).toEqual([0]);
-    doc.version = 2;
+    doc.version = 1; // the format before stalling
     expect(() => modelFromJson(JSON.stringify(doc))).toThrow(/unsupported/);
-    doc.version = 1;
+    doc.version = 2;
     doc.rates.step = -1;
     expect(() => modelFromJson(JSON.stringify(doc))).toThrow(/step rate/);
   });
@@ -281,7 +285,7 @@ describe("state as a model", () => {
     expect(Array.from(world.lefs.leftPos)).toEqual(Array.from(live.leftPos));
     expect(world.lattice).toBe(sim.lattice);
     const model = sim.model();
-    expect(model.rates).toEqual({ step: 1, respawn: 0.002, respawnCaptured: 0.0004 });
+    expect(model.rates).toEqual({ step: 1, respawn: 0.002, respawnStalled: 0.02, respawnCaptured: 0.0004 });
     world.lefs.leftPos[0] = 2999; // a copy: changing it leaves the sim alone
     expect(sim.state().leftPos[0]).toBe(live.leftPos[0]);
     expect(sim.state().leftPos[0]).not.toBe(2999);

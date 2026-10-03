@@ -31,6 +31,7 @@ fn lef_extrudes_outward_on_empty_lattice() {
             // wait), but a respawn will still fire once step actions are
             // exhausted at the boundaries.
             respawn: 1e-9,
+            respawn_stalled: 1e-9,
             respawn_captured: 1e-9,
         },
         7,
@@ -65,6 +66,7 @@ fn right_facing_leg_captured_at_compatible_ctcf() {
         Rates {
             step: 1.0,
             respawn: 1e-12,
+            respawn_stalled: 1e-12,
             respawn_captured: 1e-12,
         },
         11,
@@ -80,13 +82,12 @@ fn right_facing_leg_captured_at_compatible_ctcf() {
     assert_eq!(lef0(&sim).1.1, Mobility::Captured);
 }
 
-/// Eviction (a leg arriving at the *non-capture* side of a CTCF) should
-/// trigger an immediate respawn (dt = 0).
+/// A leg arriving at the *non-capture* side of a CTCF stalls there: it
+/// stays on the CTCF while its partner extrudes on, until the LEF respawns.
 #[test]
-fn eviction_triggers_immediate_respawn() {
+fn a_leg_reaching_a_ctcf_from_behind_stalls_there() {
     // CTCF at site 20 with its capture side on the right. The right-facing
-    // leg approaches from the left (the eviction side), so it gets evicted
-    // on contact.
+    // leg approaches from the left (the stalling side).
     let mut sites = vec![Site::plain(); 50];
     sites[20] = Site::ctcf(Direction::Right, 1.0);
     let mut sim = one_lef(
@@ -95,27 +96,18 @@ fn eviction_triggers_immediate_respawn() {
         Rates {
             step: 1.0,
             respawn: 1e-12,
+            respawn_stalled: 1e-12,
             respawn_captured: 1e-12,
         },
         13,
     );
-
-    for _ in 0..2000 {
-        sim.step().expect("queue exhausted before reaching CTCF");
-
-        if lef0(&sim).1.1 == Mobility::Evicted {
-            // The very next event must be this LEF's respawn at dt = 0.
-            let pre_clock = sim.time();
-            let (next_t, next_a) = sim.step().expect("respawn should be queued immediately");
-            assert_eq!(next_t, pre_clock, "respawn dt should be 0");
-            assert!(matches!(next_a, Action::Respawn { lef } if sim.lef_id(lef) == Some(0)));
-            let (a, b) = lef0(&sim).0;
-            assert_eq!(a, b, "both legs should share the new spawn site");
-            assert_ne!(a, 20, "should not respawn on the CTCF");
-            return;
-        }
+    while lef0(&sim).1.1 != Mobility::Stalled {
+        sim.step().expect("queue exhausted before reaching the CTCF");
     }
-    panic!("never observed eviction");
+    assert_eq!(lef0(&sim).0.1, 20, "stalled on the CTCF");
+    // The left leg runs on to the lattice's end; the right leg stays put.
+    sim.run_until(sim.time() + 200.0);
+    assert_eq!(lef0(&sim), ((0, 20), (Mobility::Moving, Mobility::Stalled)));
 }
 
 #[test]
@@ -129,7 +121,7 @@ fn a_fresh_lefs_right_leg_moves_on_when_the_leg_ahead_leaves() {
         world.add_lef((1, Mobility::Moving), (5, Mobility::Moving)).unwrap(); // B
         world.add_lef((2, Mobility::Moving), (3, Mobility::Moving)).unwrap(); // C
         world.add_lef((4, Mobility::Moving), (4, Mobility::Moving)).unwrap(); // A
-        let rates = Rates { step: 1.0, respawn: 1e-12, respawn_captured: 1e-12 };
+        let rates = Rates { step: 1.0, respawn: 1e-12, respawn_stalled: 1e-12, respawn_captured: 1e-12 };
         let mut sim = Sim::new(Model::new(world, rates, SpawnRule::UniformNonCtcf).unwrap(), seed);
         sim.run_until(200.0);
         let (_, (a_right, _)) = sim.world().lef_state(2).unwrap();

@@ -61,15 +61,19 @@
             Step rate
             <input type="number" id="rate-step" min="0" step="any" />
           </label>
-          <label title="Respawns per time unit of a LEF with neither leg held">
+          <label title="Respawns per time unit of a LEF with a leg able to move (the basal rate)">
             Respawn rate
             <input type="number" id="rate-respawn" min="0" step="any" />
           </label>
-          <label title="Respawns per time unit of a LEF with a leg held at a CTCF">
-            Respawn rate when held
+          <label title="Respawns per time unit of a LEF with both legs stalled: blocked by a leg ahead or the lattice's end, or stopped at a CTCF reached from behind">
+            Respawn rate when stalled
+            <input type="number" id="rate-respawn-stalled" min="0" step="any" />
+          </label>
+          <label title="Respawns per time unit of a LEF with a leg captured at a CTCF">
+            Respawn rate when captured
             <input type="number" id="rate-respawn-held" min="0" step="any" />
           </label>
-          <label title="Chance that a CTCF captures (or evicts) a leg arriving at it">
+          <label title="Chance that a CTCF captures (or stalls) a leg arriving at it">
             CTCF strength
             <input type="number" id="strength" min="0" max="1" step="0.05" />
           </label>
@@ -138,8 +142,7 @@
         most the threshold, the probes are in an encounter; each encounter's duration is added to the histogram
         when it ends. Beside the kymograph, on the same rows, the distance runs from 0 up to the probes'
         separation (which it never exceeds), with the threshold as a dotted line. Moving a probe or the threshold starts the statistics afresh; changes to the model don't,
-        so press Reset to see only the new model. The lattice's ends evict: a leg that reaches one makes its LEF
-        respawn.
+        so press Reset to see only the new model. A leg that reaches a CTCF from behind, or the lattice's end, stalls there.
       </p>
     </main>
     <script type="module" src="/src/encounter.ts"></script>

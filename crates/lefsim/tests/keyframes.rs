@@ -3,7 +3,6 @@
 use lefsim::*;
 
 const KEYFRAME: u8 = EventFrames::KEYFRAME;
-const EVICTED: u8 = 2; // Mobility::Evicted.code()
 
 fn lattice(strength: f64) -> Lattice {
     let mut sites = vec![Site::plain(); 200];
@@ -16,7 +15,7 @@ fn lattice(strength: f64) -> Lattice {
 fn build(seed: u64, strength: f64) -> Sim {
     let rule = SpawnRule::UniformNonCtcf;
     let world = populate(lattice(strength), 8, &rule, seed).unwrap();
-    let rates = Rates { step: 1.0, respawn: 0.02, respawn_captured: 0.005 };
+    let rates = Rates { step: 1.0, respawn: 0.02, respawn_stalled: 0.1, respawn_captured: 0.005 };
     Sim::new(Model::new(world, rates, rule).unwrap(), seed)
 }
 
@@ -139,47 +138,6 @@ fn replaying_from_any_batch_reproduces_the_run() {
             assert_eq!(&state, state_at(&traj, t), "replay from batch {b}, at t={t}");
         }
     }
-}
-
-#[test]
-fn keyframes_never_show_evicted_and_batches_never_split_a_chain() {
-    // Strong CTCFs evict often; a cap just above a keyframe forces a batch
-    // boundary every couple of events, so boundaries land on chains.
-    let mut sim = build(3, 1.0);
-    let n_legs = sim.n_legs();
-    let batches = keyframed_batches(&mut sim, 3000.0, n_legs + 4);
-
-    let events = batches.iter().flat_map(rows).filter(|r| r.4 != KEYFRAME);
-    let evictions = events.filter(|r| r.3 == EVICTED).count();
-    assert!(evictions > 20, "want many evictions, got {evictions}");
-
-    for (b, batch) in batches.iter().enumerate() {
-        assert!(rows(batch).take(n_legs).all(|r| r.3 != EVICTED), "keyframe {b} shows Evicted");
-        // An eviction is followed by its respawn at the same instant; a batch
-        // ending on one would have split the chain.
-        if let Some(last) = rows(batch).last() {
-            assert_ne!(last.3, EVICTED, "batch {b} ends mid-chain");
-        }
-    }
-}
-
-#[test]
-fn a_recorder_attached_mid_chain_opens_after_the_chain() {
-    let mut sim = build(4, 1.0);
-    // Step until a leg is evicted: its respawn is then due at this instant.
-    while !leg_state(&sim).iter().any(|&(_, m)| m == EVICTED) {
-        sim.step().expect("run should contain an eviction");
-    }
-    let t_evict = sim.time();
-    assert_eq!(sim.next_event_time(), Some(t_evict));
-
-    let mut rec = EventRecorder::new().with_keyframes(sim.n_legs());
-    sim.run_until_with(t_evict + 20.0, &mut rec);
-    let all: Vec<_> = rows(rec.frames()).collect();
-    let n_legs = sim.n_legs();
-    assert!(all[..n_legs].iter().all(|r| r.4 == KEYFRAME && r.0 == t_evict && r.3 != EVICTED));
-    // The respawn fired before the keyframe and is folded into it.
-    assert!(all[n_legs..].iter().all(|r| r.4 != KEYFRAME && r.0 > t_evict));
 }
 
 #[test]

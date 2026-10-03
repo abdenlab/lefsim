@@ -1,15 +1,10 @@
 // A live run whose model can be edited while it runs: the CTCFs (moved by
 // dragging them in two lanes, one per orientation, or added and removed by
-// count), the three rates and the CTCF strength. Shared by the pages that
+// count), the four rates and the CTCF strength. Shared by the pages that
 // offer these controls.
 //
 // A change builds a new model and carries the LEFs over to it at the current
 // time, so the run continues rather than restarting.
-//
-// The lattice's ends evict: each holds an implicit CTCF facing outward, at
-// full strength (capturing from the left at site 0, from the right at the
-// last site), so a leg reaching an end makes its LEF respawn rather than
-// being held there. They aren't drawn, dragged or counted.
 
 import { createLattice, createModel, createWorld, MOBILITY, populate, Sim, type Lattice, type Rates } from "lefsim";
 
@@ -19,6 +14,7 @@ import { colors, setLattice } from "./render.ts";
 const MAX_CTCFS = 16;
 const CAPTURED = MOBILITY.indexOf("Captured");
 const MOVING = MOBILITY.indexOf("Moving");
+const STALLED = MOBILITY.indexOf("Stalled");
 
 /** A CTCF; `left` means it captures from the left (its chevron points left). */
 export interface CtcfMark {
@@ -33,18 +29,13 @@ export const DEFAULT_CTCFS: CtcfMark[] = [
   { site: 2250, left: true },
 ];
 
-/** The implicit evicting CTCFs at the lattice's ends. */
-const END_CTCFS = [
-  { site: 0, capturesFrom: "left" as const, strength: 1 },
-  { site: N_SITES - 1, capturesFrom: "right" as const, strength: 1 },
-];
-
 /** The inputs an editable run reads, by role. */
 export interface ModelInputs {
   nLeft: HTMLInputElement;
   nRight: HTMLInputElement;
   step: HTMLInputElement;
   respawn: HTMLInputElement;
+  respawnStalled: HTMLInputElement;
   respawnHeld: HTMLInputElement;
   strength: HTMLInputElement;
 }
@@ -69,9 +60,10 @@ export class EditableRun {
     inputs.nRight.value = String(this.ctcfs.filter((c) => !c.left).length);
     inputs.step.value = String(this.rates.step);
     inputs.respawn.value = String(this.rates.respawn);
+    inputs.respawnStalled.value = String(this.rates.respawnStalled);
     inputs.respawnHeld.value = String(this.rates.respawnCaptured);
     inputs.strength.value = String(this.strength);
-    for (const input of [inputs.step, inputs.respawn, inputs.respawnHeld, inputs.strength]) {
+    for (const input of [inputs.step, inputs.respawn, inputs.respawnStalled, inputs.respawnHeld, inputs.strength]) {
       input.addEventListener("change", () => {
         this.#readParams();
         this.rebuild();
@@ -82,18 +74,11 @@ export class EditableRun {
     inputs.nRight.addEventListener("change", () => this.#setCount(false, inputs.nRight));
   }
 
-  /** The lattice the sim runs on: the CTCFs, and the evicting ends. */
   lattice(): Lattice {
-    return createLattice(N_SITES, [...this.#ctcfSpecs(), ...END_CTCFS]);
-  }
-
-  /** The lattice the views draw: without the implicit ends, which aren't domain boundaries. */
-  #drawnLattice(): Lattice {
-    return createLattice(N_SITES, this.#ctcfSpecs());
-  }
-
-  #ctcfSpecs() {
-    return this.ctcfs.map((c) => ({ site: c.site, capturesFrom: c.left ? ("left" as const) : ("right" as const), strength: this.strength }));
+    return createLattice(
+      N_SITES,
+      this.ctcfs.map((c) => ({ site: c.site, capturesFrom: c.left ? ("left" as const) : ("right" as const), strength: this.strength })),
+    );
   }
 
   /** A new run: `nLefs` LEFs placed with `seed`, and run with it, on the current model. */
@@ -104,14 +89,15 @@ export class EditableRun {
     this.#readParams();
     const lattice = this.lattice();
     this.sim = new Sim(createModel(populate(lattice, nLefs, { seed }), this.rates), { seed });
-    setLattice(this.#drawnLattice());
+    setLattice(lattice);
   }
 
   /**
    * The same LEFs on the current model, continuing from the current time. A
-   * captured leg stays captured only if a CTCF that can hold it is still at
-   * its site (a left leg is held by one capturing from the right, a right leg
-   * by one capturing from the left).
+   * captured or stalled leg stays so only if a CTCF that can hold it that way
+   * is still at its site: a left leg is captured by one capturing from the
+   * right and stalled by one capturing from the left, a right leg the
+   * reverse. Otherwise it's moving again.
    */
   rebuild() {
     const old = this.sim;
@@ -124,23 +110,27 @@ export class EditableRun {
     const leftMob = st.leftMobility.slice();
     const rightMob = st.rightMobility.slice();
     const capturesLeftAt = new Map(this.ctcfs.map((c) => [c.site, c.left]));
-    const keep = (mob: number, site: number, needsLeft: boolean) =>
-      mob === CAPTURED && capturesLeftAt.get(site) === needsLeft ? CAPTURED : MOVING;
+    const keep = (mob: number, site: number, leftLeg: boolean) => {
+      const capturesLeft = capturesLeftAt.get(site);
+      if (mob === CAPTURED && capturesLeft === !leftLeg) return CAPTURED;
+      if (mob === STALLED && capturesLeft === leftLeg) return STALLED;
+      return MOVING;
+    };
     const lattice = this.lattice();
     const world = createWorld(lattice, {
       leftPos,
       rightPos,
-      leftMobility: Array.from(leftMob, (m, i) => keep(m, leftPos[i]!, false)),
-      rightMobility: Array.from(rightMob, (m, i) => keep(m, rightPos[i]!, true)),
+      leftMobility: Array.from(leftMob, (m, i) => keep(m, leftPos[i]!, true)),
+      rightMobility: Array.from(rightMob, (m, i) => keep(m, rightPos[i]!, false)),
     });
     this.sim = new Sim(createModel(world, this.rates), { seed: this.#seed + ++this.#rebuilds, startTime: time });
     old.free();
-    setLattice(this.#drawnLattice());
+    setLattice(lattice);
   }
 
-  /** Move CTCF `i` to `site` and rebuild; false if another CTCF (or an end) is there. */
+  /** Move CTCF `i` to `site` and rebuild; false if another CTCF is there. */
   moveCtcf(i: number, site: number): boolean {
-    if (site <= 0 || site >= N_SITES - 1 || this.ctcfs.some((c) => c.site === site)) return false;
+    if (this.ctcfs.some((c) => c.site === site)) return false;
     this.ctcfs[i]!.site = site;
     this.rebuild();
     return true;
@@ -152,7 +142,7 @@ export class EditableRun {
    * input back to the current value.
    */
   #readParams() {
-    const { step, respawn, respawnHeld, strength } = this.#inputs;
+    const { step, respawn, respawnStalled, respawnHeld, strength } = this.#inputs;
     const positive = (input: HTMLInputElement, current: number) => {
       const v = Number(input.value);
       if (input.value.trim() !== "" && Number.isFinite(v) && v > 0) return v;
@@ -162,6 +152,7 @@ export class EditableRun {
     this.rates = {
       step: positive(step, this.rates.step),
       respawn: positive(respawn, this.rates.respawn),
+      respawnStalled: positive(respawnStalled, this.rates.respawnStalled),
       respawnCaptured: positive(respawnHeld, this.rates.respawnCaptured),
     };
     const st = Number(strength.value);
@@ -180,8 +171,8 @@ export class EditableRun {
       lane = lane.slice(0, -1);
     }
     while (lane.length < n) {
-      // A new CTCF goes in the middle of the widest stretch without one (the ends count as CTCFs).
-      const sites = [0, ...this.ctcfs.map((c) => c.site).sort((a, b) => a - b), N_SITES - 1];
+      // A new CTCF goes in the middle of the widest stretch without one.
+      const sites = [-1, ...this.ctcfs.map((c) => c.site).sort((a, b) => a - b), N_SITES];
       let best = 0;
       for (let i = 1; i < sites.length - 1; i++) if (sites[i + 1]! - sites[i]! > sites[best + 1]! - sites[best]!) best = i;
       const c = { site: Math.round((sites[best]! + sites[best + 1]!) / 2), left };

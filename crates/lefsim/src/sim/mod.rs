@@ -196,10 +196,6 @@ impl Sim {
     }
 
     /// The current state, read-only.
-    ///
-    /// Between an eviction and the respawn it triggers (at the same
-    /// instant), the world holds an `Evicted` leg. The batch drivers only
-    /// stop there when an event budget runs out mid-chain; [`Sim::step`] can.
     pub fn world(&self) -> &World {
         &self.world
     }
@@ -357,7 +353,7 @@ impl Sim {
                     now
                 };
                 // A grid point exactly at `end` is final only if no event
-                // is also due then (e.g. the respawn after an eviction).
+                // is also due then (a tie, or a zero-delay event).
                 let inclusive = next.is_none_or(|t| t > end);
                 if !obs.sample(end, inclusive, self) {
                     return self.report(start, StopReason::RecorderFull);
@@ -484,7 +480,9 @@ mod tests {
         let mut next = Sim::with_start_time(model, 4, sim.time());
         assert_eq!(next.time(), 100.0);
         assert!(next.next_event_time().unwrap() >= 100.0);
-        assert!(next.run_until(200.0).n_events > 0);
+        // Both LEFs may be held by now, leaving only respawns, which take
+        // hundreds of time units: give them room.
+        assert!(next.run_until(5_000.0).n_events > 0);
     }
 
     #[test]

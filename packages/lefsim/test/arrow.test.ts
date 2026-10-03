@@ -137,14 +137,14 @@ describe("deltaChunkFromArrow", () => {
   });
 
   it("maps re-encoded dictionaries by name", () => {
-    // mobility dictionary in a different order: [Captured, Moving, Evicted]
+    // mobility dictionary in a different order: [Captured, Moving, Stalled]
     const mobType = new Dictionary(new Utf8(), new Uint8());
     const actType = new Dictionary(new Utf8(), new Uint8());
     const columns = [
       ["time", makeData({ type: new Float64(), data: new Float64Array([1, 2]) })],
       ["leg_id", makeData({ type: new Uint32(), data: new Uint32Array([0, 1]) })],
       ["pos", makeData({ type: new Uint32(), data: new Uint32Array([5, 6]) })],
-      ["mobility", makeData({ type: mobType, data: new Uint8Array([0, 1]), dictionary: vectorFromArray(["Captured", "Moving", "Evicted"], new Utf8()) })],
+      ["mobility", makeData({ type: mobType, data: new Uint8Array([0, 1]), dictionary: vectorFromArray(["Captured", "Moving", "Stalled"], new Utf8()) })],
       ["action", makeData({ type: actType, data: new Uint8Array([0, 0]), dictionary: vectorFromArray(["Respawn"], new Utf8()) })],
     ] as const;
     const fields = columns.map(([n, d]) => new Field(n, d.type as DataType, false));

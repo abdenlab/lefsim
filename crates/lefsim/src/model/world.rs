@@ -116,9 +116,6 @@ pub enum WorldError {
     /// Another leg already sits there. A LEF's own two legs may share a site
     /// (as right after it's placed); two LEFs may not.
     SiteOccupied { lef: usize, pos: Position },
-    /// `Evicted` only exists mid-way through an eviction and its immediate
-    /// respawn, never in a state at rest.
-    Evicted { lef: usize, pos: Position },
     /// A captured leg must sit on a CTCF...
     CapturedOffCtcf { lef: usize, pos: Position },
     /// ...that captures from the side it arrived from. Legs only step
@@ -126,6 +123,12 @@ pub enum WorldError {
     /// left-facing leg can only be captured by a CTCF that captures from the
     /// right, and a right-facing leg by one that captures from the left.
     CapturedWrongSide { lef: usize, pos: Position, facing: Direction },
+    /// A stalled leg must sit on a CTCF...
+    StalledOffCtcf { lef: usize, pos: Position },
+    /// ...that it reached from the side opposite the capture side: a
+    /// left-facing leg is stalled by a CTCF capturing from the left, a
+    /// right-facing leg by one capturing from the right.
+    StalledWrongSide { lef: usize, pos: Position, facing: Direction },
 }
 
 impl std::fmt::Display for WorldError {
@@ -141,9 +144,6 @@ impl std::fmt::Display for WorldError {
             WorldError::SiteOccupied { lef, pos } => {
                 write!(f, "LEF {lef}: site {pos} is already occupied by another LEF")
             }
-            WorldError::Evicted { lef, pos } => {
-                write!(f, "LEF {lef}: leg at {pos} is Evicted, which only exists mid-respawn")
-            }
             WorldError::CapturedOffCtcf { lef, pos } => {
                 write!(f, "LEF {lef}: leg at {pos} is Captured but the site is not a CTCF")
             }
@@ -153,6 +153,16 @@ impl std::fmt::Display for WorldError {
                  which captures from the {}",
                 Direction::NAMES[facing.code() as usize].to_lowercase(),
                 Direction::NAMES[facing.code() as usize].to_lowercase(),
+            ),
+            WorldError::StalledOffCtcf { lef, pos } => {
+                write!(f, "LEF {lef}: leg at {pos} is Stalled but the site is not a CTCF")
+            }
+            WorldError::StalledWrongSide { lef, pos, facing } => write!(
+                f,
+                "LEF {lef}: a {}-facing leg can't be stalled by the CTCF at {pos}, \
+                 which captures from the {}",
+                Direction::NAMES[facing.code() as usize].to_lowercase(),
+                Direction::NAMES[facing.opposite().code() as usize].to_lowercase(),
             ),
         }
     }
@@ -283,7 +293,13 @@ impl World {
         for ((pos, mobility), facing) in [(left, Direction::Left), (right, Direction::Right)] {
             match mobility {
                 Mobility::Moving => {}
-                Mobility::Evicted => return Err(WorldError::Evicted { lef, pos }),
+                Mobility::Stalled => match self.lattice.sites[pos as usize].kind {
+                    SiteKind::Plain => return Err(WorldError::StalledOffCtcf { lef, pos }),
+                    SiteKind::Ctcf { captures_from, .. } if captures_from != facing => {
+                        return Err(WorldError::StalledWrongSide { lef, pos, facing });
+                    }
+                    SiteKind::Ctcf { .. } => {}
+                },
                 Mobility::Captured => match self.lattice.sites[pos as usize].kind {
                     SiteKind::Plain => return Err(WorldError::CapturedOffCtcf { lef, pos }),
                     SiteKind::Ctcf { captures_from, .. } if captures_from != facing.opposite() => {
@@ -379,7 +395,7 @@ impl World {
 mod tests {
     use super::*;
     use crate::model::Ctcf;
-    use Mobility::{Captured, Evicted, Moving};
+    use Mobility::{Captured, Moving, Stalled};
 
     /// 20 sites: a CTCF capturing from the left at 5 (captures right-facing
     /// legs), and one capturing from the right at 15 (captures left-facing).
@@ -414,6 +430,17 @@ mod tests {
     }
 
     #[test]
+    fn a_stalled_leg_sits_on_a_ctcf_it_reached_from_behind() {
+        // The CTCF at 5 captures from the left: a left-facing leg reaching it
+        // (from the right) is stalled; at 15 (captures from the right), a
+        // right-facing leg is.
+        let mut world = World::new(lattice());
+        world.add_lef((5, Stalled), (8, Moving)).unwrap();
+        world.add_lef((10, Moving), (15, Stalled)).unwrap();
+        assert_eq!(world.lef_state(1), Some(((10, Moving), (15, Stalled))));
+    }
+
+    #[test]
     fn equality_compares_state_not_identity() {
         let mut a = World::new(lattice());
         a.add_lef((1, Moving), (3, Moving)).unwrap();
@@ -433,7 +460,9 @@ mod tests {
             ((20, Moving), (20, Moving), WorldError::PositionOutOfRange { lef: 1, pos: 20, n_sites: 20 }),
             ((4, Moving), (3, Moving), WorldError::LegsCrossed { lef: 1, left: 4, right: 3 }),
             ((9, Moving), (12, Moving), WorldError::SiteOccupied { lef: 1, pos: 9 }),
-            ((1, Evicted), (2, Moving), WorldError::Evicted { lef: 1, pos: 1 }),
+            ((1, Stalled), (2, Moving), WorldError::StalledOffCtcf { lef: 1, pos: 1 }),
+            // A left-facing leg isn't stalled by a CTCF capturing from the right (it captures it).
+            ((15, Stalled), (16, Moving), WorldError::StalledWrongSide { lef: 1, pos: 15, facing: Direction::Left }),
             ((1, Captured), (2, Moving), WorldError::CapturedOffCtcf { lef: 1, pos: 1 }),
             // A left-facing leg can't be captured by a CTCF capturing from the left.
             ((5, Captured), (6, Moving), WorldError::CapturedWrongSide { lef: 1, pos: 5, facing: Direction::Left }),

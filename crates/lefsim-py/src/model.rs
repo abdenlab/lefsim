@@ -43,7 +43,7 @@ fn parse_mobility(s: &str) -> PyResult<Mobility> {
         .iter()
         .position(|n| n.eq_ignore_ascii_case(s))
         .and_then(|i| Mobility::from_code(i as u8))
-        .ok_or_else(|| value_error(format!("mobility must be 'moving', 'captured' or 'evicted', got {s:?}")))
+        .ok_or_else(|| value_error(format!("mobility must be 'moving', 'captured' or 'stalled', got {s:?}")))
 }
 
 pub fn parse_rule(s: &str) -> PyResult<SpawnRule> {
@@ -337,9 +337,10 @@ fn lefs_from(obj: &Bound<'_, PyAny>) -> PyResult<LefStates> {
 /// polars, `World.to_arrow()`, `Sim.state()`) or a dict of sequences.
 ///
 /// Every LEF is checked: legs on the lattice and not crossed, no two LEFs
-/// on one site, no 'evicted' leg, and a 'captured' leg only on a CTCF that
-/// could have captured it (a left-facing leg by a CTCF that captures from
-/// the right, a right-facing leg by one that captures from the left).
+/// on one site, a 'captured' leg only on a CTCF that could have captured it
+/// (a left-facing leg by a CTCF that captures from the right, a right-facing
+/// leg by one that captures from the left), and a 'stalled' leg only on a
+/// CTCF it reached from behind (the reverse).
 #[pyclass(module = "lefsim", name = "World", frozen, eq, skip_from_py_object)]
 #[derive(Clone, PartialEq)]
 pub struct PyWorld(pub lefsim::World);
@@ -456,8 +457,11 @@ pub fn populate(lattice: &PyLattice, n_lefs: usize, seed: u64, spawn_rule: &str)
 // ===================================================================
 
 /// Event rates (per unit time): `step` for a moving, unblocked leg;
-/// `respawn` for a LEF with no captured leg; `respawn_captured` for one
-/// with at least one. Checked (positive and finite) by `Model`.
+/// `respawn`, the basal rate, for a LEF with a leg able to move;
+/// `respawn_stalled` for an immobilized LEF (both legs stalled: blocked by a
+/// leg ahead or the lattice's end, or stopped at a CTCF reached from behind);
+/// `respawn_captured` for a LEF with a captured leg, whatever the other leg
+/// does. Checked (positive and finite) by `Model`.
 #[pyclass(module = "lefsim", name = "Rates", frozen, eq, skip_from_py_object)]
 #[derive(Clone, PartialEq)]
 pub struct PyRates(pub lefsim::Rates);
@@ -465,12 +469,13 @@ pub struct PyRates(pub lefsim::Rates);
 #[pymethods]
 impl PyRates {
     #[new]
-    #[pyo3(signature = (step = None, respawn = None, respawn_captured = None))]
-    fn new(step: Option<f64>, respawn: Option<f64>, respawn_captured: Option<f64>) -> Self {
+    #[pyo3(signature = (step = None, respawn = None, respawn_stalled = None, respawn_captured = None))]
+    fn new(step: Option<f64>, respawn: Option<f64>, respawn_stalled: Option<f64>, respawn_captured: Option<f64>) -> Self {
         let d = lefsim::Rates::default();
         PyRates(lefsim::Rates {
             step: step.unwrap_or(d.step),
             respawn: respawn.unwrap_or(d.respawn),
+            respawn_stalled: respawn_stalled.unwrap_or(d.respawn_stalled),
             respawn_captured: respawn_captured.unwrap_or(d.respawn_captured),
         })
     }
@@ -483,6 +488,11 @@ impl PyRates {
     #[getter]
     fn respawn(&self) -> f64 {
         self.0.respawn
+    }
+
+    #[getter]
+    fn respawn_stalled(&self) -> f64 {
+        self.0.respawn_stalled
     }
 
     #[getter]
@@ -517,7 +527,10 @@ impl PyRates {
 
     fn __repr__(&self) -> String {
         let r = &self.0;
-        format!("lefsim.Rates(step={:?}, respawn={:?}, respawn_captured={:?})", r.step, r.respawn, r.respawn_captured)
+        format!(
+            "lefsim.Rates(step={:?}, respawn={:?}, respawn_stalled={:?}, respawn_captured={:?})",
+            r.step, r.respawn, r.respawn_stalled, r.respawn_captured
+        )
     }
 }
 

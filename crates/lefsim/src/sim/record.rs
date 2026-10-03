@@ -17,10 +17,10 @@
 //!
 //! State is piecewise-constant between events, so grid snapshots are exact,
 //! not interpolated. A grid point `g` records the state after *every* event
-//! with time `<= g`. In particular, a chain of zero-delay events (an
-//! eviction followed by its immediate respawn) is fully applied before a
-//! coincident grid point is recorded, so snapshots never show the transient
-//! `Evicted` state.
+//! with time `<= g`. In particular, a chain of events at one instant (ties,
+//! or zero-delay events, which this model no longer schedules) is fully
+//! applied before a coincident grid point is recorded, so snapshots never
+//! show a state that lasted no time.
 //!
 //! Recording never touches the RNG: a run produces the same events whether
 //! or not anything is observing it.
@@ -501,14 +501,13 @@ impl EventRecorder {
     /// A keyframe is written whenever the buffer is empty (at the start, and
     /// after each [`EventRecorder::take_frames`] / [`EventRecorder::drain_into`]),
     /// stamped with the current time, and only once that time is *settled*.
-    /// During a zero-delay chain (an eviction and its immediate respawn),
-    /// it waits for the chain to finish, so keyframes never show the
-    /// transient `Evicted` state. Events fired before the first keyframe
+    /// During a chain of events at one instant, it waits for the chain to
+    /// finish, so keyframes never show a state that lasted no time. Events fired before the first keyframe
     /// aren't logged: the keyframe already reflects them.
     ///
     /// Batches also only end at settled times, so the next one can open with
     /// a settled keyframe. A bounded buffer may therefore run past its cap by
-    /// the rows of a zero-delay chain in progress (typically two).
+    /// the rows of a chain in progress at one instant.
     ///
     /// `n_legs` is the sim's leg count; a bounded buffer must hold at least
     /// a keyframe plus one event (`max_rows >= n_legs + 2`).

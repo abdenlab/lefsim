@@ -3,7 +3,7 @@
 use lefsim::*;
 
 /// 200 sites with a convergent CTCF pair and a third CTCF facing the other
-/// way, so runs see captures, evictions, and respawns.
+/// way, so runs see captures, stalls, and respawns.
 fn lattice(strength: f64) -> Lattice {
     let mut sites = vec![Site::plain(); 200];
     sites[60] = Site::ctcf(Direction::Right, strength);
@@ -18,6 +18,7 @@ fn rates() -> Rates {
     Rates {
         step: 1.0,
         respawn: 0.02,
+        respawn_stalled: 0.1,
         respawn_captured: 0.005,
     }
 }
@@ -173,48 +174,23 @@ fn first_snapshot_is_the_initial_state() {
 }
 
 #[test]
-fn snapshots_never_show_the_evicted_state() {
-    let mut sim = build_with_strength(6, 1.0);
-    let mut rec = sim.recorder(SampleMode::every_dt(0.25));
-    let mut ev = EventRecorder::new();
-    sim.run_until_with(500.0, &mut (&mut rec, &mut ev));
-
-    let evicted = Mobility::Evicted;
-    let evictions = ev.frames().mob().iter().filter(|&&m| m == evicted).count();
-    assert!(evictions > 5, "want evictions to exercise this, got {evictions}");
-
-    let frames = rec.frames();
-    assert!(!frames.lefs().left_mobility.contains(&evicted));
-    assert!(!frames.lefs().right_mobility.contains(&evicted));
-}
-
-/// A grid point landing exactly on an eviction time must record the state
-/// after the zero-delay respawn, not the transient eviction.
-#[test]
-fn grid_point_on_an_eviction_sees_the_respawn() {
-    let mut probe = build_with_strength(7, 1.0);
-    let mut ev = EventRecorder::new();
-    probe.run_until_with(500.0, &mut ev);
-    let evicted = Mobility::Evicted;
-    let row = ev
-        .frames()
-        .mob()
-        .iter()
-        .position(|&m| m == evicted)
-        .expect("run should contain an eviction");
-    let t_evict = ev.frames().time()[row];
-    let lef = (ev.frames().leg_id()[row] / 2) as usize;
-
-    // Grid 0, t_evict, 2*t_evict, ...: the second point is exactly t_evict.
-    let mode = SampleMode::EveryDt { dt: t_evict, t0: 0.0 };
-    let (frames, _) = build_with_strength(7, 1.0).collect_until(t_evict, mode);
-    assert_eq!(frames.n_snapshots(), 2);
-    let snap = frames.snapshot(1);
-    assert_eq!(snap.time, t_evict);
-    assert_ne!(snap.left_mobility[lef], evicted);
-    assert_ne!(snap.right_mobility[lef], evicted);
-    // A just-respawned LEF has both legs on its spawn site.
-    assert_eq!(snap.left_pos[lef], snap.right_pos[lef]);
+fn a_stalled_leg_stays_on_its_ctcf_until_its_lef_respawns() {
+    // Strength 1: every leg reaching a CTCF from behind stalls there.
+    let (frames, _) = build_with_strength(6, 1.0).collect_until(500.0, SampleMode::every_dt(0.25));
+    let ctcf = |p: u32| [60, 100, 140].contains(&p);
+    let mut stalled = 0;
+    for s in 0..frames.n_snapshots() {
+        let snap = frames.snapshot(s);
+        for lef in 0..snap.left_pos.len() {
+            for (pos, mob) in [(snap.left_pos[lef], snap.left_mobility[lef]), (snap.right_pos[lef], snap.right_mobility[lef])] {
+                if mob == Mobility::Stalled {
+                    stalled += 1;
+                    assert!(ctcf(pos), "a stalled leg at {pos}, off any CTCF");
+                }
+            }
+        }
+    }
+    assert!(stalled > 20, "want stalled legs to exercise this, got {stalled}");
 }
 
 #[test]

@@ -59,7 +59,7 @@
     "dictionary": [
      "Moving",
      "Captured",
-     "Evicted"
+     "Stalled"
     ]
    },
    {
@@ -69,7 +69,7 @@
     "dictionary": [
      "Moving",
      "Captured",
-     "Evicted"
+     "Stalled"
     ]
    }
   ]
@@ -111,7 +111,7 @@
     "dictionary": [
      "Moving",
      "Captured",
-     "Evicted"
+     "Stalled"
     ]
    },
    {
@@ -121,7 +121,7 @@
     "dictionary": [
      "Moving",
      "Captured",
-     "Evicted"
+     "Stalled"
     ]
    }
   ]
@@ -163,7 +163,7 @@
     "dictionary": [
      "Moving",
      "Captured",
-     "Evicted"
+     "Stalled"
     ]
    }
   ]
@@ -204,7 +204,7 @@
     "dictionary": [
      "Moving",
      "Captured",
-     "Evicted"
+     "Stalled"
     ]
    },
    {

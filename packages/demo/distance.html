@@ -65,15 +65,19 @@
             Step rate
             <input type="number" id="rate-step" min="0" step="any" />
           </label>
-          <label title="Respawns per time unit of a LEF with neither leg held">
+          <label title="Respawns per time unit of a LEF with a leg able to move (the basal rate)">
             Respawn rate
             <input type="number" id="rate-respawn" min="0" step="any" />
           </label>
-          <label title="Respawns per time unit of a LEF with a leg held at a CTCF">
-            Respawn rate when held
+          <label title="Respawns per time unit of a LEF with both legs stalled: blocked by a leg ahead or the lattice's end, or stopped at a CTCF reached from behind">
+            Respawn rate when stalled
+            <input type="number" id="rate-respawn-stalled" min="0" step="any" />
+          </label>
+          <label title="Respawns per time unit of a LEF with a leg captured at a CTCF">
+            Respawn rate when captured
             <input type="number" id="rate-respawn-held" min="0" step="any" />
           </label>
-          <label title="Chance that a CTCF captures (or evicts) a leg arriving at it">
+          <label title="Chance that a CTCF captures (or stalls) a leg arriving at it">
             CTCF strength
             <input type="number" id="strength" min="0" max="1" step="0.05" />
           </label>
@@ -122,9 +126,7 @@
         A path between two sites walks the lattice one step at a time, or hops across a loop from one leg
         to the other, and across a chain of loops side by side the junctions between them are free. Steps and hops both count 1, so
         with no loops the distance is just the separation. On the right, each pair of probes is joined
-        by a spring as long as its effective distance, and the line links the probes in lattice order. The
-        lattice's ends evict: a leg that reaches one makes its LEF respawn, as if an outward-facing CTCF sat at
-        each end.
+        by a spring as long as its effective distance, and the line links the probes in lattice order. A leg that reaches a CTCF from behind, or the lattice's end, stalls there; a LEF with both legs stalled unloads faster.
       </p>
     </main>
     <script type="module" src="/src/distance.ts"></script>

@@ -91,9 +91,16 @@ site. In the simulation:
   `facing` direction); backsliding is not scheduled.
 - A leg's **mobility** is set at the moment of landing on a site and then
   persists until the next landing:
-  - `Moving`: free to step.
-  - `Captured`: a CTCF has held it in place.
-  - `Evicted`: a CTCF has kicked it off, forcing an immediate respawn.
+  - `Moving`: free to step (unless blocked, see below).
+  - `Captured`: a CTCF reached from its capture side has held it in place,
+    which protects its LEF from faster unloading.
+  - `Stalled`: a CTCF reached from its other side has stopped it. Steps only
+    go forward, so it stays there until its LEF respawns.
+
+  A moving leg is also **blocked** while another leg sits on the next site
+  ahead, or the lattice ends there. Blocking is derived from positions, never
+  stored, so it lifts as soon as the obstruction moves. For unloading, a
+  blocked leg counts as stalled.
 
 So we have 1 mutable entity type: leg. A leg's properties: its lattice site, its
 facing direction, and its mobility state all live in the `Leg` struct. Lattice
@@ -102,8 +109,8 @@ lattice site points to 1 or more leg keys. These are stack-allocated vecs of
 length 2 since each site holds 0 or 1 legs, and only briefly 2 right after a
 respawn.
 
-Note that LEFs are "recycled" in the current model: upon eviction or unbinding,
-they respawn. No new entities get created and none get destroyed over a run.
+Note that LEFs are "recycled" in the current model: upon unbinding, they
+respawn. No new entities get created and none get destroyed over a run.
 
 Arenas:
 
@@ -116,14 +123,19 @@ Arenas:
 #### Scheduling rules
 
 - `Step { leg }`
-  - schedules to `Never` if the leg isn't `Moving`, would step off the lattice,
-    or is blocked by another leg on the target site.
+  - schedules to `Never` if the leg isn't `Moving` or is blocked (another leg
+    on the target site, or the lattice's end).
   - otherwise it draws an exponential wait with rate `rates.step`.
-- `Respawn { lef }` looks at the mobility of _both_ legs together:
-  - either leg `Evicted` → `At(now)` (immediate).
-  - either leg `Captured` → exponential wait at `rates.respawn_captured` (longer
-    lifetime while paused at a boundary).
-  - otherwise → `rates.respawn`.
+- `Respawn { lef }` looks at _both_ legs together, and draws an exponential
+  wait at:
+  - `rates.respawn_captured` if either leg is `Captured`, whatever the other
+    does: capture protects a LEF.
+  - `rates.respawn_stalled` if both legs are stalled (each `Stalled`, or
+    `Moving` but blocked): the LEF is immobilized.
+  - `rates.respawn`, the basal rate, otherwise.
+
+  Since blocking depends on neighbors, a step or respawn reschedules the
+  respawns of the LEFs whose legs it blocks or unblocks.
 
 #### Firing rules
 
@@ -142,11 +154,12 @@ On each `Step` or `Respawn` fire, the mobility of the leg(s) is reassessed using
 a `resolve_mobility(site, arrived_from, rng)` function. `arrived_from` is the
 side of the landing site the leg came from. This is the single place where a
 CTCF can act on a leg. Its `captures_from` determines its capture side (the
-opposite side evicts). If the site is a CTCF:
+opposite side stalls). If the site is a CTCF:
 
 - if `arrived_from == captures_from` → with probability `strength` return
   `Captured` else `Moving` (pass-through).
-- if `arrived_from != captures_from` → with probability `strength` return `Evicted`.
+- if `arrived_from != captures_from` → with probability `strength` return
+  `Stalled` else `Moving`.
 
 This is called _only_ once at actual landings, never during scheduling.
 Otherwise a leg standing still on a CTCF that already failed to capture it would
@@ -208,12 +221,12 @@ document (and so do `World`, `Lattice`, `Rates` and `LefStates` on their own):
 
 ```json
 {
-  "format": "lefsim.model", "version": 1,
+  "format": "lefsim.model", "version": 2,
   "lattice": { "n_sites": 100,
                "ctcfs": [{ "site": 30, "captures_from": "right", "strength": 0.8 }] },
   "lefs": [{ "left_pos": 10, "right_pos": 12,
               "left_mobility": "moving", "right_mobility": "moving" }],
-  "rates": { "step": 1.0, "respawn": 0.001, "respawn_captured": 0.0001 },
+  "rates": { "step": 1.0, "respawn": 0.001, "respawn_stalled": 0.01, "respawn_captured": 0.001 },
   "spawn": { "rule": "uniform_non_ctcf" }
 }
 ```
@@ -252,10 +265,9 @@ let frames = rec.frames(); // LefFrames: time, left_pos, right_pos, left_mob, ri
 let deltas = events.frames(); // EventFrames: time, leg_id, pos, mob, kind
 ```
 
-A grid point `g` records the state after _every_ event at or before `g`. So a
-zero-delay chain (an eviction and its immediate respawn) is fully applied before
-a coincident grid point is recorded, and snapshots never show the transient
-`Evicted` state. Recording never touches the RNG, so a run fires the same
+A grid point `g` records the state after _every_ event at or before `g`, so
+events at the same instant are all applied before a coincident grid point is
+recorded. Recording never touches the RNG, so a run fires the same
 events whether or not it is observed, and split runs (`run_until(a)` then
 `run_until(b)`) record exactly what one `run_until(b)` would.
 
@@ -284,9 +296,8 @@ one `Keyframe` row per leg holding the full state, so each batch can be replayed
 on its own. That's what seeking and joining a stream partway through need.
 Rows carry absolute values, so replay is an idempotent overwrite, and dropping
 the keyframe rows leaves exactly the plain event log. Keyframes are written
-only at settled times, never partway through an eviction and its immediate
-respawn, so they never show a transient `Evicted` leg. For the same reason a
-bounded batch may run past its cap by the rows of such a chain (typically two).
+only at settled times, never partway through events at one instant, and a
+bounded batch may run past its cap by the rows of such a chain.
 
 **Replaying.** A `Replayer` rebuilds the state at any recorded time from
 keyframed batches, with no simulation:
@@ -325,7 +336,7 @@ import polars as pl
 
 lattice = lefsim.Lattice(1000, {"site": [300, 700], "captures_from": ["right", "left"], "strength": 0.9})
 world = lefsim.populate(lattice, 10, seed=1)  # or lefsim.World(lattice, table_of_lefs)
-model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=1e-3, respawn_captured=1e-4))
+model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=1e-3, respawn_stalled=1e-2, respawn_captured=1e-3))
 sim = lefsim.Sim(model, seed=42)
 
 sim.run_until(100.0)  # advance only
@@ -430,7 +441,7 @@ const lattice = createLattice(3000, [
   { site: 600, capturesFrom: "left", strength: 0.8 },
   { site: 601, capturesFrom: "right", strength: 0.8 },
 ]);
-const model = createModel(populate(lattice, 20, { seed: 1 }), { step: 1, respawn: 2e-3, respawnCaptured: 4e-4 });
+const model = createModel(populate(lattice, 20, { seed: 1 }), { step: 1, respawn: 2e-3, respawnStalled: 2e-2, respawnCaptured: 2e-3 });
 using sim = new Sim(model, { seed: 1 });
 
 function frame() {

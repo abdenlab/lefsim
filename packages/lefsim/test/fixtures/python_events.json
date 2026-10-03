@@ -31,10 +31,11 @@
   "rates": {
    "step": 1.0,
    "respawn": 0.01,
+   "respawnStalled": 0.05,
    "respawnCaptured": 0.002
   },
   "tEnd": 300.0,
   "chunkSize": 400
  },
- "batches": 7
+ "batches": 12
 }

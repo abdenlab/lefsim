@@ -107,6 +107,7 @@ class Rates:
         self,
         step: Optional[float] = None,
         respawn: Optional[float] = None,
+        respawn_stalled: Optional[float] = None,
         respawn_captured: Optional[float] = None,
     ) -> None: ...
     @property
@@ -114,10 +115,14 @@ class Rates:
         """Step rate of a moving, unblocked leg."""
     @property
     def respawn(self) -> float:
-        """Respawn rate of a LEF with no captured leg."""
+        """Basal respawn rate: a LEF with a leg able to move."""
+    @property
+    def respawn_stalled(self) -> float:
+        """Respawn rate of an immobilized LEF: both legs stalled (blocked by a
+        leg ahead or the lattice's end, or stopped at a CTCF reached from behind)."""
     @property
     def respawn_captured(self) -> float:
-        """Respawn rate of a LEF with at least one captured leg."""
+        """Respawn rate of a LEF with a captured leg, whatever the other leg does."""
     def to_dict(self) -> Any:
         """As plain Python data, in the same shape as the JSON."""
     @classmethod

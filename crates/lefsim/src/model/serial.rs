@@ -15,7 +15,7 @@ use super::{
 /// The `format` field of a model document.
 pub(super) const MODEL_FORMAT: &str = "lefsim.model";
 /// The current `version` of the model document.
-pub(super) const MODEL_VERSION: u32 = 1;
+pub(super) const MODEL_VERSION: u32 = 2;
 
 /// One row of a [`LefStates`] table. Mobility defaults to moving.
 #[derive(Serialize, Deserialize)]
@@ -151,14 +151,14 @@ mod tests {
         let mut world = World::new(Lattice::with_ctcfs(100, &ctcfs).unwrap());
         world.add_lef((10, Mobility::Moving), (12, Mobility::Moving)).unwrap();
         world.add_lef((30, Mobility::Captured), (70, Mobility::Captured)).unwrap();
-        let rates = Rates { step: 1.0, respawn: 0.002, respawn_captured: 0.0004 };
+        let rates = Rates { step: 1.0, respawn: 0.002, respawn_stalled: 0.02, respawn_captured: 0.0004 };
         Model::new(world, rates, SpawnRule::UniformNonCtcf).unwrap()
     }
 
     fn document() -> serde_json::Value {
         json!({
             "format": "lefsim.model",
-            "version": 1,
+            "version": 2,
             "lattice": {
                 "n_sites": 100,
                 "ctcfs": [
@@ -170,7 +170,7 @@ mod tests {
                 { "left_pos": 10, "right_pos": 12, "left_mobility": "moving", "right_mobility": "moving" },
                 { "left_pos": 30, "right_pos": 70, "left_mobility": "captured", "right_mobility": "captured" },
             ],
-            "rates": { "step": 1.0, "respawn": 0.002, "respawn_captured": 0.0004 },
+            "rates": { "step": 1.0, "respawn": 0.002, "respawn_stalled": 0.02, "respawn_captured": 0.0004 },
             "spawn": { "rule": "uniform_non_ctcf" },
         })
     }
@@ -220,7 +220,7 @@ mod tests {
     fn invalid_documents_are_rejected() {
         let cases: [(&str, serde_json::Value, &str); 8] = [
             ("/format", json!("something.else"), "expected format"),
-            ("/version", json!(2), "unsupported"),
+            ("/version", json!(1), "unsupported"),
             ("/lattice/n_sites", json!(0), "at least one site"),
             ("/lattice/ctcfs/0/strength", json!(1.5), "[0, 1]"),
             ("/lefs/0/right_pos", json!(30), "already occupied"),

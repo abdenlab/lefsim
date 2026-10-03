@@ -50,12 +50,12 @@ pub enum SiteKind {
     /// Plain lattice cell — leg passes through unchanged.
     Plain,
     /// CTCF site with an intrinsic polarity. `captures_from` names the
-    /// CTCF's capture side; the opposite side is its eviction side.
+    /// CTCF's capture side; the opposite side is its stalling side.
     /// When a leg lands here, the CTCF acts with probability `strength`:
     ///
     /// - if the leg arrived from the **`captures_from`** side, it is
     ///   **captured**;
-    /// - if the leg arrived from the opposite side, it is **evicted**.
+    /// - if the leg arrived from the opposite side, it is **stalled**.
     ///
     /// With probability `1 - strength` the leg passes through unchanged
     /// (`Mobility::Moving`). `strength` must lie in `[0, 1]`.
@@ -90,7 +90,7 @@ impl Site {
         Site { kind: SiteKind::Plain }
     }
     /// Construct a CTCF site. `captures_from` is the CTCF's capture side
-    /// (the opposite side evicts). `strength` is the per-landing
+    /// (the opposite side stalls). `strength` is the per-landing
     /// probability that the CTCF acts at all; the complement is the
     /// pass-through probability. It must lie in `[0, 1]`, which
     /// [`Lattice::new`] checks.
