@@ -101,9 +101,9 @@ describe("building a model", () => {
     [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 5 }, { leftPos: 5, rightPos: 6 }]), /already occupied/],
     [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "captured" }]), /not a CTCF/],
     [() => createWorld(lattice10(), [{ leftPos: 3, rightPos: 5, leftMobility: "captured" }]), /can't be captured/],
-    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "evicted" }]), /isn't a CTCF/],
+    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "evicted" }]), /neither its site nor/],
     // The CTCF at 3 captures from the left: it captures right-facing legs, so it can't evict one.
-    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, rightMobility: "evicted" }]), /isn't a CTCF/],
+    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, rightMobility: "evicted" }]), /neither its site nor/],
     [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "stuck" }]), /"moving" or "captured" or "evicted"/],
     [() => createWorld(lattice10(), { leftPos: [1, 2], rightPos: [3] }), /different lengths/],
     [() => populate(lattice10(), 6), /too many LEFs/],

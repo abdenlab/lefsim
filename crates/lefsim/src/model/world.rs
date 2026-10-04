@@ -123,9 +123,11 @@ pub enum WorldError {
     /// left-facing leg can only be captured by a CTCF that captures from the
     /// right, and a right-facing leg by one that captures from the left.
     CapturedWrongSide { lef: usize, pos: Position, facing: Direction },
-    /// An evicted leg must face, on the next site ahead, a CTCF met from
+    /// An evicted leg must sit on, or just before, a CTCF it met from
     /// behind: one whose capture side is the side the leg faces (a
-    /// left-facing leg is evicted by a CTCF capturing from the left).
+    /// left-facing leg is evicted by a CTCF capturing from the left). On it
+    /// when it stepped onto a bare CTCF; just before it when a captured leg
+    /// held the CTCF.
     EvictedWithoutCtcf { lef: usize, pos: Position, facing: Direction },
 }
 
@@ -154,8 +156,8 @@ impl std::fmt::Display for WorldError {
             ),
             WorldError::EvictedWithoutCtcf { lef, pos, facing } => write!(
                 f,
-                "LEF {lef}: the {}-facing leg at {pos} is Evicted, but the next site ahead \
-                 isn't a CTCF capturing from the {}",
+                "LEF {lef}: the {}-facing leg at {pos} is Evicted, but neither its site nor \
+                 the next one ahead is a CTCF capturing from the {}",
                 Direction::NAMES[facing.code() as usize].to_lowercase(),
                 Direction::NAMES[facing.code() as usize].to_lowercase(),
             ),
@@ -289,11 +291,12 @@ impl World {
             match mobility {
                 Mobility::Moving => {}
                 Mobility::Evicted => {
-                    let ahead = facing.shift(pos).filter(|&p| (p as usize) < n_sites);
-                    let ok = ahead.is_some_and(|p| {
+                    let evicts = |p: Position| {
                         matches!(self.lattice.sites[p as usize].kind,
                                  SiteKind::Ctcf { captures_from, .. } if captures_from == facing)
-                    });
+                    };
+                    let ahead = facing.shift(pos).filter(|&p| (p as usize) < n_sites);
+                    let ok = evicts(pos) || ahead.is_some_and(evicts);
                     if !ok {
                         return Err(WorldError::EvictedWithoutCtcf { lef, pos, facing });
                     }
@@ -428,14 +431,19 @@ mod tests {
     }
 
     #[test]
-    fn an_evicted_leg_waits_before_a_ctcf_met_from_behind() {
+    fn an_evicted_leg_waits_on_or_before_a_ctcf_met_from_behind() {
         // The CTCF at 5 captures from the left, so it evicts left-facing legs
-        // meeting it from the right: they wait at 6. The one at 15 (captures
-        // from the right) evicts right-facing legs, which wait at 14.
+        // meeting it from the right: on it (5) or, if it was held, at 6. The
+        // one at 15 (captures from the right) evicts right-facing legs, on it
+        // or at 14.
         let mut world = World::new(lattice());
         world.add_lef((6, Evicted), (8, Moving)).unwrap();
         world.add_lef((10, Moving), (14, Evicted)).unwrap();
         assert_eq!(world.lef_state(1), Some(((10, Moving), (14, Evicted))));
+        let mut world = World::new(lattice());
+        world.add_lef((5, Evicted), (8, Moving)).unwrap();
+        world.add_lef((10, Moving), (15, Evicted)).unwrap();
+        assert_eq!(world.lef_state(0), Some(((5, Evicted), (8, Moving))));
     }
 
     #[test]
@@ -461,8 +469,8 @@ mod tests {
             ((1, Evicted), (2, Moving), WorldError::EvictedWithoutCtcf { lef: 1, pos: 1, facing: Direction::Left }),
             // A left-facing leg isn't evicted by a CTCF capturing from the right (it can be captured).
             ((16, Evicted), (17, Moving), WorldError::EvictedWithoutCtcf { lef: 1, pos: 16, facing: Direction::Left }),
-            // Nor does a leg sitting on the CTCF count.
-            ((5, Evicted), (6, Moving), WorldError::EvictedWithoutCtcf { lef: 1, pos: 5, facing: Direction::Left }),
+            // Two sites before it is too far.
+            ((7, Evicted), (10, Moving), WorldError::EvictedWithoutCtcf { lef: 1, pos: 7, facing: Direction::Left }),
             ((1, Captured), (2, Moving), WorldError::CapturedOffCtcf { lef: 1, pos: 1 }),
             // A left-facing leg can't be captured by a CTCF capturing from the left.
             ((5, Captured), (6, Moving), WorldError::CapturedWrongSide { lef: 1, pos: 5, facing: Direction::Left }),

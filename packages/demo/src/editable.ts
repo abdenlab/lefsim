@@ -114,8 +114,9 @@ export class EditableRun {
     const keep = (mob: number, site: number, leftLeg: boolean) => {
       // Captured: on a CTCF capturing from the side it came from.
       if (mob === CAPTURED && capturesLeftAt.get(site) === !leftLeg) return CAPTURED;
-      // Evicted: just before a CTCF whose capture side faces the way it faces.
-      if (mob === EVICTED && capturesLeftAt.get(leftLeg ? site - 1 : site + 1) === leftLeg) return EVICTED;
+      // Evicted: on, or just before, a CTCF whose capture side faces the way it faces.
+      const evicts = (p: number) => capturesLeftAt.get(p) === leftLeg;
+      if (mob === EVICTED && (evicts(site) || evicts(leftLeg ? site - 1 : site + 1))) return EVICTED;
       return MOVING;
     };
     const lattice = this.lattice();

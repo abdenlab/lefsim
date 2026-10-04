@@ -11,7 +11,7 @@
 
 use lefsim::*;
 
-const GOLDEN: u64 = 0x0bf5045a7e8220d9;
+const GOLDEN: u64 = 0x4a7df0425e0d4f0b;
 
 /// FNV-1a over the bytes of every event row and the final grid snapshot.
 fn fingerprint() -> u64 {

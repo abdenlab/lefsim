@@ -175,11 +175,12 @@ fn first_snapshot_is_the_initial_state() {
 }
 
 #[test]
-fn an_evicted_leg_waits_just_before_a_ctcf_that_faces_away() {
-    // Strength 1: every leg meeting a CTCF from behind is evicted. The
-    // CTCFs at 60 and 100 capture from the right, so right-facing legs are
-    // evicted at 59 and 99; the one at 140 captures from the left, so
-    // left-facing legs are evicted at 141.
+fn an_evicted_leg_waits_on_or_just_before_a_ctcf_that_faces_away() {
+    // Strength 1: every leg stepping onto a CTCF from behind is evicted on
+    // it, and one meeting a held CTCF from behind just before it. The CTCFs
+    // at 60 and 100 capture from the right, so right-facing legs are evicted
+    // at 60 or 59, 100 or 99; the one at 140 captures from the left, so
+    // left-facing legs are evicted at 140 or 141.
     let (frames, _) = build_with_strength(6, 1.0).collect_until(500.0, SampleMode::every_dt(0.25));
     let mut evicted = 0;
     for s in 0..frames.n_snapshots() {
@@ -187,11 +188,11 @@ fn an_evicted_leg_waits_just_before_a_ctcf_that_faces_away() {
         for lef in 0..snap.left_pos.len() {
             if snap.left_mobility[lef] == Mobility::Evicted {
                 evicted += 1;
-                assert_eq!(snap.left_pos[lef], 141, "an evicted left leg off its place");
+                assert!([140, 141].contains(&snap.left_pos[lef]), "an evicted left leg at {}", snap.left_pos[lef]);
             }
             if snap.right_mobility[lef] == Mobility::Evicted {
                 evicted += 1;
-                assert!([59, 99].contains(&snap.right_pos[lef]), "an evicted right leg at {}", snap.right_pos[lef]);
+                assert!([59, 60, 99, 100].contains(&snap.right_pos[lef]), "an evicted right leg at {}", snap.right_pos[lef]);
             }
         }
     }

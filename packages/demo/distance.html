@@ -73,7 +73,7 @@
             Respawn rate when stalled
             <input type="number" id="rate-respawn-stalled" min="0" step="any" />
           </label>
-          <label title="Respawns per time unit of a LEF with either leg evicted: turned back by a CTCF met from behind">
+          <label title="Respawns per time unit of a LEF with either leg evicted: stopped by a CTCF met from behind">
             Respawn rate when evicted
             <input type="number" id="rate-respawn-evicted" min="0" step="any" />
           </label>
@@ -81,7 +81,7 @@
             Respawn rate when captured
             <input type="number" id="rate-respawn-held" min="0" step="any" />
           </label>
-          <label title="Chance that a CTCF captures a leg arriving at it, or turns back one meeting it from behind">
+          <label title="Chance that a CTCF captures a leg arriving at it from its capture side, or evicts one arriving from the other">
             CTCF strength
             <input type="number" id="strength" min="0" max="1" step="0.05" />
           </label>
@@ -130,7 +130,7 @@
         A path between two sites walks the lattice one step at a time, or hops across a loop from one leg
         to the other, and across a chain of loops side by side the junctions between them are free. Steps and hops both count 1, so
         with no loops the distance is just the separation. On the right, each pair of probes is joined
-        by a spring as long as its effective distance, and the line links the probes in lattice order. A leg meeting a CTCF from behind may be evicted, waiting just before it for its LEF to unload; a leg blocked by another or by the lattice's end stalls its LEF.
+        by a spring as long as its effective distance, and the line links the probes in lattice order. A leg meeting a CTCF from behind may be evicted there, waiting for its LEF to unload; a leg blocked by another or by the lattice's end stalls its LEF.
       </p>
     </main>
     <script type="module" src="/src/distance.ts"></script>

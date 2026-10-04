@@ -182,7 +182,7 @@ export function createLattice(nSites: number, ctcfs?: CtcfSpec[] | CtcfColumns):
  * row `i` becoming LEF `i`. Mobility defaults to moving. Checked by the
  * core: legs on the lattice and not crossed, no two LEFs on one site, a
  * captured leg only on a CTCF that could have captured it, and an evicted
- * leg only just before a CTCF it met from behind.
+ * leg only on, or just before, a CTCF it met from behind.
  */
 export function createWorld(lattice: Lattice, lefs: LefSpec[] | LefColumns = []): World {
   const world: World = { lattice, lefs: lefColumns(lefs) };

@@ -123,7 +123,7 @@ class Rates:
         lattice's end), unless the other is evicted or captured."""
     @property
     def respawn_evicted(self) -> float:
-        """Respawn rate of a LEF with either leg evicted (turned back by a CTCF
+        """Respawn rate of a LEF with either leg evicted (stopped by a CTCF
         met from behind), unless the other is captured."""
     @property
     def respawn_captured(self) -> float:

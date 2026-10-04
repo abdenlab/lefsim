@@ -94,7 +94,7 @@ export interface Rates {
    */
   respawnStalled: number;
   /**
-   * Respawn rate of a LEF with either leg evicted (turned back by a CTCF met
+   * Respawn rate of a LEF with either leg evicted (stopped by a CTCF met
    * from behind), unless the other is captured.
    */
   respawnEvicted: number;

@@ -80,7 +80,7 @@
             Respawn rate when stalled
             <input type="number" id="rate-respawn-stalled" min="0" step="any" />
           </label>
-          <label title="Respawns per time unit of a LEF with either leg evicted: turned back by a CTCF met from behind">
+          <label title="Respawns per time unit of a LEF with either leg evicted: stopped by a CTCF met from behind">
             Respawn rate when evicted
             <input type="number" id="rate-respawn-evicted" min="0" step="any" />
           </label>
@@ -88,7 +88,7 @@
             Respawn rate when captured
             <input type="number" id="rate-respawn-held" min="0" step="any" />
           </label>
-          <label title="Chance that a CTCF captures a leg arriving at it, or turns back one meeting it from behind">
+          <label title="Chance that a CTCF captures a leg arriving at it from its capture side, or evicts one arriving from the other">
             CTCF strength
             <input type="number" id="strength" min="0" max="1" step="0.05" />
           </label>
@@ -134,7 +134,7 @@
         plotted, from its value between the farthest sites (white) to its value between neighboring bins (black).
         Above the diagonal is the current state. Below it is the average over simulation time since the last
         reset (or restart, or change of bin size), each frame's state weighted by the time it covers.
-        A leg meeting a CTCF from behind may be evicted, waiting just before it for its LEF to unload; a leg blocked by another or by the lattice's end stalls its LEF.
+        A leg meeting a CTCF from behind may be evicted there, waiting for its LEF to unload; a leg blocked by another or by the lattice's end stalls its LEF.
       </p>
     </main>
     <script type="module" src="/src/contact.ts"></script>

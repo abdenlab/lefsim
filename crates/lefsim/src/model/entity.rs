@@ -30,9 +30,9 @@ pub enum Mobility {
     /// Held by a CTCF it reached from the CTCF's capture side. Protects its
     /// LEF from faster unloading.
     Captured = 1,
-    /// Turned back by a CTCF met from behind (its capture side facing away):
-    /// the step didn't happen, and the leg waits on the site before the CTCF
-    /// for its LEF to unload.
+    /// Stopped by a CTCF met from behind (its capture side facing away), and
+    /// waiting for its LEF to unload: on the CTCF, if it stepped onto a bare
+    /// one; just before it, if a captured leg held it (no step).
     Evicted = 2,
 }
 

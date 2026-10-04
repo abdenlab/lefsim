@@ -58,16 +58,22 @@
  },
  "lefs": [
   {
-   "left_pos": 325,
-   "right_pos": 424,
+   "left_pos": 25,
+   "right_pos": 75,
    "left_mobility": "captured",
-   "right_mobility": "evicted"
+   "right_mobility": "captured"
   },
   {
-   "left_pos": 79,
-   "right_pos": 91,
+   "left_pos": 372,
+   "right_pos": 374,
    "left_mobility": "moving",
    "right_mobility": "moving"
+  },
+  {
+   "left_pos": 325,
+   "right_pos": 375,
+   "left_mobility": "captured",
+   "right_mobility": "captured"
   },
   {
    "left_pos": 125,
@@ -76,86 +82,8 @@
    "right_mobility": "moving"
   },
   {
-   "left_pos": 226,
-   "right_pos": 241,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 127,
-   "right_pos": 136,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 464,
-   "right_pos": 469,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 341,
-   "right_pos": 351,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 63,
-   "right_pos": 74,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 6,
-   "right_pos": 24,
-   "left_mobility": "moving",
-   "right_mobility": "evicted"
-  },
-  {
-   "left_pos": 276,
-   "right_pos": 297,
-   "left_mobility": "evicted",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 327,
-   "right_pos": 374,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 7,
-   "right_pos": 10,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 425,
-   "right_pos": 475,
-   "left_mobility": "captured",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 326,
-   "right_pos": 375,
-   "left_mobility": "moving",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 25,
-   "right_pos": 37,
-   "left_mobility": "captured",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 225,
-   "right_pos": 275,
-   "left_mobility": "captured",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 142,
-   "right_pos": 150,
+   "left_pos": 241,
+   "right_pos": 266,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
@@ -166,16 +94,88 @@
    "right_mobility": "captured"
   },
   {
-   "left_pos": 298,
-   "right_pos": 322,
+   "left_pos": 183,
+   "right_pos": 224,
+   "left_mobility": "moving",
+   "right_mobility": "evicted"
+  },
+  {
+   "left_pos": 464,
+   "right_pos": 467,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
-   "left_pos": 38,
-   "right_pos": 75,
+   "left_pos": 485,
+   "right_pos": 491,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 97,
+   "right_pos": 108,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 425,
+   "right_pos": 475,
+   "left_mobility": "captured",
+   "right_mobility": "captured"
+  },
+  {
+   "left_pos": 226,
+   "right_pos": 267,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 427,
+   "right_pos": 463,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 435,
+   "right_pos": 442,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 443,
+   "right_pos": 460,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 269,
+   "right_pos": 275,
    "left_mobility": "moving",
    "right_mobility": "captured"
+  },
+  {
+   "left_pos": 27,
+   "right_pos": 51,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 225,
+   "right_pos": 268,
+   "left_mobility": "captured",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 378,
+   "right_pos": 385,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 426,
+   "right_pos": 474,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
   }
  ],
  "rates": {

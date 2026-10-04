@@ -84,11 +84,10 @@ fn right_facing_leg_captured_at_compatible_ctcf() {
     assert_eq!(lef0(&sim).1.1, Mobility::Captured);
 }
 
-/// A leg meeting a CTCF from its *non-capture* side is evicted before
-/// stepping onto it: it waits on the site before the CTCF, and its LEF
-/// unloads at `respawn_evicted`.
+/// A leg stepping onto a bare CTCF from its *non-capture* side is evicted
+/// there: it waits on the CTCF for its LEF to unload.
 #[test]
-fn a_leg_meeting_a_ctcf_from_behind_is_evicted_in_front_of_it() {
+fn a_leg_stepping_onto_a_ctcf_from_behind_is_evicted_on_it() {
     // CTCF at site 20 with its capture side on the right. The right-facing
     // leg approaches from the left (the eviction side).
     let mut sites = vec![Site::plain(); 50];
@@ -108,10 +107,10 @@ fn a_leg_meeting_a_ctcf_from_behind_is_evicted_in_front_of_it() {
     while lef0(&sim).1.1 != Mobility::Evicted {
         sim.step().expect("queue exhausted before reaching the CTCF");
     }
-    assert_eq!(lef0(&sim).0.1, 19, "evicted in front of the CTCF, not on it");
+    assert_eq!(lef0(&sim).0.1, 20, "evicted on the CTCF");
     // The left leg runs on to the lattice's end; the evicted leg waits.
     sim.run_until(sim.time() + 200.0);
-    assert_eq!(lef0(&sim), ((0, 19), (Mobility::Moving, Mobility::Evicted)));
+    assert_eq!(lef0(&sim), ((0, 20), (Mobility::Moving, Mobility::Evicted)));
 }
 
 /// An evicted leg's LEF unloads at `respawn_evicted`, whatever the other

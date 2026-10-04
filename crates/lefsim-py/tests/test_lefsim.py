@@ -20,7 +20,7 @@ import pytest
 import lefsim
 
 # The golden fingerprint pinned by crates/lefsim/tests/determinism.rs.
-RUST_GOLDEN = 0x0BF5045A7E8220D9
+RUST_GOLDEN = 0x4A7DF0425E0D4F0B
 
 FIXTURES = pathlib.Path(__file__).parents[3] / "packages" / "lefsim" / "test" / "fixtures"
 
@@ -177,9 +177,10 @@ def test_a_sim_state_is_a_world():
         ({"left_pos": [5], "right_pos": [7], "left_mobility": ["captured"]}, "not a CTCF"),
         # A left-facing leg can't be captured by a CTCF capturing from the left.
         ({"left_pos": [140], "right_pos": [150], "left_mobility": ["captured"]}, "can't be captured"),
-        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["evicted"]}, "isn't a CTCF"),
-        # A right-facing leg before the CTCF at 140 (capturing from the left) can be captured, not evicted.
-        ({"left_pos": [130], "right_pos": [139], "right_mobility": ["evicted"]}, "isn't a CTCF"),
+        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["evicted"]}, "neither its site nor"),
+        # A right-facing leg at the CTCF at 140 (capturing from the left) can be captured, not evicted.
+        ({"left_pos": [130], "right_pos": [139], "right_mobility": ["evicted"]}, "neither its site nor"),
+        ({"left_pos": [130], "right_pos": [140], "right_mobility": ["evicted"]}, "neither its site nor"),
         ({"left_pos": [5], "right_pos": [7], "right_mobility": ["stalled"]}, "mobility must be"),
         ({"left_pos": [5], "right_pos": [7], "right_mobility": ["stuck"]}, "mobility must be"),
         ({"left_pos": [5]}, "missing column"),
@@ -561,14 +562,14 @@ def test_event_chunks_open_with_keyframes_and_tile_the_run():
     assert replayer.world_at(300.0) == sim.world()
 
 
-def test_evicted_legs_wait_before_their_ctcf():
+def test_evicted_legs_wait_on_or_before_their_ctcf():
     rec = make_sim(seed=4, strength=1.0).record_until(500.0, dt=0.25, events=True)
     assert "Evicted" in table(rec.events)["mobility"].to_pylist()
     snaps = table(rec.snapshots)
     # make_lattice: CTCFs at 60 and 100 capture from the right (evicting
-    # right-facing legs at 59 and 99), and at 140 from the left (evicting
-    # left-facing legs at 141).
-    for side, where in (("left", {141}), ("right", {59, 99})):
+    # right-facing legs on them, or at 59 and 99 if held), and at 140 from the
+    # left (evicting left-facing legs on it, or at 141).
+    for side, where in (("left", {140, 141}), ("right", {59, 60, 99, 100})):
         mob = snaps[f"{side}_mobility"].to_pylist()
         evicted = {p for p, m in zip(snaps[f"{side}_pos"].to_pylist(), mob) if m == "Evicted"}
         assert evicted <= where, (side, evicted)

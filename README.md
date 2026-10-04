@@ -93,12 +93,12 @@ site. In the simulation:
   - `Moving`: free to step (unless blocked, see below).
   - `Captured`: a CTCF reached from its capture side has held it in place,
     which protects its LEF from faster unloading.
-  - `Evicted`: a CTCF met from its other side has turned it back. The step
-    didn't happen: the leg waits on the site just before the CTCF until its
-    LEF unloads.
+  - `Evicted`: a CTCF met from its other side has stopped it, and it waits
+    for its LEF to unload: on the CTCF if it stepped onto a bare one, or just
+    before it if a captured leg held it.
 
   A moving leg is also **blocked** while another leg sits on the next site
-  ahead (other than a captured leg holding a CTCF met from behind, which
+  ahead (unless that's a captured leg holding a CTCF met from behind, which
   evicts it instead), or the lattice ends there. Blocking is derived from
   positions, never stored, so it lifts as soon as the obstruction moves.
 
@@ -125,8 +125,7 @@ Arenas:
 - `Step { leg }`
   - schedules to `Never` if the leg isn't `Moving` or is blocked.
   - otherwise it draws an exponential wait with rate `rates.step`. That
-    includes a leg facing a CTCF from behind: its step is an attempt that
-    may evict it.
+    includes a leg facing a held CTCF from behind: its step evicts it.
 - `Respawn { lef }` looks at _both_ legs together, and draws an exponential
   wait at the first rate that applies:
   - `rates.respawn_captured` if either leg is `Captured`: capture protects.
@@ -153,16 +152,17 @@ starting LEFs, exactly as respawns would.
 A CTCF acts on a leg in two places. Its `captures_from` names its capture
 side; the other side evicts.
 
-- **Before a step, eviction.** A leg about to step onto a CTCF from behind
-  is evicted with probability `strength` (a crude stand-in for whether the
-  CTCF is bound), or for certain if a captured leg already holds it. An
-  evicted leg doesn't move. Otherwise it steps onto the CTCF and is past it.
-- **On landing, capture.** After each `Step` or `Respawn`, the leg(s) are
-  reassessed by `resolve_mobility(site, arrived_from, rng)`, where
-  `arrived_from` is the side of the landing site the leg came from: on a CTCF
-  with `arrived_from == captures_from`, `Captured` with probability
-  `strength`, else `Moving`. Landing at a spawn site isn't a step, so it can
-  capture but never evict.
+- **On landing.** After each `Step` or `Respawn`, the leg(s) are reassessed
+  by `resolve_mobility(site, arrived_from, landing, rng)`, where
+  `arrived_from` is the side of the landing site the leg came from. On a
+  CTCF, with probability `strength` (a crude stand-in for whether it's
+  bound): `Captured` if `arrived_from == captures_from`, else `Evicted`;
+  otherwise `Moving`. Landing at a spawn site isn't a step, so it can capture
+  but never evict.
+- **Before a step, a held CTCF.** A CTCF already holding a captured leg is
+  bound for certain: a leg about to step onto it from behind is evicted
+  where it stands, without moving. Any other leg on the next site is plain
+  traffic.
 
 This is called _only_ once at actual landings, never during scheduling.
 Otherwise a leg standing still on a CTCF that already failed to capture it would

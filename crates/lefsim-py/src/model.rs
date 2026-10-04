@@ -339,8 +339,8 @@ fn lefs_from(obj: &Bound<'_, PyAny>) -> PyResult<LefStates> {
 /// Every LEF is checked: legs on the lattice and not crossed, no two LEFs
 /// on one site, a 'captured' leg only on a CTCF that could have captured it
 /// (a left-facing leg by a CTCF that captures from the right, a right-facing
-/// leg by one that captures from the left), and an 'evicted' leg only just
-/// before a CTCF it met from behind (the reverse).
+/// leg by one that captures from the left), and an 'evicted' leg only on, or
+/// just before, a CTCF it met from behind (the reverse).
 #[pyclass(module = "lefsim", name = "World", frozen, eq, skip_from_py_object)]
 #[derive(Clone, PartialEq)]
 pub struct PyWorld(pub lefsim::World);
@@ -459,8 +459,8 @@ pub fn populate(lattice: &PyLattice, n_lefs: usize, seed: u64, spawn_rule: &str)
 /// Event rates (per unit time): `step` for a moving, unblocked leg;
 /// `respawn`, the basal rate, for a LEF with both legs free to move;
 /// `respawn_stalled` for a LEF with either leg blocked (by a leg ahead or the
-/// lattice's end); `respawn_evicted` for one with either leg evicted (turned
-/// back by a CTCF met from behind); `respawn_captured` for one with either
+/// lattice's end); `respawn_evicted` for one with either leg evicted (stopped
+/// by a CTCF met from behind); `respawn_captured` for one with either
 /// leg captured. The first that applies, in reverse order, wins: captured,
 /// then evicted, then stalled. Checked (positive and finite) by `Model`.
 #[pyclass(module = "lefsim", name = "Rates", frozen, eq, skip_from_py_object)]

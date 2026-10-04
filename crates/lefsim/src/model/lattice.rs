@@ -55,9 +55,10 @@ pub enum SiteKind {
     ///
     /// - if the leg arrived from the **`captures_from`** side, it is
     ///   **captured**;
-    /// - if the leg meets it from the opposite side, it is **evicted** before
-    ///   stepping onto it (the step doesn't happen; certain if a captured leg
-    ///   already holds the CTCF).
+    /// - if the leg arrived from the opposite side, it is **evicted**, there.
+    ///
+    /// A CTCF that already holds a captured leg is bound for certain: a leg
+    /// meeting it from behind is evicted where it stands, without stepping.
     ///
     /// With probability `1 - strength` the leg passes through unchanged
     /// (`Mobility::Moving`). `strength` must lie in `[0, 1]`.
