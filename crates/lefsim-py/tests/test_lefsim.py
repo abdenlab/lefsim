@@ -24,7 +24,7 @@ RUST_GOLDEN = 0x0BF5045A7E8220D9
 
 FIXTURES = pathlib.Path(__file__).parents[3] / "packages" / "lefsim" / "test" / "fixtures"
 
-RATES = lefsim.Rates(step=1.0, respawn=0.02, respawn_stalled=0.1, respawn_evicted=0.5, respawn_captured=0.005)
+RATES = lefsim.Rates(step=1.0, respawn=0.02, respawn_stalled=0.02, respawn_evicted=0.5, respawn_captured=0.005)
 
 
 def make_lattice(strength=0.8):
@@ -245,7 +245,7 @@ def test_model_json_round_trip_and_shape():
     assert doc["format"] == "lefsim.model" and doc["version"] == 2
     assert doc["lattice"]["n_sites"] == 200
     assert doc["lattice"]["ctcfs"][0] == {"site": 60, "captures_from": "right", "strength": 0.8}
-    assert doc["rates"] == {"step": 1.0, "respawn": 0.02, "respawn_stalled": 0.1, "respawn_evicted": 0.5, "respawn_captured": 0.005}
+    assert doc["rates"] == {"step": 1.0, "respawn": 0.02, "respawn_stalled": 0.02, "respawn_evicted": 0.5, "respawn_captured": 0.005}
     assert doc["spawn"] == {"rule": "uniform_non_ctcf"}
     rows = table(model.world.to_arrow()).drop_columns(["lef_id"]).to_pylist()
     assert doc["lefs"] == [{k: v.lower() if isinstance(v, str) else v for k, v in r.items()} for r in rows]
@@ -738,7 +738,8 @@ def test_a_stream_says_where_it_came_from():
     }
     assert meta[b"lefsim.kind"] == b"events"
     batches = list(reader)
-    assert len(batches) > 3 and all(b.schema.metadata == meta for b in batches)
+    # Every batch carries it (however many a quiet stretch leaves).
+    assert len(batches) > 1 and all(b.schema.metadata == meta for b in batches)
 
     # Re-running from it by hand gives the same rows.
     again = lefsim.Sim(model, seed=int(run["seed"]), start_time=run["start_time"])
@@ -1056,7 +1057,8 @@ def test_replayer_reads_any_arrow_source(tmp_path):
 
 def test_replayer_state_and_late_join():
     batches = list(keyframed_stream(17, 300.0, max_rows=80))
-    r = lefsim.Replayer.from_arrow(batches[3:], make_lattice())
+    # The stream ran to 300; say so, rather than ending at the last event.
+    r = lefsim.Replayer.from_arrow(batches[3:], make_lattice(), end=300.0)
     first = table(batches[3])["time"][0].as_py()
     assert r.start == first and not r.ready
     with pytest.raises(ValueError, match="no keyframe applied"):

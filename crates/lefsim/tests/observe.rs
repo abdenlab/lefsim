@@ -18,7 +18,7 @@ fn rates() -> Rates {
     Rates {
         step: 1.0,
         respawn: 0.02,
-        respawn_stalled: 0.1,
+        respawn_stalled: 0.02,
         respawn_evicted: 0.5,
         respawn_captured: 0.005,
     }
