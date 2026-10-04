@@ -60,6 +60,7 @@ const run = new EditableRun(
     step: $<HTMLInputElement>("rate-step"),
     respawn: $<HTMLInputElement>("rate-respawn"),
     respawnStalled: $<HTMLInputElement>("rate-respawn-stalled"),
+    respawnEvicted: $<HTMLInputElement>("rate-respawn-evicted"),
     respawnHeld: $<HTMLInputElement>("rate-respawn-held"),
     strength: $<HTMLInputElement>("strength"),
   },

@@ -218,6 +218,7 @@ fn model_from(
     step: f64,
     respawn: f64,
     respawn_stalled: f64,
+    respawn_evicted: f64,
     respawn_captured: f64,
     spawn_rule: &str,
 ) -> Result<Model, JsError> {
@@ -228,6 +229,7 @@ fn model_from(
         step,
         respawn,
         respawn_stalled,
+        respawn_evicted,
         respawn_captured,
     };
     Model::new(world, rates, rule_from(spawn_rule)?).map_err(js_err)
@@ -281,6 +283,7 @@ pub fn check_model(
     step: f64,
     respawn: f64,
     respawn_stalled: f64,
+    respawn_evicted: f64,
     respawn_captured: f64,
     spawn_rule: &str,
 ) -> Result<(), JsError> {
@@ -296,6 +299,7 @@ pub fn check_model(
         step,
         respawn,
         respawn_stalled,
+        respawn_evicted,
         respawn_captured,
         spawn_rule,
     )
@@ -331,6 +335,7 @@ fn rates_object(r: Rates) -> Object {
     set(&obj, "step", r.step);
     set(&obj, "respawn", r.respawn);
     set(&obj, "respawnStalled", r.respawn_stalled);
+    set(&obj, "respawnEvicted", r.respawn_evicted);
     set(&obj, "respawnCaptured", r.respawn_captured);
     obj
 }
@@ -365,6 +370,7 @@ impl WasmSim {
         step: f64,
         respawn: f64,
         respawn_stalled: f64,
+        respawn_evicted: f64,
         respawn_captured: f64,
         spawn_rule: &str,
         seed: u64,
@@ -387,6 +393,7 @@ impl WasmSim {
             step,
             respawn,
             respawn_stalled,
+            respawn_evicted,
             respawn_captured,
             spawn_rule,
         )?;

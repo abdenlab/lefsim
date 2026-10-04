@@ -3,7 +3,7 @@
  */
 
 /** Mobility names, indexed by the codes in {@link LiveState} mobility arrays. */
-export const MOBILITY = ["Moving", "Captured", "Stalled"] as const;
+export const MOBILITY = ["Moving", "Captured", "Evicted"] as const;
 export type Mobility = (typeof MOBILITY)[number];
 
 /** Direction names, indexed by the codes in {@link Ctcfs} `capturesFrom`. */
@@ -89,10 +89,15 @@ export interface Rates {
   /** Basal respawn rate: a LEF with both legs free to move. */
   respawn: number;
   /**
-   * Respawn rate of a stalled LEF: either leg stalled (blocked by a leg ahead
-   * or the lattice's end, or stopped at a CTCF reached from behind).
+   * Respawn rate of a LEF with either leg blocked (by a leg ahead or the
+   * lattice's end), unless the other is evicted or captured.
    */
   respawnStalled: number;
+  /**
+   * Respawn rate of a LEF with either leg evicted (turned back by a CTCF met
+   * from behind), unless the other is captured.
+   */
+  respawnEvicted: number;
   /** Respawn rate of a LEF with a captured leg, whatever the other leg does. */
   respawnCaptured: number;
 }

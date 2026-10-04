@@ -30,14 +30,15 @@ pub enum Mobility {
     /// Held by a CTCF it reached from the CTCF's capture side. Protects its
     /// LEF from faster unloading.
     Captured = 1,
-    /// Stopped by a CTCF it reached from the CTCF's other side. Can't step
-    /// again (steps only go forward) until its LEF respawns.
-    Stalled = 2,
+    /// Turned back by a CTCF met from behind (its capture side facing away):
+    /// the step didn't happen, and the leg waits on the site before the CTCF
+    /// for its LEF to unload.
+    Evicted = 2,
 }
 
 impl Mobility {
     /// Names indexed by [`Mobility::code`].
-    pub const NAMES: [&str; 3] = ["Moving", "Captured", "Stalled"];
+    pub const NAMES: [&str; 3] = ["Moving", "Captured", "Evicted"];
 
     /// Stable `u8` encoding: the index into [`Mobility::NAMES`].
     pub fn code(self) -> u8 {
@@ -59,7 +60,7 @@ impl Mobility {
         match code {
             0 => Some(Mobility::Moving),
             1 => Some(Mobility::Captured),
-            2 => Some(Mobility::Stalled),
+            2 => Some(Mobility::Evicted),
             _ => None,
         }
     }

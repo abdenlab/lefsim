@@ -11,7 +11,7 @@
 
 use lefsim::*;
 
-const GOLDEN: u64 = 0x69865133d61c9448;
+const GOLDEN: u64 = 0x0bf5045a7e8220d9;
 
 /// FNV-1a over the bytes of every event row and the final grid snapshot.
 fn fingerprint() -> u64 {
@@ -22,7 +22,7 @@ fn fingerprint() -> u64 {
     }
     let rule = SpawnRule::UniformNonCtcf;
     let world = populate(Lattice::new(sites).unwrap(), 20, &rule, 0x5EED).unwrap();
-    let rates = Rates { step: 1.0, respawn: 0.01, respawn_stalled: 0.05, respawn_captured: 0.002 };
+    let rates = Rates { step: 1.0, respawn: 0.01, respawn_stalled: 0.05, respawn_evicted: 0.2, respawn_captured: 0.002 };
     let mut sim = Sim::new(Model::new(world, rates, rule).unwrap(), 0x5EED);
     let mut rec = sim.recorder(SampleMode::every_dt(5.0));
     let mut ev = EventRecorder::new();

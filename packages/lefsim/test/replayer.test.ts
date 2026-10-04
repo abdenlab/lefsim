@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createLattice, createModel, KEYFRAME, MOBILITY, Replayer, Sim, type DeltaChunk, type LiveState } from "../src/index.ts";
 import { makeSim, type Setup } from "./helpers.ts";
 
-const STALLED = MOBILITY.indexOf("Stalled");
+const EVICTED = MOBILITY.indexOf("Evicted");
 
 const OPTIONS: Setup = {
   nSites: 200,
@@ -13,7 +13,7 @@ const OPTIONS: Setup = {
     { site: 140, capturesFrom: "left", strength: 0.9 },
   ],
   nLefs: 8,
-  rates: { step: 1, respawn: 0.02, respawnStalled: 0.1, respawnCaptured: 0.005 },
+  rates: { step: 1, respawn: 0.02, respawnStalled: 0.1, respawnEvicted: 0.5, respawnCaptured: 0.005 },
 };
 
 const LATTICE = createLattice(OPTIONS.nSites, OPTIONS.ctcfs);
@@ -245,22 +245,24 @@ describe("Replayer", () => {
     expect(() => r.seek(0)).toThrow(/no keyframe/);
   });
 
-  it("carries stalled legs, which stay on their CTCF, through keyframes", () => {
+  it("carries evicted legs, waiting just before their CTCF, through keyframes", () => {
     const strong = { ...OPTIONS, ctcfs: (OPTIONS.ctcfs as { site: number; capturesFrom: "left" | "right" }[]).map((c) => ({ ...c, strength: 1 })) };
     const ctcfSites = new Set((OPTIONS.ctcfs as { site: number }[]).map((c) => c.site));
     using sim = makeSim({ ...strong, seed: 3 });
-    let stalled = 0;
+    let evicted = 0;
     for (;;) {
       const c = sim.recordEventChunk(3000, { maxRows: 2 * sim.nLefs + 4 });
       for (let i = 0; i < c.kind.length; i++) {
-        if (c.mobility[i] === STALLED) {
-          expect(ctcfSites.has(c.pos[i]!)).toBe(true);
-          stalled++;
+        if (c.mobility[i] === EVICTED) {
+          // The CTCF is the next site ahead: left of a left leg (even leg id), right of a right one.
+          const ahead = c.legId[i]! % 2 === 0 ? c.pos[i]! - 1 : c.pos[i]! + 1;
+          expect(ctcfSites.has(ahead)).toBe(true);
+          evicted++;
         }
       }
       if (c.stopped !== "recorder_full") break;
     }
-    expect(stalled).toBeGreaterThan(10);
+    expect(evicted).toBeGreaterThan(10);
   });
 
   it("checks every row, as the core's replayer does, and rejects a bad chunk whole", () => {

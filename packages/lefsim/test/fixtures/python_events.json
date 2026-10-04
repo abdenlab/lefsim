@@ -32,10 +32,11 @@
    "step": 1.0,
    "respawn": 0.01,
    "respawnStalled": 0.05,
+   "respawnEvicted": 0.2,
    "respawnCaptured": 0.002
   },
   "tEnd": 300.0,
   "chunkSize": 400
  },
- "batches": 15
+ "batches": 14
 }

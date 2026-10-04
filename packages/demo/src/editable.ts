@@ -1,6 +1,6 @@
 // A live run whose model can be edited while it runs: the CTCFs (moved by
 // dragging them in two lanes, one per orientation, or added and removed by
-// count), the four rates and the CTCF strength. Shared by the pages that
+// count), the five rates and the CTCF strength. Shared by the pages that
 // offer these controls.
 //
 // A change builds a new model and carries the LEFs over to it at the current
@@ -14,7 +14,7 @@ import { colors, setLattice } from "./render.ts";
 const MAX_CTCFS = 16;
 const CAPTURED = MOBILITY.indexOf("Captured");
 const MOVING = MOBILITY.indexOf("Moving");
-const STALLED = MOBILITY.indexOf("Stalled");
+const EVICTED = MOBILITY.indexOf("Evicted");
 
 /** A CTCF; `left` means it captures from the left (its chevron points left). */
 export interface CtcfMark {
@@ -36,6 +36,7 @@ export interface ModelInputs {
   step: HTMLInputElement;
   respawn: HTMLInputElement;
   respawnStalled: HTMLInputElement;
+  respawnEvicted: HTMLInputElement;
   respawnHeld: HTMLInputElement;
   strength: HTMLInputElement;
 }
@@ -61,9 +62,10 @@ export class EditableRun {
     inputs.step.value = String(this.rates.step);
     inputs.respawn.value = String(this.rates.respawn);
     inputs.respawnStalled.value = String(this.rates.respawnStalled);
+    inputs.respawnEvicted.value = String(this.rates.respawnEvicted);
     inputs.respawnHeld.value = String(this.rates.respawnCaptured);
     inputs.strength.value = String(this.strength);
-    for (const input of [inputs.step, inputs.respawn, inputs.respawnStalled, inputs.respawnHeld, inputs.strength]) {
+    for (const input of [inputs.step, inputs.respawn, inputs.respawnStalled, inputs.respawnEvicted, inputs.respawnHeld, inputs.strength]) {
       input.addEventListener("change", () => {
         this.#readParams();
         this.rebuild();
@@ -94,10 +96,9 @@ export class EditableRun {
 
   /**
    * The same LEFs on the current model, continuing from the current time. A
-   * captured or stalled leg stays so only if a CTCF that can hold it that way
-   * is still at its site: a left leg is captured by one capturing from the
-   * right and stalled by one capturing from the left, a right leg the
-   * reverse. Otherwise it's moving again.
+   * captured leg stays so only if a CTCF that can hold it is still at its
+   * site, and an evicted leg only if the CTCF that turned it back is still
+   * just ahead of it. Otherwise it's moving again.
    */
   rebuild() {
     const old = this.sim;
@@ -111,9 +112,10 @@ export class EditableRun {
     const rightMob = st.rightMobility.slice();
     const capturesLeftAt = new Map(this.ctcfs.map((c) => [c.site, c.left]));
     const keep = (mob: number, site: number, leftLeg: boolean) => {
-      const capturesLeft = capturesLeftAt.get(site);
-      if (mob === CAPTURED && capturesLeft === !leftLeg) return CAPTURED;
-      if (mob === STALLED && capturesLeft === leftLeg) return STALLED;
+      // Captured: on a CTCF capturing from the side it came from.
+      if (mob === CAPTURED && capturesLeftAt.get(site) === !leftLeg) return CAPTURED;
+      // Evicted: just before a CTCF whose capture side faces the way it faces.
+      if (mob === EVICTED && capturesLeftAt.get(leftLeg ? site - 1 : site + 1) === leftLeg) return EVICTED;
       return MOVING;
     };
     const lattice = this.lattice();
@@ -142,7 +144,7 @@ export class EditableRun {
    * input back to the current value.
    */
   #readParams() {
-    const { step, respawn, respawnStalled, respawnHeld, strength } = this.#inputs;
+    const { step, respawn, respawnStalled, respawnEvicted, respawnHeld, strength } = this.#inputs;
     const positive = (input: HTMLInputElement, current: number) => {
       const v = Number(input.value);
       if (input.value.trim() !== "" && Number.isFinite(v) && v > 0) return v;
@@ -153,6 +155,7 @@ export class EditableRun {
       step: positive(step, this.rates.step),
       respawn: positive(respawn, this.rates.respawn),
       respawnStalled: positive(respawnStalled, this.rates.respawnStalled),
+      respawnEvicted: positive(respawnEvicted, this.rates.respawnEvicted),
       respawnCaptured: positive(respawnHeld, this.rates.respawnCaptured),
     };
     const st = Number(strength.value);

@@ -20,11 +20,11 @@ import pytest
 import lefsim
 
 # The golden fingerprint pinned by crates/lefsim/tests/determinism.rs.
-RUST_GOLDEN = 0x69865133D61C9448
+RUST_GOLDEN = 0x0BF5045A7E8220D9
 
 FIXTURES = pathlib.Path(__file__).parents[3] / "packages" / "lefsim" / "test" / "fixtures"
 
-RATES = lefsim.Rates(step=1.0, respawn=0.02, respawn_stalled=0.1, respawn_captured=0.005)
+RATES = lefsim.Rates(step=1.0, respawn=0.02, respawn_stalled=0.1, respawn_evicted=0.5, respawn_captured=0.005)
 
 
 def make_lattice(strength=0.8):
@@ -177,10 +177,10 @@ def test_a_sim_state_is_a_world():
         ({"left_pos": [5], "right_pos": [7], "left_mobility": ["captured"]}, "not a CTCF"),
         # A left-facing leg can't be captured by a CTCF capturing from the left.
         ({"left_pos": [140], "right_pos": [150], "left_mobility": ["captured"]}, "can't be captured"),
-        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["stalled"]}, "not a CTCF"),
-        # A right-facing leg isn't stalled by a CTCF capturing from the left: it's captured.
-        ({"left_pos": [130], "right_pos": [140], "right_mobility": ["stalled"]}, "can't be stalled"),
-        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["evicted"]}, "mobility must be"),
+        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["evicted"]}, "isn't a CTCF"),
+        # A right-facing leg before the CTCF at 140 (capturing from the left) can be captured, not evicted.
+        ({"left_pos": [130], "right_pos": [139], "right_mobility": ["evicted"]}, "isn't a CTCF"),
+        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["stalled"]}, "mobility must be"),
         ({"left_pos": [5], "right_pos": [7], "right_mobility": ["stuck"]}, "mobility must be"),
         ({"left_pos": [5]}, "missing column"),
         ({"left_pos": [5, 6], "right_pos": [7]}, "different lengths"),
@@ -202,8 +202,8 @@ def test_world_rejects_non_tables():
 
 def test_rates_default_to_the_core():
     r = lefsim.Rates()
-    assert (r.step, r.respawn, r.respawn_stalled, r.respawn_captured) == (1.0, 1e-3, 1e-2, 1e-3)
-    assert lefsim.Rates(respawn=0.5) == lefsim.Rates(1.0, 0.5, 1e-2, 1e-3)
+    assert (r.step, r.respawn, r.respawn_stalled, r.respawn_evicted, r.respawn_captured) == (1.0, 1e-3, 1e-2, 1e-1, 1e-3)
+    assert lefsim.Rates(respawn=0.5) == lefsim.Rates(1.0, 0.5, 1e-2, 1e-1, 1e-3)
 
 
 def test_model_parts():
@@ -222,6 +222,7 @@ def test_model_parts():
         (lefsim.Rates(step=0.0), "step rate must be positive"),
         (lefsim.Rates(respawn=float("nan")), "respawn rate must be positive"),
         (lefsim.Rates(respawn_stalled=0.0), "respawn_stalled rate"),
+        (lefsim.Rates(respawn_evicted=float("inf")), "respawn_evicted rate"),
         (lefsim.Rates(respawn_captured=-1.0), "respawn_captured rate"),
     ],
 )
@@ -244,7 +245,7 @@ def test_model_json_round_trip_and_shape():
     assert doc["format"] == "lefsim.model" and doc["version"] == 2
     assert doc["lattice"]["n_sites"] == 200
     assert doc["lattice"]["ctcfs"][0] == {"site": 60, "captures_from": "right", "strength": 0.8}
-    assert doc["rates"] == {"step": 1.0, "respawn": 0.02, "respawn_stalled": 0.1, "respawn_captured": 0.005}
+    assert doc["rates"] == {"step": 1.0, "respawn": 0.02, "respawn_stalled": 0.1, "respawn_evicted": 0.5, "respawn_captured": 0.005}
     assert doc["spawn"] == {"rule": "uniform_non_ctcf"}
     rows = table(model.world.to_arrow()).drop_columns(["lef_id"]).to_pylist()
     assert doc["lefs"] == [{k: v.lower() if isinstance(v, str) else v for k, v in r.items()} for r in rows]
@@ -455,7 +456,7 @@ def test_python_reproduces_the_rust_golden_stream():
     sides = ["right" if i % 100 == 25 else "left" for i in sites]
     lattice = lefsim.Lattice(500, {"site": sites, "captures_from": sides, "strength": 0.7})
     world = lefsim.populate(lattice, 20, seed=0x5EED)
-    model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=0.01, respawn_stalled=0.05, respawn_captured=0.002))
+    model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=0.01, respawn_stalled=0.05, respawn_evicted=0.2, respawn_captured=0.002))
     rec = lefsim.Sim(model, seed=0x5EED).record_events(50_000, dt=5.0, events=True)
     assert rec.n_events == 50_000
 
@@ -560,17 +561,18 @@ def test_event_chunks_open_with_keyframes_and_tile_the_run():
     assert replayer.world_at(300.0) == sim.world()
 
 
-def test_stalled_legs_stay_on_ctcfs():
+def test_evicted_legs_wait_before_their_ctcf():
     rec = make_sim(seed=4, strength=1.0).record_until(500.0, dt=0.25, events=True)
-    assert "Stalled" in table(rec.events)["mobility"].to_pylist()
+    assert "Evicted" in table(rec.events)["mobility"].to_pylist()
     snaps = table(rec.snapshots)
-    stalled = [
-        p
-        for side in ("left", "right")
-        for p, m in zip(snaps[f"{side}_pos"].to_pylist(), snaps[f"{side}_mobility"].to_pylist())
-        if m == "Stalled"
-    ]
-    assert stalled and set(stalled) <= {60, 100, 140}  # make_lattice's CTCFs
+    # make_lattice: CTCFs at 60 and 100 capture from the right (evicting
+    # right-facing legs at 59 and 99), and at 140 from the left (evicting
+    # left-facing legs at 141).
+    for side, where in (("left", {141}), ("right", {59, 99})):
+        mob = snaps[f"{side}_mobility"].to_pylist()
+        evicted = {p for p, m in zip(snaps[f"{side}_pos"].to_pylist(), mob) if m == "Evicted"}
+        assert evicted <= where, (side, evicted)
+    assert "Evicted" in snaps["left_mobility"].to_pylist() + snaps["right_mobility"].to_pylist()
 
 
 @pytest.mark.parametrize(
@@ -629,7 +631,7 @@ def test_batch_is_readable_by_every_consumer():
 
     pdf = batch.to_pandas()
     assert isinstance(pdf, pd.DataFrame) and len(pdf) == expected.num_rows
-    assert set(pdf["left_mobility"].astype(str)) <= {"Moving", "Captured", "Stalled"}
+    assert set(pdf["left_mobility"].astype(str)) <= {"Moving", "Captured", "Evicted"}
 
     got = duckdb.sql("select count(*), max(time) from batch").fetchone()
     assert got == (expected.num_rows, 20.0)
@@ -640,7 +642,7 @@ def test_categoricals_carry_names():
     ev = table(rec.events)
     assert ev.schema.field("action").type == pa.dictionary(pa.uint8(), pa.string())
     assert set(ev["action"].to_pylist()) == {"Step", "Respawn"}
-    assert set(ev["mobility"].to_pylist()) <= {"Moving", "Captured", "Stalled"}
+    assert set(ev["mobility"].to_pylist()) <= {"Moving", "Captured", "Evicted"}
 
 
 def test_batch_metadata_and_repr():
@@ -1111,6 +1113,7 @@ def test_replayer_reproduces_the_cross_language_fixture():
             step=rates["step"],
             respawn=rates["respawn"],
             respawn_stalled=rates["respawnStalled"],
+            respawn_evicted=rates["respawnEvicted"],
             respawn_captured=rates["respawnCaptured"],
         ),
     )

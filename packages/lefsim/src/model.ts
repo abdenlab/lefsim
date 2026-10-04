@@ -19,7 +19,7 @@ import { DIRECTION, MOBILITY, type Ctcfs, type Lattice, type Lefs, type Model, t
 
 export type Side = "left" | "right";
 
-/** One CTCF, as a row. `capturesFrom` is its capture side; the other side stalls. */
+/** One CTCF, as a row. `capturesFrom` is its capture side; the other side evicts. */
 export interface CtcfSpec {
   site: number;
   capturesFrom: Side | number;
@@ -181,8 +181,8 @@ export function createLattice(nSites: number, ctcfs?: CtcfSpec[] | CtcfColumns):
  * A world: the LEFs on a lattice (rows, or columns such as a {@link Lefs}),
  * row `i` becoming LEF `i`. Mobility defaults to moving. Checked by the
  * core: legs on the lattice and not crossed, no two LEFs on one site, a
- * captured leg only on a CTCF that could have captured it, and a stalled leg
- * only on a CTCF it reached from behind.
+ * captured leg only on a CTCF that could have captured it, and an evicted
+ * leg only just before a CTCF it met from behind.
  */
 export function createWorld(lattice: Lattice, lefs: LefSpec[] | LefColumns = []): World {
   const world: World = { lattice, lefs: lefColumns(lefs) };
@@ -213,7 +213,7 @@ export function createModel(world: World, rates: Partial<Rates> = {}, options: {
 /** The core's arguments for a model. */
 export function modelArgs(m: Model) {
   const r = m.rates;
-  return [...latticeArgs(m.world.lattice), ...lefArgs(m.world.lefs), r.step, r.respawn, r.respawnStalled, r.respawnCaptured, m.spawnRule] as const;
+  return [...latticeArgs(m.world.lattice), ...lefArgs(m.world.lefs), r.step, r.respawn, r.respawnStalled, r.respawnEvicted, r.respawnCaptured, m.spawnRule] as const;
 }
 
 /**
@@ -268,6 +268,7 @@ export function modelToJson(model: Model, indent?: number | string): string {
       step: model.rates.step,
       respawn: model.rates.respawn,
       respawn_stalled: model.rates.respawnStalled,
+      respawn_evicted: model.rates.respawnEvicted,
       respawn_captured: model.rates.respawnCaptured,
     },
     spawn: { rule: model.spawnRule },
@@ -309,6 +310,7 @@ export function modelFromJson(text: string): Model {
     step: field<number>(r, "step", "rates"),
     respawn: field<number>(r, "respawn", "rates"),
     respawnStalled: field<number>(r, "respawn_stalled", "rates"),
+    respawnEvicted: field<number>(r, "respawn_evicted", "rates"),
     respawnCaptured: field<number>(r, "respawn_captured", "rates"),
   };
   const spawnRule = field<SpawnRule>(field<object>(doc, "spawn", "model"), "rule", "spawn");

@@ -26,7 +26,7 @@ config = {
     "ctcfStrength": 0.7,
     "nLefs": 20,
     "seed": 0x5EED,
-    "rates": {"step": 1.0, "respawn": 0.01, "respawnStalled": 0.05, "respawnCaptured": 0.002},
+    "rates": {"step": 1.0, "respawn": 0.01, "respawnStalled": 0.05, "respawnEvicted": 0.2, "respawnCaptured": 0.002},
     "tEnd": 1000.0,
 }
 
@@ -43,6 +43,7 @@ def make_sim(config):
             step=rates["step"],
             respawn=rates["respawn"],
             respawn_stalled=rates["respawnStalled"],
+            respawn_evicted=rates["respawnEvicted"],
             respawn_captured=rates["respawnCaptured"],
         ),
     )

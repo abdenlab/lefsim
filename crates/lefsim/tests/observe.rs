@@ -3,7 +3,7 @@
 use lefsim::*;
 
 /// 200 sites with a convergent CTCF pair and a third CTCF facing the other
-/// way, so runs see captures, stalls, and respawns.
+/// way, so runs see captures, evictions, and respawns.
 fn lattice(strength: f64) -> Lattice {
     let mut sites = vec![Site::plain(); 200];
     sites[60] = Site::ctcf(Direction::Right, strength);
@@ -19,6 +19,7 @@ fn rates() -> Rates {
         step: 1.0,
         respawn: 0.02,
         respawn_stalled: 0.1,
+        respawn_evicted: 0.5,
         respawn_captured: 0.005,
     }
 }
@@ -174,23 +175,27 @@ fn first_snapshot_is_the_initial_state() {
 }
 
 #[test]
-fn a_stalled_leg_stays_on_its_ctcf_until_its_lef_respawns() {
-    // Strength 1: every leg reaching a CTCF from behind stalls there.
+fn an_evicted_leg_waits_just_before_a_ctcf_that_faces_away() {
+    // Strength 1: every leg meeting a CTCF from behind is evicted. The
+    // CTCFs at 60 and 100 capture from the right, so right-facing legs are
+    // evicted at 59 and 99; the one at 140 captures from the left, so
+    // left-facing legs are evicted at 141.
     let (frames, _) = build_with_strength(6, 1.0).collect_until(500.0, SampleMode::every_dt(0.25));
-    let ctcf = |p: u32| [60, 100, 140].contains(&p);
-    let mut stalled = 0;
+    let mut evicted = 0;
     for s in 0..frames.n_snapshots() {
         let snap = frames.snapshot(s);
         for lef in 0..snap.left_pos.len() {
-            for (pos, mob) in [(snap.left_pos[lef], snap.left_mobility[lef]), (snap.right_pos[lef], snap.right_mobility[lef])] {
-                if mob == Mobility::Stalled {
-                    stalled += 1;
-                    assert!(ctcf(pos), "a stalled leg at {pos}, off any CTCF");
-                }
+            if snap.left_mobility[lef] == Mobility::Evicted {
+                evicted += 1;
+                assert_eq!(snap.left_pos[lef], 141, "an evicted left leg off its place");
+            }
+            if snap.right_mobility[lef] == Mobility::Evicted {
+                evicted += 1;
+                assert!([59, 99].contains(&snap.right_pos[lef]), "an evicted right leg at {}", snap.right_pos[lef]);
             }
         }
     }
-    assert!(stalled > 20, "want stalled legs to exercise this, got {stalled}");
+    assert!(evicted > 20, "want evicted legs to exercise this, got {evicted}");
 }
 
 #[test]

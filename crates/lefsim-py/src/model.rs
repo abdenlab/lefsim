@@ -43,7 +43,7 @@ fn parse_mobility(s: &str) -> PyResult<Mobility> {
         .iter()
         .position(|n| n.eq_ignore_ascii_case(s))
         .and_then(|i| Mobility::from_code(i as u8))
-        .ok_or_else(|| value_error(format!("mobility must be 'moving', 'captured' or 'stalled', got {s:?}")))
+        .ok_or_else(|| value_error(format!("mobility must be 'moving', 'captured' or 'evicted', got {s:?}")))
 }
 
 pub fn parse_rule(s: &str) -> PyResult<SpawnRule> {
@@ -339,8 +339,8 @@ fn lefs_from(obj: &Bound<'_, PyAny>) -> PyResult<LefStates> {
 /// Every LEF is checked: legs on the lattice and not crossed, no two LEFs
 /// on one site, a 'captured' leg only on a CTCF that could have captured it
 /// (a left-facing leg by a CTCF that captures from the right, a right-facing
-/// leg by one that captures from the left), and a 'stalled' leg only on a
-/// CTCF it reached from behind (the reverse).
+/// leg by one that captures from the left), and an 'evicted' leg only just
+/// before a CTCF it met from behind (the reverse).
 #[pyclass(module = "lefsim", name = "World", frozen, eq, skip_from_py_object)]
 #[derive(Clone, PartialEq)]
 pub struct PyWorld(pub lefsim::World);
@@ -458,10 +458,11 @@ pub fn populate(lattice: &PyLattice, n_lefs: usize, seed: u64, spawn_rule: &str)
 
 /// Event rates (per unit time): `step` for a moving, unblocked leg;
 /// `respawn`, the basal rate, for a LEF with both legs free to move;
-/// `respawn_stalled` for a stalled LEF (either leg stalled: blocked by a leg
-/// ahead or the lattice's end, or stopped at a CTCF reached from behind);
-/// `respawn_captured` for a LEF with a captured leg, whatever the other leg
-/// does. Checked (positive and finite) by `Model`.
+/// `respawn_stalled` for a LEF with either leg blocked (by a leg ahead or the
+/// lattice's end); `respawn_evicted` for one with either leg evicted (turned
+/// back by a CTCF met from behind); `respawn_captured` for one with either
+/// leg captured. The first that applies, in reverse order, wins: captured,
+/// then evicted, then stalled. Checked (positive and finite) by `Model`.
 #[pyclass(module = "lefsim", name = "Rates", frozen, eq, skip_from_py_object)]
 #[derive(Clone, PartialEq)]
 pub struct PyRates(pub lefsim::Rates);
@@ -469,13 +470,20 @@ pub struct PyRates(pub lefsim::Rates);
 #[pymethods]
 impl PyRates {
     #[new]
-    #[pyo3(signature = (step = None, respawn = None, respawn_stalled = None, respawn_captured = None))]
-    fn new(step: Option<f64>, respawn: Option<f64>, respawn_stalled: Option<f64>, respawn_captured: Option<f64>) -> Self {
+    #[pyo3(signature = (step = None, respawn = None, respawn_stalled = None, respawn_evicted = None, respawn_captured = None))]
+    fn new(
+        step: Option<f64>,
+        respawn: Option<f64>,
+        respawn_stalled: Option<f64>,
+        respawn_evicted: Option<f64>,
+        respawn_captured: Option<f64>,
+    ) -> Self {
         let d = lefsim::Rates::default();
         PyRates(lefsim::Rates {
             step: step.unwrap_or(d.step),
             respawn: respawn.unwrap_or(d.respawn),
             respawn_stalled: respawn_stalled.unwrap_or(d.respawn_stalled),
+            respawn_evicted: respawn_evicted.unwrap_or(d.respawn_evicted),
             respawn_captured: respawn_captured.unwrap_or(d.respawn_captured),
         })
     }
@@ -493,6 +501,11 @@ impl PyRates {
     #[getter]
     fn respawn_stalled(&self) -> f64 {
         self.0.respawn_stalled
+    }
+
+    #[getter]
+    fn respawn_evicted(&self) -> f64 {
+        self.0.respawn_evicted
     }
 
     #[getter]
@@ -528,8 +541,8 @@ impl PyRates {
     fn __repr__(&self) -> String {
         let r = &self.0;
         format!(
-            "lefsim.Rates(step={:?}, respawn={:?}, respawn_stalled={:?}, respawn_captured={:?})",
-            r.step, r.respawn, r.respawn_stalled, r.respawn_captured
+            "lefsim.Rates(step={:?}, respawn={:?}, respawn_stalled={:?}, respawn_evicted={:?}, respawn_captured={:?})",
+            r.step, r.respawn, r.respawn_stalled, r.respawn_evicted, r.respawn_captured
         )
     }
 }

@@ -65,15 +65,19 @@
             Respawn rate
             <input type="number" id="rate-respawn" min="0" step="any" />
           </label>
-          <label title="Respawns per time unit of a LEF with either leg stalled: blocked by a leg ahead or the lattice's end, or stopped at a CTCF reached from behind">
+          <label title="Respawns per time unit of a LEF with either leg blocked, by a leg ahead or the lattice's end">
             Respawn rate when stalled
             <input type="number" id="rate-respawn-stalled" min="0" step="any" />
+          </label>
+          <label title="Respawns per time unit of a LEF with either leg evicted: turned back by a CTCF met from behind">
+            Respawn rate when evicted
+            <input type="number" id="rate-respawn-evicted" min="0" step="any" />
           </label>
           <label title="Respawns per time unit of a LEF with a leg captured at a CTCF">
             Respawn rate when captured
             <input type="number" id="rate-respawn-held" min="0" step="any" />
           </label>
-          <label title="Chance that a CTCF captures (or stalls) a leg arriving at it">
+          <label title="Chance that a CTCF captures a leg arriving at it, or turns back one meeting it from behind">
             CTCF strength
             <input type="number" id="strength" min="0" max="1" step="0.05" />
           </label>
@@ -142,7 +146,7 @@
         most the threshold, the probes are in an encounter; each encounter's duration is added to the histogram
         when it ends. Beside the kymograph, on the same rows, the distance runs from 0 up to the probes'
         separation (which it never exceeds), with the threshold as a dotted line. Moving a probe or the threshold starts the statistics afresh; changes to the model don't,
-        so press Reset to see only the new model. A leg that reaches a CTCF from behind, or the lattice's end, stalls there.
+        so press Reset to see only the new model. A leg meeting a CTCF from behind may be evicted, waiting just before it for its LEF to unload.
       </p>
     </main>
     <script type="module" src="/src/encounter.ts"></script>

@@ -11,7 +11,7 @@ const OPTIONS: Setup = {
     { site: 140, capturesFrom: "left", strength: 0.8 },
   ],
   nLefs: 8,
-  rates: { step: 1, respawn: 0.02, respawnStalled: 0.1, respawnCaptured: 0.005 },
+  rates: { step: 1, respawn: 0.02, respawnStalled: 0.1, respawnEvicted: 0.5, respawnCaptured: 0.005 },
 };
 const make = (seed: number) => makeSim({ ...OPTIONS, seed });
 

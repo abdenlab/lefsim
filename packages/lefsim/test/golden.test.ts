@@ -9,7 +9,7 @@ import { eventsToArrow, snapshotsToArrow } from "../src/arrow.ts";
 import { Sim } from "../src/index.ts";
 import { makeSim, type Setup } from "./helpers.ts";
 
-const RUST_GOLDEN = 0x69865133d61c9448n;
+const RUST_GOLDEN = 0x0bf5045a7e8220d9n;
 
 /** FNV-1a, 64-bit, over a byte array. */
 function fnv1a(bytes: Uint8Array, h = 0xcbf29ce484222325n): bigint {
@@ -27,7 +27,7 @@ it("reproduces the Rust golden fingerprint from Arrow JS columns", () => {
     ctcfs: sites.map((site) => ({ site, capturesFrom: site % 100 === 25 ? "right" : "left", strength: 0.7 })),
     nLefs: 20,
     seed: 0x5eed,
-    rates: { step: 1, respawn: 0.01, respawnStalled: 0.05, respawnCaptured: 0.002 },
+    rates: { step: 1, respawn: 0.01, respawnStalled: 0.05, respawnEvicted: 0.2, respawnCaptured: 0.002 },
   });
   const rec = sim.recordEvents(50_000, { dt: 5, events: true });
   expect(rec.nEvents).toBe(50_000);

@@ -151,7 +151,7 @@ mod tests {
         let mut world = World::new(Lattice::with_ctcfs(100, &ctcfs).unwrap());
         world.add_lef((10, Mobility::Moving), (12, Mobility::Moving)).unwrap();
         world.add_lef((30, Mobility::Captured), (70, Mobility::Captured)).unwrap();
-        let rates = Rates { step: 1.0, respawn: 0.002, respawn_stalled: 0.02, respawn_captured: 0.0004 };
+        let rates = Rates { step: 1.0, respawn: 0.002, respawn_stalled: 0.02, respawn_evicted: 0.2, respawn_captured: 0.0004 };
         Model::new(world, rates, SpawnRule::UniformNonCtcf).unwrap()
     }
 
@@ -170,7 +170,7 @@ mod tests {
                 { "left_pos": 10, "right_pos": 12, "left_mobility": "moving", "right_mobility": "moving" },
                 { "left_pos": 30, "right_pos": 70, "left_mobility": "captured", "right_mobility": "captured" },
             ],
-            "rates": { "step": 1.0, "respawn": 0.002, "respawn_stalled": 0.02, "respawn_captured": 0.0004 },
+            "rates": { "step": 1.0, "respawn": 0.002, "respawn_stalled": 0.02, "respawn_evicted": 0.2, "respawn_captured": 0.0004 },
             "spawn": { "rule": "uniform_non_ctcf" },
         })
     }
