@@ -6,8 +6,7 @@ import type { RecordBatch } from "apache-arrow";
 import { expect, it } from "vitest";
 
 import { eventsToArrow, snapshotsToArrow } from "../src/arrow.ts";
-import { Sim } from "../src/index.ts";
-import { makeSim, type Setup } from "./helpers.ts";
+import { makeSim } from "./helpers.ts";
 
 const RUST_GOLDEN = 0xd5d3254ed77ff3e9n;
 
@@ -37,7 +36,11 @@ it("reproduces the Rust golden fingerprint from Arrow JS columns", () => {
   // Events, row by row: time bits, leg_id, pos (little-endian), mobility, kind.
   const n = events.numRows;
   const rows = new DataView(new ArrayBuffer(n * 18));
-  const [time, leg, pos] = [values<Float64Array>(events, "time"), values<Uint32Array>(events, "leg_id"), values<Uint32Array>(events, "pos")];
+  const [time, leg, pos] = [
+    values<Float64Array>(events, "time"),
+    values<Uint32Array>(events, "leg_id"),
+    values<Uint32Array>(events, "pos"),
+  ];
   const [mob, kind] = [values<Uint8Array>(events, "mobility"), values<Uint8Array>(events, "action")];
   for (let i = 0; i < n; i++) {
     const o = i * 18;

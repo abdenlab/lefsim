@@ -12,17 +12,25 @@
 
 import { decompress as zstdDecompress } from "fzstd";
 import {
+  type AsyncBuffer,
   asyncBufferFromUrl,
+  type Compressors,
   cachedAsyncBuffer,
+  type FileMetaData,
   parquetMetadataAsync,
   parquetRead,
-  type AsyncBuffer,
-  type Compressors,
-  type FileMetaData,
 } from "hyparquet";
 
-import { Replayer, replayerFromRows, type EventRows } from "./replayer.ts";
-import { DIRECTION, MOBILITY, ROW_KIND, type Lattice, type LiveState, type SnapshotColumns, type World } from "./types.ts";
+import { type EventRows, Replayer, replayerFromRows } from "./replayer.ts";
+import {
+  DIRECTION,
+  type Lattice,
+  type LiveState,
+  MOBILITY,
+  ROW_KIND,
+  type SnapshotColumns,
+  type World,
+} from "./types.ts";
 
 /** Where a Parquet file comes from: a URL (read with range requests), a `Blob`/`File`, bytes, or a hyparquet `AsyncBuffer`. */
 export type ParquetSource = string | URL | Blob | ArrayBuffer | Uint8Array | AsyncBuffer;
@@ -71,7 +79,12 @@ function toCodes(values: ArrayLike<unknown>, names: readonly string[], column: s
 }
 
 /** Rows `[rowStart, rowEnd)` of the event columns. */
-async function readRows(file: AsyncBuffer, metadata: FileMetaData, rowStart: number, rowEnd: number): Promise<EventRows> {
+async function readRows(
+  file: AsyncBuffer,
+  metadata: FileMetaData,
+  rowStart: number,
+  rowEnd: number,
+): Promise<EventRows> {
   const parts: Record<string, unknown[]> = Object.fromEntries(COLUMNS.map((c) => [c, []]));
   try {
     await parquetRead({
@@ -120,7 +133,11 @@ function fromModelJson(json: string): { lattice: Lattice; nLefs: number } {
     nSites: doc.lattice.n_sites,
     ctcfs: {
       site: Uint32Array.from(ctcfs, (c) => c.site),
-      capturesFrom: toCodes(ctcfs.map((c) => c.captures_from), DIRECTION, "captures_from"),
+      capturesFrom: toCodes(
+        ctcfs.map((c) => c.captures_from),
+        DIRECTION,
+        "captures_from",
+      ),
       strength: Float64Array.from(ctcfs, (c) => c.strength),
     },
   };
@@ -342,7 +359,10 @@ export class ParquetReplayer {
 }
 
 function concatSnapshots(pieces: SnapshotColumns[], nLefs: number): SnapshotColumns {
-  const cat = <T extends Float64Array | Uint32Array | Uint8Array>(key: Exclude<keyof SnapshotColumns, "nLefs">, Ctor: { new (n: number): T }): T => {
+  const cat = <T extends Float64Array | Uint32Array | Uint8Array>(
+    key: Exclude<keyof SnapshotColumns, "nLefs">,
+    Ctor: { new (n: number): T },
+  ): T => {
     const out = new Ctor(pieces.reduce((n, p) => n + p[key].length, 0));
     let at = 0;
     for (const p of pieces) {
@@ -370,7 +390,10 @@ function concatSnapshots(pieces: SnapshotColumns[], nLefs: number): SnapshotColu
  * `lefsim.model`). Reads snappy and zstd. The TS counterpart of Python's
  * `Replayer.from_parquet`.
  */
-export async function replayerFromParquet(source: ParquetSource, options: { lattice?: Lattice } = {}): Promise<ParquetReplayer> {
+export async function replayerFromParquet(
+  source: ParquetSource,
+  options: { lattice?: Lattice } = {},
+): Promise<ParquetReplayer> {
   const file = await asyncBuffer(source);
   const metadata = await parquetMetadataAsync(file);
   const modelJson = footerEntry(metadata, "lefsim.model");

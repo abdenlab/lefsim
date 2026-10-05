@@ -49,18 +49,15 @@ let graphCtx = fit(graphCanvas);
 // ------------------------------------------------------------------ state
 
 /** The run and its editable model. */
-const run = new EditableRun(
-  DEFAULT_CTCFS,
-  {
-    nLeft: $<HTMLInputElement>("nctcf-left"),
-    nRight: $<HTMLInputElement>("nctcf-right"),
-    step: $<HTMLInputElement>("rate-step"),
-    respawn: $<HTMLInputElement>("rate-respawn"),
-    respawnBlocked: $<HTMLInputElement>("rate-respawn-blocked"),
-    respawnHeld: $<HTMLInputElement>("rate-respawn-held"),
-    strength: $<HTMLInputElement>("strength"),
-  },
-);
+const run = new EditableRun(DEFAULT_CTCFS, {
+  nLeft: $<HTMLInputElement>("nctcf-left"),
+  nRight: $<HTMLInputElement>("nctcf-right"),
+  step: $<HTMLInputElement>("rate-step"),
+  respawn: $<HTMLInputElement>("rate-respawn"),
+  respawnBlocked: $<HTMLInputElement>("rate-respawn-blocked"),
+  respawnHeld: $<HTMLInputElement>("rate-respawn-held"),
+  strength: $<HTMLInputElement>("strength"),
+});
 run.onChange = () => {
   if (!playing) settle();
 };
@@ -172,7 +169,10 @@ const PAD = 34;
 
 function updateView(width: number, height: number) {
   const k = probes.length;
-  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  let x0 = Infinity,
+    x1 = -Infinity,
+    y0 = Infinity,
+    y1 = -Infinity;
   for (let i = 0; i < k; i++) {
     x0 = Math.min(x0, pos[2 * i]!);
     x1 = Math.max(x1, pos[2 * i]!);
@@ -240,11 +240,17 @@ function drawGraph() {
   ctx.lineJoin = "round";
 
   // The lattice order: probes joined left to right along the lattice.
-  const order = probes.map((s, i) => [s, i] as const).sort((a, b) => a[0] - b[0]).map(([, i]) => i);
+  const order = probes
+    .map((s, i) => [s, i] as const)
+    .sort((a, b) => a[0] - b[0])
+    .map(([, i]) => i);
   ctx.strokeStyle = colors.rule;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  order.forEach((i, n) => (n ? ctx.lineTo(...pts[i]!) : ctx.moveTo(...pts[i]!)));
+  for (const [n, i] of order.entries()) {
+    if (n === 0) ctx.moveTo(...pts[i]!);
+    else ctx.lineTo(...pts[i]!);
+  }
   ctx.stroke();
 
   // A hovered probe's distances to the others.

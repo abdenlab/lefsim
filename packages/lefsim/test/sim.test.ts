@@ -1,7 +1,4 @@
 import { describe, expect, it } from "vitest";
-
-import fixture from "./fixtures/determinism_state.json";
-import modelFixture from "./fixtures/model.json";
 import {
   coreNames,
   createLattice,
@@ -13,9 +10,11 @@ import {
   modelToJson,
   populate,
   ROW_KIND,
-  Sim,
   SITE_KIND,
+  Sim,
 } from "../src/index.ts";
+import fixture from "./fixtures/determinism_state.json";
+import modelFixture from "./fixtures/model.json";
 import { makeModel, makeSim, type Setup } from "./helpers.ts";
 
 const TADS: Setup = {
@@ -55,7 +54,10 @@ describe("names", () => {
 
 describe("building a model", () => {
   it("createLattice takes CTCFs as rows or columns, names or codes", () => {
-    const rows = createLattice(50, [{ site: 10, capturesFrom: "left", strength: 0.3 }, { site: 20, capturesFrom: "Right" as "right" }]); // names are case-insensitive
+    const rows = createLattice(50, [
+      { site: 10, capturesFrom: "left", strength: 0.3 },
+      { site: 20, capturesFrom: "Right" as "right" },
+    ]); // names are case-insensitive
     const cols = createLattice(50, { site: new Uint32Array([10, 20]), capturesFrom: [0, "right"], strength: [0.3, 1] });
     expect(cols).toEqual(rows);
     expect(Array.from(rows.ctcfs.capturesFrom)).toEqual([0, 1]);
@@ -64,7 +66,10 @@ describe("building a model", () => {
 
   it("createWorld takes LEFs as rows or columns; mobility defaults to moving", () => {
     const lattice = createLattice(100, [{ site: 60, capturesFrom: "left" }]);
-    const rows = createWorld(lattice, [{ leftPos: 10, rightPos: 12 }, { leftPos: 30, rightPos: 60, rightMobility: "captured" }]);
+    const rows = createWorld(lattice, [
+      { leftPos: 10, rightPos: 12 },
+      { leftPos: 30, rightPos: 60, rightMobility: "captured" },
+    ]);
     const cols = createWorld(lattice, { leftPos: [10, 30], rightPos: [12, 60], rightMobility: [0, 1] });
     expect(cols).toEqual(rows);
     expect(Array.from(rows.lefs.leftMobility)).toEqual([0, 0]);
@@ -93,12 +98,26 @@ describe("building a model", () => {
     [() => createLattice(10, [{ site: 2.5, capturesFrom: "left" }]), /non-negative integers/],
     [() => createLattice(10, [{ site: 3, capturesFrom: "up" as "left" }]), /"left" or "right"/],
     [() => createLattice(10, [{ site: 10, capturesFrom: "left" }]), /outside a lattice/],
-    [() => createLattice(10, [{ site: 3, capturesFrom: "left" }, { site: 3, capturesFrom: "left" }]), /twice/],
+    [
+      () =>
+        createLattice(10, [
+          { site: 3, capturesFrom: "left" },
+          { site: 3, capturesFrom: "left" },
+        ]),
+      /twice/,
+    ],
     [() => createLattice(10, [{ site: 3, capturesFrom: "left", strength: 1.5 }]), /\[0, 1\]/],
     [() => createLattice(10, { site: [3, 4], capturesFrom: ["left"] }), /1 entries/],
     [() => createWorld(lattice10(), [{ leftPos: 10, rightPos: 10 }]), /outside/],
     [() => createWorld(lattice10(), [{ leftPos: 5, rightPos: 4 }]), /right of the right leg/],
-    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 5 }, { leftPos: 5, rightPos: 6 }]), /already occupied/],
+    [
+      () =>
+        createWorld(lattice10(), [
+          { leftPos: 1, rightPos: 5 },
+          { leftPos: 5, rightPos: 6 },
+        ]),
+      /already occupied/,
+    ],
     [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "captured" }]), /not a CTCF/],
     [() => createWorld(lattice10(), [{ leftPos: 3, rightPos: 5, leftMobility: "captured" }]), /can't be captured/],
     [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "evicted" }]), /"moving" or "captured"/],
@@ -113,7 +132,10 @@ describe("building a model", () => {
     [() => createModel(createWorld(lattice10()), { step: 0 }), /step rate must be positive/],
     [() => createModel(createWorld(lattice10()), { respawn: Number.NaN }), /respawn rate must be positive/],
     [() => createModel(createWorld(lattice10()), { respawnBlocked: 0 }), /respawn_blocked rate must be positive/],
-    [() => createModel(createWorld(lattice10()), {}, { spawnRule: "anywhere" as "uniform_non_ctcf" }), /unknown spawn rule/],
+    [
+      () => createModel(createWorld(lattice10()), {}, { spawnRule: "anywhere" as "uniform_non_ctcf" }),
+      /unknown spawn rule/,
+    ],
     [() => new Sim(makeModel({ nSites: 10 }), { startTime: Number.POSITIVE_INFINITY }), /startTime/],
   ] as [() => unknown, RegExp][])("rejects case %#", (build, message) => {
     expect(build).toThrow(message);
@@ -122,7 +144,11 @@ describe("building a model", () => {
   it("new Sim checks the model too, so a hand-edited one can't slip through", () => {
     const world = createWorld(createLattice(10), [{ leftPos: 1, rightPos: 2 }]);
     world.lefs.leftPos[0] = 5; // now crossed
-    const model = { world, rates: { step: 1, respawn: 1, respawnBlocked: 1, respawnCaptured: 1 }, spawnRule: "uniform_non_ctcf" } as const;
+    const model = {
+      world,
+      rates: { step: 1, respawn: 1, respawnBlocked: 1, respawnCaptured: 1 },
+      spawnRule: "uniform_non_ctcf",
+    } as const;
     expect(() => new Sim(model)).toThrow(/right of the right leg/);
   });
 

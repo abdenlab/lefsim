@@ -8,10 +8,20 @@
 // so it can't pass what has been recorded: it waits, as it would while
 // buffering a stream.
 
-import { init, iterate, Replayer, Sim } from "lefsim";
+import { init, iterate, Replayer } from "lefsim";
 
 import { N_SITES, newSim, readRunInputs } from "./model.ts";
-import { $, fmt, fmtCompact, Kymograph, LoopView, onThemeChange, setLattice, snapshotOf, type Frame } from "./render.ts";
+import {
+  $,
+  type Frame,
+  fmt,
+  fmtCompact,
+  Kymograph,
+  LoopView,
+  onThemeChange,
+  setLattice,
+  snapshotOf,
+} from "./render.ts";
 
 /** Length of each recorded run, in simulation time units. */
 const T_END = 50_000;

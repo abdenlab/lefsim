@@ -1,14 +1,14 @@
 """Tests for the lefsim Python bindings."""
 
+import _thread
 import copy
-import math
 import json
+import math
 import pathlib
 import pickle
 import subprocess
 import sys
 import threading
-import _thread
 
 import duckdb
 import numpy as np
@@ -66,8 +66,8 @@ def test_lattice_properties_and_table():
     "n_sites, ctcfs, match",
     [
         (0, None, "at least one site"),
-        (10, {"site": [3]}, "missing column \"captures_from\""),
-        (10, {"captures_from": "left"}, "missing column \"site\""),
+        (10, {"site": [3]}, 'missing column "captures_from"'),
+        (10, {"captures_from": "left"}, 'missing column "site"'),
         (10, {"site": [10], "captures_from": "left"}, "outside"),
         (10, {"site": [3, 3], "captures_from": "left"}, "twice"),
         (10, {"site": [3], "captures_from": "up"}, "'left' or 'right'"),
@@ -1000,7 +1000,9 @@ def test_from_parquet_of_a_recording_that_starts_mid_run(tmp_path):
 def test_from_parquet_falls_back_for_other_files(tmp_path):
     import pyarrow.parquet as pq
 
-    events = pa.RecordBatchReader.from_stream(make_sim(seed=26).stream(200.0, events=True, keyframes=True, max_rows=80)).read_all()
+    events = pa.RecordBatchReader.from_stream(
+        make_sim(seed=26).stream(200.0, events=True, keyframes=True, max_rows=80)
+    ).read_all()
     plain = tmp_path / "plain.parquet"
     pq.write_table(events.replace_schema_metadata(None), plain, row_group_size=37)
     with pytest.raises(ValueError, match="pass lattice="):
@@ -1140,7 +1142,11 @@ def test_replayer_reproduces_the_cross_language_fixture():
     import pyarrow.ipc as ipc
 
     config = json.loads((FIXTURES / "python_events.json").read_text())["config"]
-    ctcfs = {"site": config["ctcfSites"], "captures_from": config["ctcfCapturesFrom"], "strength": config["ctcfStrength"]}
+    ctcfs = {
+        "site": config["ctcfSites"],
+        "captures_from": config["ctcfCapturesFrom"],
+        "strength": config["ctcfStrength"],
+    }
     lattice = lefsim.Lattice(config["nSites"], ctcfs)
     rates = config["rates"]
     model = lefsim.Model(

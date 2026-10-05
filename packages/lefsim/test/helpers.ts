@@ -1,6 +1,15 @@
 /** Test setups in the shape the tests were written in, built through the model API. */
 
-import { createLattice, createModel, populate, Sim, type CtcfColumns, type CtcfSpec, type Model, type Rates } from "../src/index.ts";
+import {
+  type CtcfColumns,
+  type CtcfSpec,
+  createLattice,
+  createModel,
+  type Model,
+  populate,
+  type Rates,
+  Sim,
+} from "../src/index.ts";
 
 export interface Setup {
   nSites: number;

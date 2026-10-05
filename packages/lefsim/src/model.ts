@@ -15,7 +15,17 @@ import {
   populate as wasmPopulate,
 } from "#wasm";
 
-import { DIRECTION, MOBILITY, type Ctcfs, type Lattice, type Lefs, type Model, type Rates, type SpawnRule, type World } from "./types.ts";
+import {
+  type Ctcfs,
+  DIRECTION,
+  type Lattice,
+  type Lefs,
+  MOBILITY,
+  type Model,
+  type Rates,
+  type SpawnRule,
+  type World,
+} from "./types.ts";
 
 export type Side = "left" | "right";
 
@@ -91,10 +101,14 @@ function column<T>(value: ArrayLike<T> | T, n: number, name: string): ArrayLike<
 }
 
 function ctcfColumns(ctcfs: CtcfSpec[] | CtcfColumns | undefined): Ctcfs {
-  if (ctcfs === undefined) return { site: new Uint32Array(), capturesFrom: new Uint8Array(), strength: new Float64Array() };
+  if (ctcfs === undefined)
+    return { site: new Uint32Array(), capturesFrom: new Uint8Array(), strength: new Float64Array() };
   if (Array.isArray(ctcfs)) {
     return {
-      site: toU32Array(ctcfs.map((c) => c.site), "CTCF sites"),
+      site: toU32Array(
+        ctcfs.map((c) => c.site),
+        "CTCF sites",
+      ),
       capturesFrom: Uint8Array.from(ctcfs, (c) => code(c.capturesFrom, DIRECTION, "capturesFrom")),
       strength: Float64Array.from(ctcfs, (c) => c.strength ?? 1),
     };
@@ -112,15 +126,23 @@ function ctcfColumns(ctcfs: CtcfSpec[] | CtcfColumns | undefined): Ctcfs {
 function lefColumns(lefs: LefSpec[] | LefColumns): Lefs {
   if (Array.isArray(lefs)) {
     return {
-      leftPos: toU32Array(lefs.map((l) => l.leftPos), "leftPos"),
-      rightPos: toU32Array(lefs.map((l) => l.rightPos), "rightPos"),
+      leftPos: toU32Array(
+        lefs.map((l) => l.leftPos),
+        "leftPos",
+      ),
+      rightPos: toU32Array(
+        lefs.map((l) => l.rightPos),
+        "rightPos",
+      ),
       leftMobility: Uint8Array.from(lefs, (l) => code(l.leftMobility ?? 0, MOBILITY, "leftMobility")),
       rightMobility: Uint8Array.from(lefs, (l) => code(l.rightMobility ?? 0, MOBILITY, "rightMobility")),
     };
   }
   const n = lefs.leftPos.length;
   const mobility = (col: ArrayLike<MobilityInput> | undefined, name: string) =>
-    col === undefined ? new Uint8Array(n) : Uint8Array.from({ length: col.length }, (_, i) => code(col[i], MOBILITY, name));
+    col === undefined
+      ? new Uint8Array(n)
+      : Uint8Array.from({ length: col.length }, (_, i) => code(col[i], MOBILITY, name));
   return {
     leftPos: toU32Array(lefs.leftPos, "leftPos"),
     rightPos: toU32Array(lefs.rightPos, "rightPos"),
@@ -138,7 +160,9 @@ function checkNSites(nSites: number): number {
 
 function checkSpawnRule(rule: string): SpawnRule {
   if (!SPAWN_RULES.includes(rule as SpawnRule)) {
-    throw new RangeError(`unknown spawn rule ${JSON.stringify(rule)} (available: ${SPAWN_RULES.map((r) => JSON.stringify(r)).join(", ")})`);
+    throw new RangeError(
+      `unknown spawn rule ${JSON.stringify(rule)} (available: ${SPAWN_RULES.map((r) => JSON.stringify(r)).join(", ")})`,
+    );
   }
   return rule as SpawnRule;
 }
@@ -212,7 +236,15 @@ export function createModel(world: World, rates: Partial<Rates> = {}, options: {
 /** The core's arguments for a model. */
 export function modelArgs(m: Model) {
   const r = m.rates;
-  return [...latticeArgs(m.world.lattice), ...lefArgs(m.world.lefs), r.step, r.respawn, r.respawnBlocked, r.respawnCaptured, m.spawnRule] as const;
+  return [
+    ...latticeArgs(m.world.lattice),
+    ...lefArgs(m.world.lefs),
+    r.step,
+    r.respawn,
+    r.respawnBlocked,
+    r.respawnCaptured,
+    m.spawnRule,
+  ] as const;
 }
 
 /**
@@ -275,7 +307,8 @@ export function modelToJson(model: Model, indent?: number | string): string {
 }
 
 function field<T>(obj: unknown, key: string, where: string): T {
-  if (typeof obj !== "object" || obj === null || !(key in obj)) throw new RangeError(`${where}: missing field "${key}"`);
+  if (typeof obj !== "object" || obj === null || !(key in obj))
+    throw new RangeError(`${where}: missing field "${key}"`);
   return (obj as Record<string, T>)[key]!;
 }
 
@@ -285,7 +318,8 @@ export function modelFromJson(text: string): Model {
   const format = field<string>(doc, "format", "model");
   if (format !== FORMAT) throw new RangeError(`expected format "${FORMAT}", got ${JSON.stringify(format)}`);
   const version = field<number>(doc, "version", "model");
-  if (version !== VERSION) throw new RangeError(`unsupported ${FORMAT} version ${version} (this build reads version ${VERSION})`);
+  if (version !== VERSION)
+    throw new RangeError(`unsupported ${FORMAT} version ${version} (this build reads version ${VERSION})`);
 
   const lat = field<object>(doc, "lattice", "model");
   const ctcfs = (field<unknown[]>(lat, "ctcfs", "lattice") ?? []).map((c) => ({

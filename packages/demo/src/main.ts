@@ -2,11 +2,28 @@
 // frame, drawn as loop arcs and a scrolling kymograph, plus a leg-occupancy
 // profile streamed as Arrow record batches from a second, background Sim.
 
-import { init, iterate, Sim } from "lefsim";
+import { init, iterate, type Sim } from "lefsim";
 import { toRecordBatches } from "lefsim/arrow";
 
-import { BOUNDARIES, N_SITES, newSim, readRunInputs } from "./model.ts";
-import { $, colors, drawCtcfs, drawTadBands, fit, fmt, fmtCompact, Kymograph, LoopView, onThemeChange, placeTooltip, setLattice, siteAt, snapshotOf, type Frame, xScale } from "./render.ts";
+import { N_SITES, newSim, readRunInputs } from "./model.ts";
+import {
+  $,
+  colors,
+  drawCtcfs,
+  drawTadBands,
+  type Frame,
+  fit,
+  fmt,
+  fmtCompact,
+  Kymograph,
+  LoopView,
+  onThemeChange,
+  placeTooltip,
+  setLattice,
+  siteAt,
+  snapshotOf,
+  xScale,
+} from "./render.ts";
 
 /** Cap on events per frame, so a burst can't stall the page. */
 const MAX_EVENTS_PER_FRAME = 40_000;
@@ -116,8 +133,7 @@ let occTime = 0;
 let occ = fit(occCanvas);
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-const whilePaused = () =>
-  playing ? Promise.resolve() : new Promise<void>((resolve) => (resumeBackground = resolve));
+const whilePaused = () => (playing ? Promise.resolve() : new Promise<void>((resolve) => (resumeBackground = resolve)));
 
 async function startBackground(nLefs: number, seed: number) {
   const generation = ++bgGeneration;
@@ -222,7 +238,12 @@ occCanvas.addEventListener("pointermove", (e) => {
     return;
   }
   const v = occCounts[site]! / occSnapshots;
-  placeTooltip(occTooltip, occCanvas, e, `Site ${fmt.format(site)}: ${v < 0.001 ? v.toExponential(1) : v.toFixed(3)} legs on average`);
+  placeTooltip(
+    occTooltip,
+    occCanvas,
+    e,
+    `Site ${fmt.format(site)}: ${v < 0.001 ? v.toExponential(1) : v.toFixed(3)} legs on average`,
+  );
 });
 occCanvas.addEventListener("pointerleave", () => {
   occTooltip.hidden = true;

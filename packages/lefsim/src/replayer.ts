@@ -5,7 +5,16 @@
  * tell whether it's watching a local simulation or a recorded/streamed one.
  */
 
-import { KEYFRAME, MOBILITY, ROW_KIND, type DeltaChunk, type Lattice, type LiveState, type SnapshotColumns, type World } from "./types.ts";
+import {
+  type DeltaChunk,
+  KEYFRAME,
+  type Lattice,
+  type LiveState,
+  MOBILITY,
+  ROW_KIND,
+  type SnapshotColumns,
+  type World,
+} from "./types.ts";
 
 interface KeyframeRef {
   chunk: number;
@@ -42,7 +51,8 @@ export class Replayer {
 
   /** A replayer for a run on `lattice` with `nLefs` LEFs. */
   constructor(lattice: Lattice, nLefs: number) {
-    if (!Number.isInteger(nLefs) || nLefs < 0) throw new RangeError(`nLefs must be a non-negative integer, got ${nLefs}`);
+    if (!Number.isInteger(nLefs) || nLefs < 0)
+      throw new RangeError(`nLefs must be a non-negative integer, got ${nLefs}`);
     this.lattice = lattice;
     this.nLefs = nLefs;
     this.#leftPos = new Uint32Array(nLefs);
@@ -107,7 +117,9 @@ export class Replayer {
       const start = row;
       while (row < n && kind[row] === KEYFRAME && time[row] === time[start] && legId[row] === row - start) row++;
       if (row - start !== nLegs) {
-        throw new RangeError(`keyframe at t=${time[start]} has ${row - start} rows; expected ${nLegs}, one per leg in order`);
+        throw new RangeError(
+          `keyframe at t=${time[start]} has ${row - start} rows; expected ${nLegs}, one per leg in order`,
+        );
       }
       found.push({ chunk: index, row: start, time: time[start]! });
     }
@@ -336,7 +348,11 @@ export type EventRows = Omit<DeltaChunk, "end">;
  * `nLefs` defaults to the size of the first keyframe; `end` to the last row.
  * Shared by `replayerFromArrow` and `replayerFromParquet`.
  */
-export function replayerFromRows(rows: EventRows, lattice: Lattice, options: { nLefs?: number; end?: number } = {}): Replayer {
+export function replayerFromRows(
+  rows: EventRows,
+  lattice: Lattice,
+  options: { nLefs?: number; end?: number } = {},
+): Replayer {
   const n = rows.time.length;
   const isKeyframe = (i: number) => rows.kind[i] === KEYFRAME;
 
@@ -345,7 +361,13 @@ export function replayerFromRows(rows: EventRows, lattice: Lattice, options: { n
     const first = rows.kind.indexOf(KEYFRAME);
     if (first < 0) throw new RangeError("no keyframe in the log: pass nLefs, or record with keyframes");
     let len = 0;
-    while (first + len < n && isKeyframe(first + len) && rows.time[first + len] === rows.time[first] && rows.legId[first + len] === len) len++;
+    while (
+      first + len < n &&
+      isKeyframe(first + len) &&
+      rows.time[first + len] === rows.time[first] &&
+      rows.legId[first + len] === len
+    )
+      len++;
     nLefs = len / 2;
   }
 

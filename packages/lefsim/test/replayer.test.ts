@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { createLattice, createModel, KEYFRAME, MOBILITY, Replayer, ROW_KIND, Sim, type DeltaChunk, type LiveState } from "../src/index.ts";
+import {
+  createLattice,
+  createModel,
+  type DeltaChunk,
+  KEYFRAME,
+  type LiveState,
+  Replayer,
+  ROW_KIND,
+  Sim,
+} from "../src/index.ts";
 import { makeSim, type Setup } from "./helpers.ts";
 
 const EVICT = ROW_KIND.indexOf("Evict");
@@ -48,7 +57,12 @@ const copy = (s: LiveState) => ({
 /** Reference states from a live Sim at increasing times. */
 function reference(seed: number, times: number[]) {
   using sim = make(seed);
-  return new Map(times.map((t) => (sim.runUntil(t), [t, copy(sim.state())] as const)));
+  const states = new Map<number, ReturnType<typeof copy>>();
+  for (const t of times) {
+    sim.runUntil(t);
+    states.set(t, copy(sim.state()));
+  }
+  return states;
 }
 
 const grid = (from: number, to: number, step: number) =>
@@ -246,7 +260,10 @@ describe("Replayer", () => {
   });
 
   it("records each eviction as both legs of one LEF landing together", () => {
-    const strong = { ...OPTIONS, ctcfs: (OPTIONS.ctcfs as { site: number; capturesFrom: "left" | "right" }[]).map((c) => ({ ...c, strength: 1 })) };
+    const strong = {
+      ...OPTIONS,
+      ctcfs: (OPTIONS.ctcfs as { site: number; capturesFrom: "left" | "right" }[]).map((c) => ({ ...c, strength: 1 })),
+    };
     using sim = makeSim({ ...strong, seed: 3 });
     let evictions = 0;
     for (;;) {

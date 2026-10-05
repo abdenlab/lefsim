@@ -48,7 +48,9 @@ const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
 
 /** An RGB color packed as an opaque pixel: the image's 4 bytes read as one 32-bit word. */
 export function packPixel(r: number, g: number, b: number): number {
-  return LITTLE_ENDIAN ? ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0 : ((r << 24) | (g << 16) | (b << 8) | 255) >>> 0;
+  return LITTLE_ENDIAN
+    ? ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0
+    : ((r << 24) | (g << 16) | (b << 8) | 255) >>> 0;
 }
 
 /** A colormap's 256 entries as packed pixels. */
@@ -58,7 +60,13 @@ export function packedColors(lut: Uint8Array): Uint32Array {
 
 export function superscript(n: number): string {
   const digits = "⁰¹²³⁴⁵⁶⁷⁸⁹";
-  return (n < 0 ? "⁻" : "") + String(Math.abs(n)).split("").map((d) => digits[Number(d)]).join("");
+  return (
+    (n < 0 ? "⁻" : "") +
+    String(Math.abs(n))
+      .split("")
+      .map((d) => digits[Number(d)])
+      .join("")
+  );
 }
 
 /**

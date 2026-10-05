@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { createLattice, createWorld, effectiveDistance, effectiveDistances, effectiveDistancesOver, type World } from "../src/index.ts";
+import {
+  createLattice,
+  createWorld,
+  effectiveDistance,
+  effectiveDistances,
+  effectiveDistancesOver,
+  type World,
+} from "../src/index.ts";
 import { makeSim } from "./helpers.ts";
 
 const lattice = createLattice(100);
@@ -27,9 +34,15 @@ describe("effectiveDistance", () => {
   });
 
   it("rejects bad lengths and sites", () => {
-    expect(() => effectiveDistance(rosette, 1, 2, { stepLength: 0, hopLength: 1 })).toThrow(/step length must be positive/);
-    expect(() => effectiveDistance(rosette, 1, 2, { stepLength: 1.5, hopLength: 1 })).toThrow(/stepLength must be a non-negative integer/);
-    expect(() => effectiveDistance(rosette, 1, 2, { stepLength: 1, hopLength: -1 })).toThrow(/hopLength must be a non-negative integer/);
+    expect(() => effectiveDistance(rosette, 1, 2, { stepLength: 0, hopLength: 1 })).toThrow(
+      /step length must be positive/,
+    );
+    expect(() => effectiveDistance(rosette, 1, 2, { stepLength: 1.5, hopLength: 1 })).toThrow(
+      /stepLength must be a non-negative integer/,
+    );
+    expect(() => effectiveDistance(rosette, 1, 2, { stepLength: 1, hopLength: -1 })).toThrow(
+      /hopLength must be a non-negative integer/,
+    );
     expect(() => effectiveDistance(rosette, 1, 2, { stepLength: 2 ** 50, hopLength: 1 })).toThrow(/exceed 2\^53/);
     expect(() => effectiveDistance(rosette, 1, 100, lengths)).toThrow(/site 100 is outside a lattice of 100 sites/);
     expect(() => effectiveDistance(rosette, -1, 2, lengths)).toThrow(/sites must be non-negative integers/);

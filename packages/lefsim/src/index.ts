@@ -10,14 +10,36 @@
  * {@link Sim.step}.
  */
 
-import wasmInit, { initSync as wasmInitSync, names, WasmSim } from "#wasm";
 import type { InitInput } from "#wasm";
+import wasmInit, { names, WasmSim, initSync as wasmInitSync } from "#wasm";
 
-import { lefArgs, modelArgs, seedBigInt } from "./model.ts";
+import { modelArgs, seedBigInt } from "./model.ts";
+import type {
+  DeltaChunk,
+  Lattice,
+  LiveState,
+  Model,
+  Rates,
+  SnapshotChunk,
+  SnapshotColumns,
+  SpawnRule,
+  StopReason,
+  World,
+} from "./types.ts";
 import { ROW_KIND } from "./types.ts";
-import type { DeltaChunk, Lattice, LiveState, Model, Rates, SnapshotChunk, SnapshotColumns, SpawnRule, StopReason, World } from "./types.ts";
 
-export { DIRECTION, KEYFRAME, MOBILITY, ROW_KIND, SITE_KIND } from "./types.ts";
+export { effectiveDistance, effectiveDistances, effectiveDistancesOver, type PathLengths } from "./distance.ts";
+export type { CtcfColumns, CtcfSpec, LefColumns, LefSpec, Side } from "./model.ts";
+export {
+  createLattice,
+  createModel,
+  createWorld,
+  defaultRates,
+  modelFromJson,
+  modelToJson,
+  populate,
+  SPAWN_RULES,
+} from "./model.ts";
 export type {
   Ctcfs,
   DeltaChunk,
@@ -33,18 +55,7 @@ export type {
   StopReason,
   World,
 } from "./types.ts";
-export {
-  createLattice,
-  createModel,
-  createWorld,
-  defaultRates,
-  modelFromJson,
-  modelToJson,
-  populate,
-  SPAWN_RULES,
-} from "./model.ts";
-export type { CtcfColumns, CtcfSpec, LefColumns, LefSpec, Side } from "./model.ts";
-export { effectiveDistance, effectiveDistances, effectiveDistancesOver, type PathLengths } from "./distance.ts";
+export { DIRECTION, KEYFRAME, MOBILITY, ROW_KIND, SITE_KIND } from "./types.ts";
 
 // ------------------------------------------------------------------ setup
 
@@ -320,13 +331,26 @@ export class Sim implements Disposable {
     if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
     const maxEvents = options.maxEvents ?? Infinity;
     if (maxEvents !== Infinity) checkCount(maxEvents, "maxEvents");
-    const r = this.#driver.record_until(tEnd, maxEvents, options.dt, options.t0 ?? 0, options.events ?? false, options.keyframes ?? false);
+    const r = this.#driver.record_until(
+      tEnd,
+      maxEvents,
+      options.dt,
+      options.t0 ?? 0,
+      options.events ?? false,
+      options.keyframes ?? false,
+    );
     return withEventEnd(r as Recording);
   }
 
   /** {@link Sim.runEvents}, recording as in {@link Sim.recordUntil}. */
   recordEvents(n: number, options: RecordOptions = {}): Recording {
-    const r = this.#driver.record_events(checkCount(n, "n"), options.dt, options.t0 ?? 0, options.events ?? false, options.keyframes ?? false);
+    const r = this.#driver.record_events(
+      checkCount(n, "n"),
+      options.dt,
+      options.t0 ?? 0,
+      options.events ?? false,
+      options.keyframes ?? false,
+    );
     return withEventEnd(r as Recording);
   }
 
@@ -344,7 +368,13 @@ export class Sim implements Disposable {
     if (Number.isNaN(tEnd)) throw new RangeError("tEnd is NaN");
     const maxSnapshots = checkCount(options.maxSnapshots ?? 1_000, "maxSnapshots");
     const maxEvents = checkCount(options.maxEvents ?? 250_000, "maxEvents");
-    return this.#driver.record_snapshot_chunk(tEnd, options.dt, options.t0 ?? 0, maxSnapshots, maxEvents) as SnapshotChunk;
+    return this.#driver.record_snapshot_chunk(
+      tEnd,
+      options.dt,
+      options.t0 ?? 0,
+      maxSnapshots,
+      maxEvents,
+    ) as SnapshotChunk;
   }
 
   /**
@@ -381,7 +411,10 @@ export class Sim implements Disposable {
    * {@link iterate}. For Arrow record batches, pipe it through
    * `toRecordBatches()` from `lefsim/arrow`.
    */
-  stream(tEnd: number, options: { dt: number; t0?: number; maxSnapshots?: number; maxEvents?: number }): ReadableStream<SnapshotChunk>;
+  stream(
+    tEnd: number,
+    options: { dt: number; t0?: number; maxSnapshots?: number; maxEvents?: number },
+  ): ReadableStream<SnapshotChunk>;
   stream(tEnd: number, options: { events: true; keyframes?: boolean; maxRows?: number }): ReadableStream<EventChunk>;
   stream(
     tEnd: number,
@@ -400,7 +433,8 @@ export class Sim implements Disposable {
       const keyframes = options.keyframes ?? true;
       const maxRows = checkCount(options.maxRows ?? 10_000, "maxRows");
       const min = keyframes ? this.nLegs + 2 : 2;
-      if (maxRows < min) throw new RangeError(`maxRows must be at least ${min}${keyframes ? " with keyframes" : ""}, got ${maxRows}`);
+      if (maxRows < min)
+        throw new RangeError(`maxRows must be at least ${min}${keyframes ? " with keyframes" : ""}, got ${maxRows}`);
       next = () => this.#sim.record_event_chunk(tEnd, maxRows, keyframes) as EventChunk;
     } else {
       if ("maxRows" in options) throw new RangeError("maxRows applies to events: true; use maxSnapshots with dt");

@@ -3,7 +3,7 @@
 // Views take a `Frame`: a copy of a LiveState. Whether that state came from a
 // Sim (live) or a Replayer (replay) is invisible here, which is the point.
 
-import { MOBILITY, type Lattice, type LiveState } from "lefsim";
+import { type Lattice, type LiveState, MOBILITY } from "lefsim";
 
 export const fmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 export const fmtCompact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
@@ -197,7 +197,12 @@ export class LoopView {
       const l = f.leftPos[best]!;
       const r = f.rightPos[best]!;
       const status = f.held[best] ? "held at a boundary" : "extruding";
-      placeTooltip(tooltip, canvas, e, `LEF ${best}: sites ${fmt.format(l)}–${fmt.format(r)}, ${fmt.format(r - l)} long, ${status}`);
+      placeTooltip(
+        tooltip,
+        canvas,
+        e,
+        `LEF ${best}: sites ${fmt.format(l)}–${fmt.format(r)}, ${fmt.format(r - l)} long, ${status}`,
+      );
     });
     canvas.addEventListener("pointerleave", () => {
       tooltip.hidden = true;
@@ -299,7 +304,17 @@ export class Kymograph {
     // Shift the backing store down by `row` CSS pixels.
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height - row * dpr, 0, row * dpr, canvas.width, canvas.height - row * dpr);
+    ctx.drawImage(
+      canvas,
+      0,
+      0,
+      canvas.width,
+      canvas.height - row * dpr,
+      0,
+      row * dpr,
+      canvas.width,
+      canvas.height - row * dpr,
+    );
     ctx.restore();
     ctx.fillStyle = colors.paper;
     ctx.fillRect(0, 0, width, row);

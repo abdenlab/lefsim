@@ -30,7 +30,12 @@ export function worldOf(sim: Sim): World {
   const s = sim.state();
   return {
     lattice: sim.lattice,
-    lefs: { leftPos: s.leftPos.slice(), rightPos: s.rightPos.slice(), leftMobility: s.leftMobility.slice(), rightMobility: s.rightMobility.slice() },
+    lefs: {
+      leftPos: s.leftPos.slice(),
+      rightPos: s.rightPos.slice(),
+      leftMobility: s.leftMobility.slice(),
+      rightMobility: s.rightMobility.slice(),
+    },
   };
 }
 

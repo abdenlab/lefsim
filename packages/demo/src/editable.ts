@@ -6,7 +6,7 @@
 // A change builds a new model and carries the LEFs over to it at the current
 // time, so the run continues rather than restarting.
 
-import { createLattice, createModel, createWorld, MOBILITY, populate, Sim, type Lattice, type Rates } from "lefsim";
+import { createLattice, createModel, createWorld, type Lattice, MOBILITY, populate, type Rates, Sim } from "lefsim";
 
 import { N_SITES, RATES } from "./model.ts";
 import { colors, setLattice } from "./render.ts";
@@ -76,7 +76,11 @@ export class EditableRun {
   lattice(): Lattice {
     return createLattice(
       N_SITES,
-      this.ctcfs.map((c) => ({ site: c.site, capturesFrom: c.left ? ("left" as const) : ("right" as const), strength: this.strength })),
+      this.ctcfs.map((c) => ({
+        site: c.site,
+        capturesFrom: c.left ? ("left" as const) : ("right" as const),
+        strength: this.strength,
+      })),
     );
   }
 
@@ -165,7 +169,8 @@ export class EditableRun {
       // A new CTCF goes in the middle of the widest stretch without one.
       const sites = [-1, ...this.ctcfs.map((c) => c.site).sort((a, b) => a - b), N_SITES];
       let best = 0;
-      for (let i = 1; i < sites.length - 1; i++) if (sites[i + 1]! - sites[i]! > sites[best + 1]! - sites[best]!) best = i;
+      for (let i = 1; i < sites.length - 1; i++)
+        if (sites[i + 1]! - sites[i]! > sites[best + 1]! - sites[best]!) best = i;
       const c = { site: Math.round((sites[best]! + sites[best + 1]!) / 2), left };
       this.ctcfs.push(c);
       lane.push(c);

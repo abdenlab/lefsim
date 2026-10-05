@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { KEYFRAME, Sim, type SnapshotColumns } from "../src/index.ts";
+import { KEYFRAME, type Sim, type SnapshotColumns } from "../src/index.ts";
 import { makeSim, type Setup } from "./helpers.ts";
 
 const OPTIONS: Setup = {
@@ -133,7 +133,11 @@ describe("recordSnapshotChunk", () => {
     const all = whole.recordUntil(200, { dt: 0.5 });
     using sim = make(8);
     const parts = [sim.recordUntil(50, { dt: 0.5 }).snapshots!];
-    for (let c = sim.recordSnapshotChunk(150, { dt: 0.5, maxSnapshots: 9 }); ; c = sim.recordSnapshotChunk(150, { dt: 0.5, maxSnapshots: 9 })) {
+    for (
+      let c = sim.recordSnapshotChunk(150, { dt: 0.5, maxSnapshots: 9 });
+      ;
+      c = sim.recordSnapshotChunk(150, { dt: 0.5, maxSnapshots: 9 })
+    ) {
       parts.push(c);
       if (c.stopped === "reached_time") break;
     }

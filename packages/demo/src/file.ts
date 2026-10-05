@@ -8,9 +8,19 @@
 // scrubber is dragged.
 
 import { init } from "lefsim";
-import { replayerFromParquet, type ParquetReplayer, type ParquetSource } from "lefsim/parquet";
+import { type ParquetReplayer, type ParquetSource, replayerFromParquet } from "lefsim/parquet";
 
-import { $, fmt, fmtCompact, Kymograph, LoopView, onThemeChange, setLattice, snapshotOf, type Frame } from "./render.ts";
+import {
+  $,
+  type Frame,
+  fmt,
+  fmtCompact,
+  Kymograph,
+  LoopView,
+  onThemeChange,
+  setLattice,
+  snapshotOf,
+} from "./render.ts";
 
 /** Where `make_sample.py` writes its file; the page offers it if it's there. */
 const SAMPLE = "/sample.parquet";
@@ -61,7 +71,9 @@ function showSpeed() {
 }
 
 const fmtBytes = (n: number) =>
-  n < 1e6 ? `${fmt.format(n / 1e3)} KB` : `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(n / 1e6)} MB`;
+  n < 1e6
+    ? `${fmt.format(n / 1e3)} KB`
+    : `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(n / 1e6)} MB`;
 
 function showError(e: unknown) {
   errorRow.hidden = false;
@@ -246,7 +258,10 @@ showSpeed();
 
 // `?url=...` opens a file straight away; otherwise offer the sample if it exists.
 const urlParam = new URLSearchParams(location.search).get("url");
-const sampleExists = await fetch(SAMPLE, { method: "HEAD" }).then((r) => r.ok, () => false);
+const sampleExists = await fetch(SAMPLE, { method: "HEAD" }).then(
+  (r) => r.ok,
+  () => false,
+);
 sampleBtn.hidden = !sampleExists;
 if (urlParam) {
   urlIn.value = urlParam;

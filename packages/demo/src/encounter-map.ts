@@ -226,8 +226,24 @@ function drawColorbars() {
   ctx.clearRect(0, 0, width, height);
   const barW = Math.min(260, width - MARGIN.left - MARGIN.right - 180);
   const x0 = width - MARGIN.right - barW;
-  drawColorbar(ctx, { x0, y0: 8, width: barW, lut: FALL, lo: freqRange[0], hi: freqRange[1], label: "Encounters per time unit (lower)" });
-  drawColorbar(ctx, { x0, y0: 44, width: barW, lut: BLUES, lo: durRange[0], hi: durRange[1], label: "Mean duration (upper)" });
+  drawColorbar(ctx, {
+    x0,
+    y0: 8,
+    width: barW,
+    lut: FALL,
+    lo: freqRange[0],
+    hi: freqRange[1],
+    label: "Encounters per time unit (lower)",
+  });
+  drawColorbar(ctx, {
+    x0,
+    y0: 44,
+    width: barW,
+    lut: BLUES,
+    lo: durRange[0],
+    hi: durRange[1],
+    label: "Mean duration (upper)",
+  });
 }
 
 function drawLanes() {

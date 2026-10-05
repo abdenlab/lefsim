@@ -138,7 +138,9 @@ class Model:
     document; loading checks everything construction does.
     """
 
-    def __init__(self, world: World, rates: Optional[Rates] = None, *, spawn_rule: SpawnRuleName = "uniform_non_ctcf") -> None: ...
+    def __init__(
+        self, world: World, rates: Optional[Rates] = None, *, spawn_rule: SpawnRuleName = "uniform_non_ctcf"
+    ) -> None: ...
     @property
     def world(self) -> World: ...
     @property

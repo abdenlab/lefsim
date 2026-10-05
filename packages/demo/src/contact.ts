@@ -13,8 +13,8 @@
 import { effectiveDistances, init } from "lefsim";
 
 import { CtcfLanes, DEFAULT_CTCFS, EditableRun } from "./editable.ts";
-import { N_SITES, readRunInputs, worldOf } from "./model.ts";
 import { condensedIndex, drawColorbar as drawBar, FALL, packedColors, SquareMap } from "./heatmap.ts";
+import { N_SITES, readRunInputs, worldOf } from "./model.ts";
 import { $, fit, fmt, LoopView, MARGIN, onThemeChange, placeTooltip, siteAt, snapshotOf, xScale } from "./render.ts";
 
 const LENGTHS = { stepLength: 1, hopLength: 1 };
@@ -52,18 +52,15 @@ let colorbarCtx = fit(colorbarCanvas);
 // ------------------------------------------------------------------ state
 
 /** The run and its editable model. */
-const run = new EditableRun(
-  DEFAULT_CTCFS,
-  {
-    nLeft: $<HTMLInputElement>("nctcf-left"),
-    nRight: $<HTMLInputElement>("nctcf-right"),
-    step: $<HTMLInputElement>("rate-step"),
-    respawn: $<HTMLInputElement>("rate-respawn"),
-    respawnBlocked: $<HTMLInputElement>("rate-respawn-blocked"),
-    respawnHeld: $<HTMLInputElement>("rate-respawn-held"),
-    strength: $<HTMLInputElement>("strength"),
-  },
-);
+const run = new EditableRun(DEFAULT_CTCFS, {
+  nLeft: $<HTMLInputElement>("nctcf-left"),
+  nRight: $<HTMLInputElement>("nctcf-right"),
+  step: $<HTMLInputElement>("rate-step"),
+  respawn: $<HTMLInputElement>("rate-respawn"),
+  respawnBlocked: $<HTMLInputElement>("rate-respawn-blocked"),
+  respawnHeld: $<HTMLInputElement>("rate-respawn-held"),
+  strength: $<HTMLInputElement>("strength"),
+});
 run.onChange = () => {
   if (!playing) draw();
 };

@@ -11,7 +11,8 @@
  */
 
 import {
-  Data,
+  type Data,
+  type DataType,
   Dictionary,
   Field,
   Float64,
@@ -20,21 +21,20 @@ import {
   Schema,
   Struct,
   Table,
-  Uint32,
   Uint8,
+  Uint32,
   Utf8,
   vectorFromArray,
-  type DataType,
 } from "apache-arrow";
 
-import { Replayer, replayerFromRows } from "./replayer.ts";
+import { type Replayer, replayerFromRows } from "./replayer.ts";
 import {
-  DIRECTION,
-  MOBILITY,
-  ROW_KIND,
   type DeltaChunk,
+  DIRECTION,
   type Lattice,
   type Lefs,
+  MOBILITY,
+  ROW_KIND,
   type SnapshotColumns,
 } from "./types.ts";
 
@@ -54,7 +54,10 @@ function dict(keys: Uint8Array, names: readonly string[]): Data<Dictionary<Utf8,
 
 function batch(columns: [string, Data][], kind: string, extra: Record<string, string> = {}): RecordBatch {
   const fields = columns.map(([name, data]) => new Field(name, data.type as DataType, false));
-  const metadata = new Map([["lefsim.kind", kind], ...Object.entries(extra).map(([k, v]) => [`lefsim.${k}`, v] as [string, string])]);
+  const metadata = new Map([
+    ["lefsim.kind", kind],
+    ...Object.entries(extra).map(([k, v]) => [`lefsim.${k}`, v] as [string, string]),
+  ]);
   const schema = new Schema(fields, metadata);
   const length = columns[0]?.[1].length ?? 0;
   const data = makeData({ type: new Struct(fields), length, nullCount: 0, children: columns.map(([, d]) => d) });
@@ -221,7 +224,12 @@ function codes(b: RecordBatch, name: string, names: readonly string[]): Uint8Arr
   const out = new Uint8Array(vec.length);
   for (let i = 0; i < vec.length; i++) {
     const v: unknown = vec.get(i);
-    const code = typeof v === "number" ? (Number.isInteger(v) && v >= 0 && v < names.length ? v : -1) : lower.indexOf(String(v).toLowerCase());
+    const code =
+      typeof v === "number"
+        ? Number.isInteger(v) && v >= 0 && v < names.length
+          ? v
+          : -1
+        : lower.indexOf(String(v).toLowerCase());
     if (code < 0) throw new RangeError(`column "${name}" has unknown value ${JSON.stringify(v)}`);
     out[i] = code;
   }
@@ -263,9 +271,13 @@ export function replayerFromArrow(
   lattice: Lattice,
   options: { nLefs?: number; end?: number } = {},
 ): Replayer {
-  const batches: Iterable<RecordBatch> = source instanceof RecordBatch ? [source] : source instanceof Table ? source.batches : source;
+  const batches: Iterable<RecordBatch> =
+    source instanceof RecordBatch ? [source] : source instanceof Table ? source.batches : source;
   const parts = Array.from(batches, (b) => deltaChunkFromArrow(b));
-  const concat = <T extends Float64Array | Uint32Array | Uint8Array>(key: "time" | "legId" | "pos" | "mobility" | "kind", Ctor: { new (n: number): T }): T => {
+  const concat = <T extends Float64Array | Uint32Array | Uint8Array>(
+    key: "time" | "legId" | "pos" | "mobility" | "kind",
+    Ctor: { new (n: number): T },
+  ): T => {
     const out = new Ctor(parts.reduce((n, p) => n + p[key].length, 0));
     let at = 0;
     for (const p of parts) {
@@ -295,7 +307,9 @@ export function replayerFromArrow(
  * const batches = sim.stream(1e6, { dt: 1 }).pipeThrough(toRecordBatches());
  * ```
  */
-export function toRecordBatches(options: { layout?: Layout } = {}): TransformStream<SnapshotColumns | DeltaChunk, RecordBatch> {
+export function toRecordBatches(
+  options: { layout?: Layout } = {},
+): TransformStream<SnapshotColumns | DeltaChunk, RecordBatch> {
   return new TransformStream({
     transform(chunk, controller) {
       controller.enqueue("legId" in chunk ? eventsToArrow(chunk) : snapshotsToArrow(chunk, options));

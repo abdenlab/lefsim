@@ -13,15 +13,25 @@ import { makeSim } from "./helpers.ts";
 const { config } = ipcInfo;
 const keyframed = readFileSync(new URL("./fixtures/python_events.parquet", import.meta.url));
 const plain = readFileSync(new URL("./fixtures/python_events_plain.parquet", import.meta.url));
-const ctcfs = { site: config.ctcfSites, capturesFrom: config.ctcfCapturesFrom as Side[], strength: config.ctcfStrength };
+const ctcfs = {
+  site: config.ctcfSites,
+  capturesFrom: config.ctcfCapturesFrom as Side[],
+  strength: config.ctcfStrength,
+};
 const lattice = createLattice(config.nSites, ctcfs);
 
 /** The live run the fixtures recorded. */
-const liveSim = () => makeSim({ nSites: config.nSites, ctcfs, nLefs: config.nLefs, seed: config.seed, rates: config.rates });
+const liveSim = () =>
+  makeSim({ nSites: config.nSites, ctcfs, nLefs: config.nLefs, seed: config.seed, rates: config.rates });
 
 function liveWorlds(times: number[]): Map<number, World> {
   using sim = liveSim();
-  return new Map([...times].sort((a, b) => a - b).map((t) => (sim.runUntil(t), [t, sim.world()] as const)));
+  const worlds = new Map<number, World>();
+  for (const t of [...times].sort((a, b) => a - b)) {
+    sim.runUntil(t);
+    worlds.set(t, sim.world());
+  }
+  return worlds;
 }
 
 describe("replayerFromParquet", () => {
@@ -103,7 +113,10 @@ describe("replayerFromParquet over HTTP", () => {
       const end = range[2] === undefined ? keyframed.length - 1 : Math.min(Number(range[2]), keyframed.length - 1);
       const body = keyframed.subarray(start, end + 1);
       bytesServed += body.length;
-      res.writeHead(206, { "Content-Range": `bytes ${start}-${end}/${keyframed.length}`, "Content-Length": body.length });
+      res.writeHead(206, {
+        "Content-Range": `bytes ${start}-${end}/${keyframed.length}`,
+        "Content-Length": body.length,
+      });
       res.end(body);
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

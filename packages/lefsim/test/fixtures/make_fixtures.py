@@ -12,8 +12,10 @@ core is bit-identical across native and wasm32).
 import json
 import pathlib
 
-import lefsim
 import pyarrow as pa
+import pyarrow.parquet as pq
+
+import lefsim
 
 HERE = pathlib.Path(__file__).parent
 
@@ -34,7 +36,11 @@ config = {
 def make_sim(config):
     """The Sim that the TS `new Sim(config)` builds: LEFs placed with the
     seed, then run with the same seed."""
-    ctcfs = {"site": config["ctcfSites"], "captures_from": config["ctcfCapturesFrom"], "strength": config["ctcfStrength"]}
+    ctcfs = {
+        "site": config["ctcfSites"],
+        "captures_from": config["ctcfCapturesFrom"],
+        "strength": config["ctcfStrength"],
+    }
     lattice = lefsim.Lattice(config["nSites"], ctcfs)
     rates = config["rates"]
     model = lefsim.Model(
@@ -138,8 +144,6 @@ print("wrote", out, f"({n_batches} batches, {out.stat().st_size:,} bytes)")
 # row group per chunk), and as a plain snappy file with no lefsim metadata
 # and row groups that cut keyframes, for the TS reader's fallback.
 
-import pyarrow.parquet as pq
-
 out = HERE / "python_events.parquet"
 make_sim(ipc_config).stream(
     ipc_config["tEnd"], events=True, keyframes=True, max_rows=ipc_config["chunkSize"]
@@ -152,4 +156,3 @@ plain = pa.RecordBatchReader.from_stream(
 out = HERE / "python_events_plain.parquet"
 pq.write_table(plain.replace_schema_metadata(None), out, compression="snappy", row_group_size=37)
 print("wrote", out, f"({out.stat().st_size:,} bytes)")
-

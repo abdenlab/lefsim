@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import {
+  type DataType,
   Dictionary,
   Field,
   Float64,
@@ -13,19 +14,25 @@ import {
   tableFromArrays,
   tableFromIPC,
   tableToIPC,
-  Uint32,
   Uint8,
+  Uint32,
   Utf8,
   vectorFromArray,
-  type DataType,
 } from "apache-arrow";
 import { describe, expect, it } from "vitest";
 
-import { deltaChunkFromArrow, eventsToArrow, latticeToArrow, lefsToArrow, replayerFromArrow, snapshotsToArrow } from "../src/arrow.ts";
+import {
+  deltaChunkFromArrow,
+  eventsToArrow,
+  latticeToArrow,
+  lefsToArrow,
+  replayerFromArrow,
+  snapshotsToArrow,
+} from "../src/arrow.ts";
 import { createLattice, KEYFRAME, Replayer, ROW_KIND, type Side } from "../src/index.ts";
-import { makeSim, type Setup } from "./helpers.ts";
-import schemas from "./fixtures/schemas.json";
 import ipcInfo from "./fixtures/python_events.json";
+import schemas from "./fixtures/schemas.json";
+import { makeSim, type Setup } from "./helpers.ts";
 
 // ------------------------------------------------------------------ helpers
 
@@ -46,7 +53,8 @@ function describe_(batch: RecordBatch) {
       name: f.name,
       type: neutralType(f.type),
       nullable: f.nullable,
-      dictionary: f.type instanceof Dictionary ? (batch.getChild(f.name)!.data[0]!.dictionary!.toArray() as string[]) : null,
+      dictionary:
+        f.type instanceof Dictionary ? (batch.getChild(f.name)!.data[0]!.dictionary!.toArray() as string[]) : null,
     })),
   };
 }
@@ -144,8 +152,18 @@ describe("deltaChunkFromArrow", () => {
       ["time", makeData({ type: new Float64(), data: new Float64Array([1, 2]) })],
       ["leg_id", makeData({ type: new Uint32(), data: new Uint32Array([0, 1]) })],
       ["pos", makeData({ type: new Uint32(), data: new Uint32Array([5, 6]) })],
-      ["mobility", makeData({ type: mobType, data: new Uint8Array([0, 1]), dictionary: vectorFromArray(["Captured", "Moving"], new Utf8()) })],
-      ["action", makeData({ type: actType, data: new Uint8Array([0, 0]), dictionary: vectorFromArray(["Respawn"], new Utf8()) })],
+      [
+        "mobility",
+        makeData({
+          type: mobType,
+          data: new Uint8Array([0, 1]),
+          dictionary: vectorFromArray(["Captured", "Moving"], new Utf8()),
+        }),
+      ],
+      [
+        "action",
+        makeData({ type: actType, data: new Uint8Array([0, 0]), dictionary: vectorFromArray(["Respawn"], new Utf8()) }),
+      ],
     ] as const;
     const fields = columns.map(([n, d]) => new Field(n, d.type as DataType, false));
     const batch = new RecordBatch(
@@ -166,7 +184,9 @@ describe("Arrow IPC from the Python binding", () => {
     capturesFrom: config.ctcfCapturesFrom as Side[],
     strength: config.ctcfStrength,
   });
-  const batches = () => [...RecordBatchReader.from(readFileSync(new URL("./fixtures/python_events.arrows", import.meta.url)))];
+  const batches = () => [
+    ...RecordBatchReader.from(readFileSync(new URL("./fixtures/python_events.arrows", import.meta.url))),
+  ];
 
   /** Replay against a live wasm Sim of the same run at many times. */
   function expectMatchesLiveRun(replayer: Replayer) {

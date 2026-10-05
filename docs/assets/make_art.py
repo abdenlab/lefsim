@@ -9,8 +9,9 @@ python/, where lefsim is installed:
 
 from pathlib import Path
 
-import lefsim
 import polars as pl
+
+import lefsim
 
 OUT = Path(__file__).parent
 
@@ -22,9 +23,12 @@ THEMES = {
 # Three domains, each between a convergent pair of CTCFs.
 N_SITES = 600
 CTCFS = [
-    (60, "left"), (200, "right"),
-    (230, "left"), (390, "right"),
-    (420, "left"), (540, "right"),
+    (60, "left"),
+    (200, "right"),
+    (230, "left"),
+    (390, "right"),
+    (420, "left"),
+    (540, "right"),
 ]
 W, H = 1200, 260
 MARGIN_X, BASE = 24, 220

@@ -2,14 +2,7 @@ import { RecordBatch } from "apache-arrow";
 import { describe, expect, it } from "vitest";
 
 import { toRecordBatches } from "../src/arrow.ts";
-import {
-  iterate,
-  KEYFRAME,
-  Replayer,
-  Sim,
-  type EventChunk,
-  type SnapshotChunk,
-} from "../src/index.ts";
+import { type EventChunk, iterate, KEYFRAME, Replayer, type SnapshotChunk } from "../src/index.ts";
 import { makeSim, type Setup } from "./helpers.ts";
 
 const OPTIONS: Setup = {
@@ -130,7 +123,9 @@ describe("Sim.stream", () => {
 describe("toRecordBatches", () => {
   it("turns snapshot and event streams into Arrow record batches", async () => {
     using a = make(9);
-    const snaps = await collect(a.stream(100, { dt: 1, maxSnapshots: 30 }).pipeThrough(toRecordBatches({ layout: "leg" })));
+    const snaps = await collect(
+      a.stream(100, { dt: 1, maxSnapshots: 30 }).pipeThrough(toRecordBatches({ layout: "leg" })),
+    );
     expect(snaps.every((b) => b instanceof RecordBatch)).toBe(true);
     expect(snaps.reduce((n, b) => n + b.numRows, 0)).toBe(101 * 16);
     expect(snaps[0]!.schema.metadata.get("lefsim.kind")).toBe("legs");
