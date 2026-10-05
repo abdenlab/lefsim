@@ -14,3 +14,6 @@ packages/*/dist/
 
 # Demo sample written by packages/demo/make_sample.py
 packages/demo/public/sample.parquet
+
+# MkDocs build output
+/site/

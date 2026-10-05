@@ -1,0 +1,52 @@
+site_name: lefsim
+site_description: Stochastic simulation of loop-extrusion factors on a 1D lattice
+repo_url: https://github.com/abdenlab/lefsim
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - content.tabs.link # one language tab choice applies across the page
+    - navigation.sections
+    - navigation.indexes
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Concepts:
+      - The framework: concepts/framework.md
+      - The LEF model: concepts/model.md
+      - Recording and replay: concepts/recording.md
+      - Effective distance: concepts/effective-distance.md
+  - Guides:
+      - Rust: guides/rust.md
+      - Python: guides/python.md
+      - TypeScript: guides/typescript.md
+      - Browser demos: guides/demos.md
+  - Design notes: design/index.md
+  - API reference: reference.md
