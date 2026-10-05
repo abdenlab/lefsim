@@ -134,22 +134,3 @@ Each publish job skips a registry that already has the version, so if one fails,
 fix the cause and re-run the workflow. A registry never accepts the same version
 twice, so never move a tag that reached any registry: bump to the next patch
 version instead.
-
-### One-time setup
-
-Publishing uses trusted publishing (OIDC), so the repository stores no tokens.
-Each registry is told which repository, workflow (`release.yml`) and GitHub
-environment may publish:
-
-- **GitHub:** create the environments `crates-io`, `pypi` and `npm` (Settings →
-    Environments), optionally requiring approval. Under Settings → Pages, set
-    the source to "GitHub Actions" for the docs.
-- **PyPI:** add a pending trusted publisher for the project `lefsim`
-    (environment `pypi`). It works before the project exists.
-- **crates.io and npm:** both need the package to exist before trusted
-    publishing can be configured, so publish the first version by hand:
-    `cargo publish -p lefsim` and, after `pnpm build:wasm`,
-    `pnpm --filter lefsim publish`. Then add the trusted publisher in each
-    package's settings (environments `crates-io` and `npm`). After that, push
-    the tag as usual: the workflow skips those two, publishes to PyPI and
-    creates the GitHub release.
