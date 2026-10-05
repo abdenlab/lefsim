@@ -58,8 +58,7 @@
     "nullable": false,
     "dictionary": [
      "Moving",
-     "Captured",
-     "Evicted"
+     "Captured"
     ]
    },
    {
@@ -68,8 +67,7 @@
     "nullable": false,
     "dictionary": [
      "Moving",
-     "Captured",
-     "Evicted"
+     "Captured"
     ]
    }
   ]
@@ -110,8 +108,7 @@
     "nullable": false,
     "dictionary": [
      "Moving",
-     "Captured",
-     "Evicted"
+     "Captured"
     ]
    },
    {
@@ -120,8 +117,7 @@
     "nullable": false,
     "dictionary": [
      "Moving",
-     "Captured",
-     "Evicted"
+     "Captured"
     ]
    }
   ]
@@ -162,8 +158,7 @@
     "nullable": false,
     "dictionary": [
      "Moving",
-     "Captured",
-     "Evicted"
+     "Captured"
     ]
    }
   ]
@@ -203,8 +198,7 @@
     "nullable": false,
     "dictionary": [
      "Moving",
-     "Captured",
-     "Evicted"
+     "Captured"
     ]
    },
    {

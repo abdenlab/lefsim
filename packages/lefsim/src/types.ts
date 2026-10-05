@@ -3,7 +3,7 @@
  */
 
 /** Mobility names, indexed by the codes in {@link LiveState} mobility arrays. */
-export const MOBILITY = ["Moving", "Captured", "Evicted"] as const;
+export const MOBILITY = ["Moving", "Captured"] as const;
 export type Mobility = (typeof MOBILITY)[number];
 
 /** Direction names, indexed by the codes in {@link Ctcfs} `capturesFrom`. */

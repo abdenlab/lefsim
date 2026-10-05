@@ -175,29 +175,22 @@ fn first_snapshot_is_the_initial_state() {
 }
 
 #[test]
-fn an_evicted_leg_waits_before_its_ctcf_beside_a_captured_partner() {
-    // Strength 1. Evicted legs only persist when a captured partner protects
-    // their LEF, and they wait just before the CTCF: the CTCFs at 60 and 100
-    // capture from the right, so right-facing legs wait at 59 and 99; the one
-    // at 140 captures from the left, so left-facing legs wait at 141.
-    let (frames, _) = build_with_strength(6, 1.0).collect_until(500.0, SampleMode::every_dt(0.25));
-    let mut evicted = 0;
-    for s in 0..frames.n_snapshots() {
-        let snap = frames.snapshot(s);
-        for lef in 0..snap.left_pos.len() {
-            if snap.left_mobility[lef] == Mobility::Evicted {
-                evicted += 1;
-                assert_eq!(snap.left_pos[lef], 141, "an evicted left leg off its place");
-                assert_eq!(snap.right_mobility[lef], Mobility::Captured, "unprotected, yet waiting");
-            }
-            if snap.right_mobility[lef] == Mobility::Evicted {
-                evicted += 1;
-                assert!([59, 99].contains(&snap.right_pos[lef]), "an evicted right leg at {}", snap.right_pos[lef]);
-                assert_eq!(snap.left_mobility[lef], Mobility::Captured, "unprotected, yet waiting");
-            }
-        }
+fn every_eviction_unloads_its_lef_in_one_event() {
+    // Strength 1, so legs meet CTCFs from behind often. Each Evict event is
+    // two rows at one time: both legs of one LEF, landed on one site.
+    let mut sim = build_with_strength(6, 1.0);
+    let mut ev = EventRecorder::new();
+    sim.run_until_with(500.0, &mut ev);
+    let f = ev.frames();
+    let evict = Action::Evict { leg: LegKey::default() }.code();
+    let rows: Vec<usize> = (0..f.n_rows()).filter(|&r| f.kind()[r] == evict).collect();
+    assert!(rows.len() > 10, "want evictions to exercise this, got {} rows", rows.len());
+    for pair in rows.chunks(2) {
+        let [a, b] = [pair[0], pair[1]];
+        assert_eq!(f.time()[a], f.time()[b]);
+        assert_eq!(f.leg_id()[a] / 2, f.leg_id()[b] / 2, "both legs of one LEF");
+        assert_eq!(f.pos()[a], f.pos()[b], "landed on one site");
     }
-    assert!(evicted > 20, "want evicted legs to exercise this, got {evicted}");
 }
 
 #[test]
@@ -241,16 +234,12 @@ fn event_rows_match_actions() {
     let evict = Action::Evict { leg: LegKey::default() }.code();
     let n_steps = f.kind().iter().filter(|&&k| k == step).count();
     let n_respawn_rows = f.kind().iter().filter(|&&k| k == respawn).count();
-    // An eviction is one row if protected (the leg, now evicted), two if it
-    // unloaded the LEF (both legs at their new site).
-    let evict_rows = || f.kind().iter().zip(f.mob()).filter(|&(&k, _)| k == evict);
-    let n_protected = evict_rows().filter(|&(_, &m)| m == Mobility::Evicted).count();
-    let n_unloading_rows = evict_rows().filter(|&(_, &m)| m != Mobility::Evicted).count();
-    // One row per step, two per respawn.
+    let n_evict_rows = f.kind().iter().filter(|&&k| k == evict).count();
+    // One row per step, two per respawn or eviction (both legs at their new site).
     assert_eq!(n_respawn_rows % 2, 0);
-    assert_eq!(n_unloading_rows % 2, 0);
-    assert!(n_protected + n_unloading_rows > 0, "want evictions to exercise this");
-    assert_eq!(n_steps + n_respawn_rows / 2 + n_protected + n_unloading_rows / 2, 2000);
+    assert_eq!(n_evict_rows % 2, 0);
+    assert!(n_evict_rows > 0, "want evictions to exercise this");
+    assert_eq!(n_steps + n_respawn_rows / 2 + n_evict_rows / 2, 2000);
     assert!(f.time().windows(2).all(|w| w[0] <= w[1]));
     assert!(f.leg_id().iter().all(|&id| (id as usize) < sim.n_legs()));
 }

@@ -92,15 +92,12 @@ site. In the simulation:
 - A leg's **mobility** is one of:
   - `Moving`: free to step (unless blocked, see below).
   - `Captured`: a CTCF reached from its capture side has held it in place,
-    which protects its LEF from faster unloading, and from eviction.
-  - `Evicted`: a CTCF met from its other side has evicted it while its
-    partner is captured. The partner's capture protects the LEF, so instead
-    of unloading at once, it waits just before the CTCF until its LEF
-    unloads.
+    which protects its LEF from faster unloading, and its other leg from
+    eviction.
 
   A moving leg is also **blocked** while another leg sits on the next site
   ahead (unless that's a captured leg holding a CTCF met from behind, which
-  evicts it instead), or the lattice ends there. Blocking is derived from
+  evicts it instead, if it isn't protected), or the lattice ends there. Blocking is derived from
   positions, never stored, so it lifts as soon as the obstruction moves.
 
 So we have 1 mutable entity type: leg. A leg's properties: its lattice site, its
@@ -128,12 +125,15 @@ Arenas:
     held CTCF from behind.
   - otherwise it draws an exponential wait with rate `rates.step`, or
     `(1 − strength) × rates.step` if it faces a bare CTCF from behind (it
-    passes only if the CTCF turns out unbound).
+    passes only if the CTCF turns out unbound), unless it's protected.
 - `Evict { leg }` competes with the step of a moving leg facing a CTCF from
   behind: rate `strength × rates.step` for a bare CTCF (it turns out bound),
   or `rates.step` for one a captured leg holds (bound for certain); `Never`
   otherwise. Two independent clocks at `(1 − p) k` and `p k` are exactly a
   step at `k` followed by a coin flip with probability `p`.
+- A leg whose partner is captured is **protected**, immune to eviction: its
+  `Evict` is `Never`, it steps onto a bare CTCF met from behind at the full
+  `rates.step`, and a held one blocks it. A capture reschedules the partner.
 - `Respawn { lef }` looks at _both_ legs together, and draws an exponential
   wait at the first rate that applies:
   - `rates.respawn_captured` if either leg is `Captured`: capture protects.
@@ -159,12 +159,10 @@ starting LEFs, exactly as respawns would.
 A CTCF acts on a leg in two places. Its `captures_from` names its capture
 side; the other side evicts.
 
-- **Eviction**, when `Evict` fires. Unless the leg's partner is captured,
-  the LEF unloads at once: it respawns in the same event, like stepping into
-  a black hole, so no transient state is stored. A captured partner protects
-  the LEF: the leg is marked `Evicted` and waits where it stands, and the LEF
-  keeps unloading at `respawn_captured`. In the event log, an eviction is
-  one row (the evicted leg) or two (both legs at their new site).
+- **Eviction**, when `Evict` fires: the LEF unloads at once. It respawns in
+  the same event, like stepping into a black hole, so no transient state is
+  stored. In the event log, an eviction is two rows: both legs at their new
+  site.
 - **Capture, on landing.** After each `Step` or `Respawn`, the leg(s) are
   reassessed by `resolve_mobility(site, arrived_from, rng)`, where
   `arrived_from` is the side of the landing site the leg came from: on a

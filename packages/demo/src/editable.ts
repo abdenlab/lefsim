@@ -14,7 +14,6 @@ import { colors, setLattice } from "./render.ts";
 const MAX_CTCFS = 16;
 const CAPTURED = MOBILITY.indexOf("Captured");
 const MOVING = MOBILITY.indexOf("Moving");
-const EVICTED = MOBILITY.indexOf("Evicted");
 
 /** A CTCF; `left` means it captures from the left (its chevron points left). */
 export interface CtcfMark {
@@ -95,8 +94,7 @@ export class EditableRun {
   /**
    * The same LEFs on the current model, continuing from the current time. A
    * captured leg stays so only if a CTCF that can hold it is still at its
-   * site, and an evicted leg only if the CTCF that evicted it is still just
-   * ahead of it and its partner is still captured. Otherwise it's moving again.
+   * site; otherwise it's moving again.
    */
   rebuild() {
     const old = this.sim;
@@ -114,12 +112,6 @@ export class EditableRun {
       mob === CAPTURED && capturesLeftAt.get(site) === !leftLeg ? CAPTURED : MOVING;
     const leftMobility = Array.from(leftMob, (m, i) => captured(m, leftPos[i]!, true));
     const rightMobility = Array.from(rightMob, (m, i) => captured(m, rightPos[i]!, false));
-    // Evicted: just before a CTCF whose capture side faces the way it faces,
-    // and protected by a partner that's still captured.
-    for (let i = 0; i < leftPos.length; i++) {
-      if (leftMob[i] === EVICTED && capturesLeftAt.get(leftPos[i]! - 1) === true && rightMobility[i] === CAPTURED) leftMobility[i] = EVICTED;
-      if (rightMob[i] === EVICTED && capturesLeftAt.get(rightPos[i]! + 1) === false && leftMobility[i] === CAPTURED) rightMobility[i] = EVICTED;
-    }
     const lattice = this.lattice();
     const world = createWorld(lattice, { leftPos, rightPos, leftMobility, rightMobility });
     this.sim = new Sim(createModel(world, this.rates), { seed: this.#seed + ++this.#rebuilds, startTime: time });

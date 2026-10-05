@@ -30,17 +30,11 @@ pub enum Mobility {
     /// Held by a CTCF it reached from the CTCF's capture side. Protects its
     /// LEF from faster unloading.
     Captured = 1,
-    /// Evicted by a CTCF met from behind (its capture side facing away) while
-    /// its partner is captured, which protects the LEF from unloading at
-    /// once: the leg waits just before the CTCF for its LEF to unload. (An
-    /// unprotected eviction unloads the LEF in the same event, so never
-    /// leaves this state behind.)
-    Evicted = 2,
 }
 
 impl Mobility {
     /// Names indexed by [`Mobility::code`].
-    pub const NAMES: [&str; 3] = ["Moving", "Captured", "Evicted"];
+    pub const NAMES: [&str; 2] = ["Moving", "Captured"];
 
     /// Stable `u8` encoding: the index into [`Mobility::NAMES`].
     pub fn code(self) -> u8 {
@@ -62,7 +56,6 @@ impl Mobility {
         match code {
             0 => Some(Mobility::Moving),
             1 => Some(Mobility::Captured),
-            2 => Some(Mobility::Evicted),
             _ => None,
         }
     }

@@ -43,7 +43,7 @@ fn parse_mobility(s: &str) -> PyResult<Mobility> {
         .iter()
         .position(|n| n.eq_ignore_ascii_case(s))
         .and_then(|i| Mobility::from_code(i as u8))
-        .ok_or_else(|| value_error(format!("mobility must be 'moving', 'captured' or 'evicted', got {s:?}")))
+        .ok_or_else(|| value_error(format!("mobility must be 'moving' or 'captured', got {s:?}")))
 }
 
 pub fn parse_rule(s: &str) -> PyResult<SpawnRule> {
@@ -337,10 +337,9 @@ fn lefs_from(obj: &Bound<'_, PyAny>) -> PyResult<LefStates> {
 /// polars, `World.to_arrow()`, `Sim.state()`) or a dict of sequences.
 ///
 /// Every LEF is checked: legs on the lattice and not crossed, no two LEFs
-/// on one site, a 'captured' leg only on a CTCF that could have captured it
-/// (a left-facing leg by a CTCF that captures from the right, a right-facing
-/// leg by one that captures from the left), and an 'evicted' leg only just
-/// before a CTCF it met from behind (the reverse), with a captured partner.
+/// on one site, and a 'captured' leg only on a CTCF that could have captured
+/// it (a left-facing leg by a CTCF that captures from the right, a
+/// right-facing leg by one that captures from the left).
 #[pyclass(module = "lefsim", name = "World", frozen, eq, skip_from_py_object)]
 #[derive(Clone, PartialEq)]
 pub struct PyWorld(pub lefsim::World);
@@ -461,8 +460,9 @@ pub fn populate(lattice: &PyLattice, n_lefs: usize, seed: u64, spawn_rule: &str)
 /// `respawn`, the basal rate, for a LEF with both legs free to move;
 /// `respawn_stalled` for a LEF with either leg blocked (by a leg ahead or the
 /// lattice's end); `respawn_captured` for one with either leg captured,
-/// which wins over stalled. Eviction unloads a LEF at once unless its other
-/// leg is captured. Checked (positive and finite) by `Model`.
+/// which wins over stalled. Eviction unloads a LEF at once; a leg whose
+/// partner is captured is immune to it. Checked (positive and finite) by
+/// `Model`.
 #[pyclass(module = "lefsim", name = "Rates", frozen, eq, skip_from_py_object)]
 #[derive(Clone, PartialEq)]
 pub struct PyRates(pub lefsim::Rates);

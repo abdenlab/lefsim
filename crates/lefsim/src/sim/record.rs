@@ -279,8 +279,7 @@ impl Recorder {
 /// Per-event deltas: one row per leg changed by a fired event.
 ///
 /// A `Step` produces one row, a `Respawn` two (one per leg, sharing a
-/// `time`), and an `Evict` one (the leg, waiting, evicted) or two (both legs
-/// at their new site, if it unloaded the LEF). With keyframes enabled (see [`EventRecorder::with_keyframes`]),
+/// `time`), as does an `Evict` (both legs at their new site). With keyframes enabled (see [`EventRecorder::with_keyframes`]),
 /// each batch also opens with one `Keyframe` row per leg.
 ///
 /// `kind` holds codes into [`EventFrames::KIND_NAMES`] (for events these
@@ -423,9 +422,8 @@ impl EventFrames {
         let legs = match action {
             Action::Step { leg } => [Some(leg), None],
             Action::Respawn { lef } => sim.world().lefs[lef].legs.map(Some),
-            // A protected eviction changes only the leg; one that unloaded
-            // the LEF moved both legs to their new site, like a respawn.
-            Action::Evict { leg } if sim.world().legs[leg].mobility == Mobility::Evicted => [Some(leg), None],
+            // Eviction unloads the LEF: both legs at their new site, like a
+            // respawn.
             Action::Evict { leg } => {
                 let lef = sim.world().legs[leg].lef;
                 sim.world().lefs[lef].legs.map(Some)

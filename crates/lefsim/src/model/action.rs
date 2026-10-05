@@ -23,8 +23,8 @@ pub struct Rates {
     /// ahead, or the lattice's end), the other free or blocked.
     pub respawn_stalled: f64,
     /// Respawn rate of a LEF with either leg captured, whatever the other leg
-    /// is doing: capture protects a LEF from faster unloading, and from
-    /// eviction.
+    /// is doing: capture protects a LEF from faster unloading, and its other
+    /// leg from eviction.
     pub respawn_captured: f64,
 }
 
@@ -52,12 +52,12 @@ pub enum Action {
     Step { leg: LegKey },
     /// A LEF unbinds and respawns at a new site sampled from the spawn rule.
     Respawn { lef: LefKey },
-    /// A leg facing a CTCF from behind is evicted by it. Competes with the
-    /// leg's step: a step at rate `k` splits into passing at `(1 - p) k` and
-    /// eviction at `p k`, where `p` is the CTCF's strength (the chance it's
-    /// bound), or `p = 1` if a captured leg holds it. Unless the other leg is
-    /// captured, eviction unloads the LEF at once (it respawns in the same
-    /// event); a captured partner protects it, and the leg waits, evicted.
+    /// A leg facing a CTCF from behind is evicted by it, and its LEF unloads
+    /// at once (it respawns in the same event). Competes with the leg's step:
+    /// a step at rate `k` splits into passing at `(1 - p) k` and eviction at
+    /// `p k`, where `p` is the CTCF's strength (the chance it's bound), or
+    /// `p = 1` if a captured leg holds it. A leg whose partner is captured is
+    /// immune: it passes a bare CTCF at the full rate, and a held one blocks it.
     Evict { leg: LegKey },
 }
 
@@ -191,12 +191,23 @@ fn ahead(world: &World, leg_k: LegKey) -> Ahead {
     }
 }
 
-/// Whether a leg is blocked: moving, but with another leg ahead (not a
-/// captured one holding a CTCF met from behind) or the lattice's end.
-/// Derived from positions, never stored, so it can't go stale as neighbors
-/// move.
+/// Whether a leg's partner is captured, which makes it immune to eviction.
+fn protected(world: &World, leg_k: LegKey) -> bool {
+    let lef = &world.lefs[world.legs[leg_k].lef];
+    lef.legs.iter().any(|&l| l != leg_k && world.legs[l].mobility == Mobility::Captured)
+}
+
+/// Whether a leg is blocked: moving, but unable to step or be evicted (a leg
+/// ahead, or the lattice's end; for a protected leg, also a held CTCF met
+/// from behind). Derived from positions, never stored, so it can't go stale
+/// as neighbors move.
 fn blocked(world: &World, leg_k: LegKey) -> bool {
-    world.legs[leg_k].mobility == Mobility::Moving && ahead(world, leg_k) == Ahead::Blocked
+    world.legs[leg_k].mobility == Mobility::Moving
+        && match ahead(world, leg_k) {
+            Ahead::Blocked => true,
+            Ahead::CtcfBackHeld => protected(world, leg_k),
+            Ahead::Free | Ahead::CtcfBack(_) => false,
+        }
 }
 
 /// An exponential wait at `rate`, or never for a rate of zero.
@@ -220,6 +231,8 @@ fn schedule_step(
     }
     match ahead(world, leg_k) {
         Ahead::Free => at_rate(rates.step, now, rng),
+        // Immune to eviction: it just steps on.
+        Ahead::CtcfBack(_) if protected(world, leg_k) => at_rate(rates.step, now, rng),
         // Passing: the CTCF turns out unbound.
         Ahead::CtcfBack(strength) => at_rate((1.0 - strength) * rates.step, now, rng),
         Ahead::CtcfBackHeld | Ahead::Blocked => Schedule::Never,
@@ -233,7 +246,7 @@ fn schedule_evict(
     now: Time,
     rng: &mut SimRng,
 ) -> Schedule {
-    if world.legs[leg_k].mobility != Mobility::Moving {
+    if world.legs[leg_k].mobility != Mobility::Moving || protected(world, leg_k) {
         return Schedule::Never;
     }
     match ahead(world, leg_k) {
@@ -256,8 +269,8 @@ fn schedule_respawn(
 }
 
 /// A LEF's respawn rate in the current state, the first that applies:
-/// `respawn_captured` if either leg is captured (an evicted leg always has a
-/// captured partner), `respawn_stalled` if either is blocked, else `respawn`.
+/// `respawn_captured` if either leg is captured, `respawn_stalled` if either
+/// is blocked, else `respawn`.
 fn respawn_rate(lef_k: LefKey, world: &World, rates: &Rates) -> f64 {
     let legs = world.lefs[lef_k].legs;
     if legs.iter().any(|&l| world.legs[l].mobility == Mobility::Captured) {
@@ -309,17 +322,20 @@ fn fire_step(
     let leg = &mut world.legs[leg_k];
     leg.pos = new_pos;
     leg.mobility = resolve_mobility(kind, arrived_from, rng);
+    let captured = leg.mobility == Mobility::Captured;
 
-    // Tell the engine what to reschedule.
+    // Tell the engine what to reschedule. A capture makes the partner immune
+    // to eviction, which changes its clocks.
     touched.legs.push(leg_k);
     touched.lefs.push(lef_k);
+    if captured {
+        touched.legs.extend(world.lefs[lef_k].legs.into_iter().filter(|&l| l != leg_k));
+    }
     touched.legs.extend(rear_neighbors.into_iter().chain(post_neighbors).filter(|&n| n != leg_k));
 }
 
-/// Eviction: a captured partner protects the LEF, and the leg waits where it
-/// stands, evicted (it never moves again, and its LEF keeps unloading at
-/// `respawn_captured`). Otherwise the LEF unloads at once, respawning in the
-/// same event, so no transient state is ever stored.
+/// Eviction: the LEF unloads at once, respawning in the same event, so no
+/// transient state is ever stored. (A protected leg is never scheduled.)
 fn fire_evict(
     leg_k: LegKey,
     world: &mut World,
@@ -327,16 +343,9 @@ fn fire_evict(
     rng: &mut SimRng,
     touched: &mut Touched,
 ) {
+    debug_assert!(!protected(world, leg_k), "eviction scheduled for a protected leg");
     let lef_k = world.legs[leg_k].lef;
-    let protected = world.lefs[lef_k].legs.iter().any(|&l| l != leg_k && world.legs[l].mobility == Mobility::Captured);
-    if protected {
-        world.legs[leg_k].mobility = Mobility::Evicted;
-        // Nothing moved: only this leg's own actions change (its LEF's rate
-        // is the captured one either way).
-        touched.legs.push(leg_k);
-    } else {
-        fire_respawn(lef_k, world, spawn, rng, touched);
-    }
+    fire_respawn(lef_k, world, spawn, rng, touched);
 }
 
 fn fire_respawn(
@@ -534,7 +543,7 @@ mod tests {
 
     #[test]
     fn respawn_rate_takes_the_first_rule_that_applies() {
-        use Mobility::{Captured, Evicted, Moving};
+        use Mobility::Captured;
         let rate = |lefs: &[LefSpec], which: usize| {
             let (world, keys) = world_with(lefs);
             respawn_rate(keys[which], &world, &RATES)
@@ -551,14 +560,13 @@ mod tests {
         }
         // Facing a CTCF from behind isn't blocked: an eviction is pending.
         assert_eq!(rate(&[((26, Moving), (30, Moving))], 0), RATES.respawn);
-        // Either leg captured: captured, over blocked, and with an evicted leg.
+        // Either leg captured: captured, over blocked.
         assert_eq!(rate(&[((0, Moving), (20, Captured))], 0), RATES.respawn_captured);
-        assert_eq!(rate(&[((21, Evicted), (25, Captured))], 0), RATES.respawn_captured);
     }
 
     #[test]
     fn step_and_eviction_split_the_encounter_with_a_ctcf_from_behind() {
-        use Mobility::{Captured, Evicted, Moving};
+        use Mobility::Captured;
         // A plain site ahead: only a step.
         let (world, keys) = world_with(&[((5, Moving), (8, Moving))]);
         assert_eq!(clocks(&world, world.lefs[keys[0]].legs[0]), (true, false));
@@ -576,10 +584,49 @@ mod tests {
         let behind = world.lefs[keys[1]].legs[0];
         assert_eq!(clocks(&world, behind), (false, false));
         assert!(blocked(&world, behind));
-        // An evicted leg, and a leg at the lattice's end: neither.
-        let (world, keys) = world_with(&[((21, Evicted), (25, Captured)), ((30, Moving), (39, Moving))]);
-        assert_eq!(clocks(&world, world.lefs[keys[0]].legs[0]), (false, false));
-        assert_eq!(clocks(&world, world.lefs[keys[1]].legs[1]), (false, false));
+        // A leg at the lattice's end: neither.
+        let (world, keys) = world_with(&[((30, Moving), (39, Moving))]);
+        assert_eq!(clocks(&world, world.lefs[keys[0]].legs[1]), (false, false));
+    }
+
+    #[test]
+    fn a_captured_partner_makes_a_leg_immune_to_eviction() {
+        use Mobility::Captured;
+        // The left leg at 21 faces the CTCF at 20 from behind; its partner is
+        // captured at 25. A bare CTCF: only the step, at the full rate.
+        let (world, keys) = world_with(&[((21, Moving), (25, Captured))]);
+        let leg = world.lefs[keys[0]].legs[0];
+        assert_eq!(clocks(&world, leg), (true, false));
+        let mut rng = SimRng::seed_from_u64(0);
+        let full = |action: Action, world: &World, rng: &mut SimRng| match action.schedule(world, &RATES, 0.0, rng) {
+            Schedule::At(t) => t,
+            Schedule::Never => f64::INFINITY,
+        };
+        // The same draw as a free leg's step: the rate is the full `step`.
+        let (free_world, free_keys) = world_with(&[((5, Moving), (8, Moving))]);
+        let free_leg = free_world.lefs[free_keys[0]].legs[0];
+        let t_protected = full(Action::Step { leg }, &world, &mut rng);
+        let mut rng = SimRng::seed_from_u64(0);
+        assert_eq!(t_protected, full(Action::Step { leg: free_leg }, &free_world, &mut rng));
+        // A held CTCF: blocked, as traffic. (LEF 0 at 10-20 holds the CTCF at
+        // 20 with its right leg; LEF 1's left leg at 21 faces it, protected by
+        // its own right leg captured at 25.)
+        let (world, keys) = world_with(&[((10, Moving), (20, Captured)), ((21, Moving), (25, Captured))]);
+        let leg = world.lefs[keys[1]].legs[0];
+        assert_eq!(clocks(&world, leg), (false, false));
+        assert!(blocked(&world, leg));
+    }
+
+    #[test]
+    fn a_capture_reschedules_the_partner() {
+        // The right leg at 24 steps onto the CTCF at 25 from its capture side
+        // (strength 1): captured. Its partner must be rescheduled.
+        let (mut world, keys) = world_with(&[((21, Moving), (24, Moving))]);
+        let [left, right] = world.lefs[keys[0]].legs;
+        let mut touched = Touched::default();
+        fire_step(right, &mut world, &mut SimRng::seed_from_u64(0), &mut touched);
+        assert_eq!(world.legs[right].mobility, Mobility::Captured);
+        assert!(touched.legs.contains(&left), "the partner's clocks changed");
     }
 
     #[test]
@@ -613,7 +660,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unprotected_eviction_unloads_the_lef_at_once() {
+    fn an_eviction_unloads_the_lef_at_once() {
         let (mut world, keys) = world_with(&[((26, Moving), (30, Moving))]);
         let [left, right] = world.lefs[keys[0]].legs;
         evict(&mut world, left);
@@ -623,17 +670,6 @@ mod tests {
         assert_ne!(l.pos, 26);
         assert_eq!((l.mobility, r.mobility), (Mobility::Moving, Mobility::Moving));
         assert!(!world.occupied(30));
-    }
-
-    #[test]
-    fn a_captured_partner_protects_and_the_leg_waits_evicted() {
-        // The left leg at 21 faces the CTCF at 20 from behind; its partner is
-        // captured at 25.
-        let (mut world, keys) = world_with(&[((21, Moving), (25, Mobility::Captured))]);
-        let [left, right] = world.lefs[keys[0]].legs;
-        evict(&mut world, left);
-        assert_eq!((world.legs[left].pos, world.legs[left].mobility), (21, Mobility::Evicted));
-        assert_eq!((world.legs[right].pos, world.legs[right].mobility), (25, Mobility::Captured));
     }
 
     #[test]

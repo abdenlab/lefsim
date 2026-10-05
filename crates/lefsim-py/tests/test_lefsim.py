@@ -20,7 +20,7 @@ import pytest
 import lefsim
 
 # The golden fingerprint pinned by crates/lefsim/tests/determinism.rs.
-RUST_GOLDEN = 0x788BB5556FEAED1B
+RUST_GOLDEN = 0xD5D3254ED77FF3E9
 
 FIXTURES = pathlib.Path(__file__).parents[3] / "packages" / "lefsim" / "test" / "fixtures"
 
@@ -177,12 +177,7 @@ def test_a_sim_state_is_a_world():
         ({"left_pos": [5], "right_pos": [7], "left_mobility": ["captured"]}, "not a CTCF"),
         # A left-facing leg can't be captured by a CTCF capturing from the left.
         ({"left_pos": [140], "right_pos": [150], "left_mobility": ["captured"]}, "can't be captured"),
-        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["evicted"]}, "isn't a CTCF"),
-        # A right-facing leg at the CTCF at 140 (capturing from the left) can be captured, not evicted.
-        ({"left_pos": [130], "right_pos": [139], "right_mobility": ["evicted"]}, "isn't a CTCF"),
-        # Before the CTCF at 60 (capturing from the right), but no captured partner protects it.
-        ({"left_pos": [50], "right_pos": [59], "right_mobility": ["evicted"]}, "partner isn't Captured"),
-        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["stalled"]}, "mobility must be"),
+        ({"left_pos": [5], "right_pos": [7], "right_mobility": ["evicted"]}, "mobility must be"),
         ({"left_pos": [5], "right_pos": [7], "right_mobility": ["stuck"]}, "mobility must be"),
         ({"left_pos": [5]}, "missing column"),
         ({"left_pos": [5, 6], "right_pos": [7]}, "different lengths"),
@@ -562,21 +557,13 @@ def test_event_chunks_open_with_keyframes_and_tile_the_run():
     assert replayer.world_at(300.0) == sim.world()
 
 
-def test_evicted_legs_wait_before_their_ctcf_beside_a_captured_partner():
-    rec = make_sim(seed=4, strength=1.0).record_until(500.0, dt=0.25, events=True)
-    events = table(rec.events)
-    assert "Evict" in events["action"].to_pylist()
-    snaps = pl.DataFrame(rec.snapshots)
-    # make_lattice: CTCFs at 60 and 100 capture from the right (right-facing
-    # legs wait at 59 and 99), and at 140 from the left (left-facing legs wait
-    # at 141). Only a captured partner keeps an evicted leg around.
-    seen = 0
-    for side, other, where in (("left", "right", {141}), ("right", "left", {59, 99})):
-        rows = snaps.filter(pl.col(f"{side}_mobility") == "Evicted")
-        assert set(rows[f"{side}_pos"].to_list()) <= where, side
-        assert set(rows[f"{other}_mobility"].cast(pl.String).to_list()) <= {"Captured"}, side
-        seen += rows.height
-    assert seen > 0
+def test_every_eviction_unloads_its_lef_in_one_event():
+    rec = make_sim(seed=4, strength=1.0).record_until(500.0, events=True)
+    evicts = pl.DataFrame(rec.events).filter(pl.col("action") == "Evict")
+    assert evicts.height > 0
+    # Two rows per eviction: both legs of one LEF, landed on one site.
+    per_event = evicts.group_by("time").agg(pl.len(), pl.col("lef_id").n_unique(), pl.col("pos").n_unique())
+    assert per_event.select(pl.exclude("time")).unique().rows() == [(2, 1, 1)]
 
 
 @pytest.mark.parametrize(
@@ -635,7 +622,7 @@ def test_batch_is_readable_by_every_consumer():
 
     pdf = batch.to_pandas()
     assert isinstance(pdf, pd.DataFrame) and len(pdf) == expected.num_rows
-    assert set(pdf["left_mobility"].astype(str)) <= {"Moving", "Captured", "Evicted"}
+    assert set(pdf["left_mobility"].astype(str)) <= {"Moving", "Captured"}
 
     got = duckdb.sql("select count(*), max(time) from batch").fetchone()
     assert got == (expected.num_rows, 20.0)
@@ -646,7 +633,7 @@ def test_categoricals_carry_names():
     ev = table(rec.events)
     assert ev.schema.field("action").type == pa.dictionary(pa.uint8(), pa.string())
     assert set(ev["action"].to_pylist()) == {"Step", "Respawn", "Evict"}
-    assert set(ev["mobility"].to_pylist()) <= {"Moving", "Captured", "Evicted"}
+    assert set(ev["mobility"].to_pylist()) <= {"Moving", "Captured"}
 
 
 def test_batch_metadata_and_repr():
