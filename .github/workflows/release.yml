@@ -136,7 +136,7 @@ jobs:
       - if: steps.published.outputs.skip != 'true'
         uses: dtolnay/rust-toolchain@stable
       - if: steps.published.outputs.skip != 'true'
-        uses: rust-lang/crates-io-auth-action@v1
+        uses: rust-lang/crates-io-auth-action@v1.0.5
         id: auth
       - if: steps.published.outputs.skip != 'true'
         run: cargo publish -p lefsim
