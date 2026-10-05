@@ -1,9 +1,8 @@
 # Python
 
-`crates/lefsim-py` wraps the core as a Python extension with pyo3, and
-`python/` is the `lefsim` package built from it: one abi3 wheel for Python 3.9
-and later. The classes mirror the Rust types. Results come back as Arrow data
-through the
+`crates/lefsim-py` wraps the core as a Python extension with pyo3, and `python/`
+is the `lefsim` package built from it: one abi3 wheel for Python 3.9 and later.
+The classes mirror the Rust types. Results come back as Arrow data through the
 [Arrow PyCapsule Interface](https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html),
 so pyarrow, polars and duckdb read them directly, without copying, and the
 package itself has no Python dependencies.
@@ -58,10 +57,10 @@ stream that runs as it's read:
 sim.stream(1e7, events=True, keyframes=True).to_parquet("events.parquet")  # consumes `sim`
 ```
 
-`to_parquet` writes one row group per keyframed chunk (zstd by default, with
-the event times byte-stream-split, which makes files about a third smaller),
-and records where the run came from in the file's metadata. Streams carry the
-same metadata in their Arrow schema.
+`to_parquet` writes one row group per keyframed chunk (zstd by default, with the
+event times byte-stream-split, which makes files about a third smaller), and
+records where the run came from in the file's metadata. Streams carry the same
+metadata in their Arrow schema.
 
 ## Replaying
 
@@ -73,8 +72,9 @@ pl.DataFrame(r.snapshots(dt=10.0, t_start=4_000.0, t_end=6_000.0))  # a grid, as
 
 `from_parquet` takes the lattice and end time from the file's metadata, and
 reads only the row groups each call needs, so a file of any size opens
-instantly. Other Arrow sources load whole with `Replayer.from_arrow(source,
-lattice, end=...)`, which accepts any batch boundaries.
+instantly. Other Arrow sources load whole with
+`Replayer.from_arrow(source, lattice, end=...)`, which accepts any batch
+boundaries.
 
 ## Effective distance
 

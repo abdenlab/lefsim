@@ -29,8 +29,8 @@ repository.
     uv run --no-sync pytest tests
     ```
 
-    It builds one abi3 wheel for Python 3.9 and later, with no Python
-    dependencies of its own.
+    It builds one abi3 wheel for Python 3.9 and later, with no Python dependencies
+    of its own.
 
 === "TypeScript"
 
@@ -45,9 +45,9 @@ repository.
 
 ## A first run
 
-A model is a lattice, the LEFs on it, and their rates. This one has a
-convergent pair of CTCFs, each capturing legs that arrive from outside the
-domain between them.
+A model is a lattice, the LEFs on it, and their rates. This one has a convergent
+pair of CTCFs, each capturing legs that arrive from outside the domain between
+them.
 
 === "Rust"
 

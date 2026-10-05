@@ -1,10 +1,10 @@
 # The framework
 
-The engine borrows its shape from the "next reaction method" variant of the
-Gillespie algorithm (Gibson and Bruck): a priority queue of upcoming events,
-each with a next-firing time, drives a global clock forward one event at a
-time. Only the event that fired, and the events that depend on what it
-changed, are rescheduled.
+The engine borrows its shape from the "Next Reaction Method" variant of the
+Gillespie algorithm [Gibson and Bruck, 2000](https://doi.org/10.1021/jp993732q):
+a priority queue of upcoming events, each with a next-firing time, drives a
+global clock forward one event at a time. Only the event that fired, and the
+events that depend on what it changed, are rescheduled.
 
 ## Actions
 
@@ -23,11 +23,11 @@ Each action instance is its own priority-queue key: two instances of a variant
 pointing to the same entity are equal. Every action exposes two methods:
 
 - `schedule(&World, ..., now, &mut Rng) -> Schedule`: **pure**. Given the
-  current world state and clock, when would this action next fire? Returns
-  `Schedule::At(t)` or `Schedule::Never`. It must not mutate.
-- `fire(&mut World, ..., now, &mut Rng, &mut Touched)`: **mutates**. Applies
-  the event's effects to the world and pushes every leg or LEF whose state (or
-  scheduling-relevant neighborhood) changed into `Touched`.
+    current world state and clock, when would this action next fire? Returns
+    `Schedule::At(t)` or `Schedule::Never`. It must not mutate.
+- `fire(&mut World, ..., now, &mut Rng, &mut Touched)`: **mutates**. Applies the
+    event's effects to the world and pushes every leg or LEF whose state (or
+    scheduling-relevant neighborhood) changed into `Touched`.
 
 Pushing every affected entity into `Touched` is critical for correctness: an
 action left out keeps a schedule computed from a state that no longer holds.
@@ -40,9 +40,9 @@ reschedule. The entity-to-action map is fixed: each leg has one `Step` and one
 encodes that mapping, listing each action once, starting with the one that
 fired.
 
-Rescheduling draws a fresh exponential wait. That's statistically exact,
-because exponential waits don't depend on how long you've already waited, but
-it means the order and number of reschedules are part of a seeded trajectory.
+Rescheduling draws a fresh exponential wait. That's statistically exact, because
+exponential waits don't depend on how long you've already waited, but it means
+the order and number of reschedules are part of a seeded trajectory.
 
 ## Entity arenas
 
@@ -54,8 +54,8 @@ lookup tables addressed by small, cheap-to-copy keys handed out on insertion.
 
 - Legs: one leg key points to a leg (position, facing, mobility, its LEF).
 - LEFs: one LEF key points to a pair of leg keys.
-- Lattice occupancy: one site index points to 0, 1 or 2 leg keys (two only
-  when a freshly placed LEF has both legs on one site).
+- Lattice occupancy: one site index points to 0, 1 or 2 leg keys (two only when
+    a freshly placed LEF has both legs on one site).
 
 LEFs are recycled: when one unbinds, it rebinds elsewhere. No entities are
 created or destroyed during a run.
@@ -81,8 +81,11 @@ position.
 
 ## Reproducibility
 
-A seed fixes the whole run, bit for bit, across platforms, including wasm32.
-The only transcendental function in the simulation, the logarithm in the
-exponential sampler, comes from the pure-Rust `libm` crate so that it rounds
-the same everywhere. `crates/lefsim/tests/determinism.rs` pins a golden hash
-of a long run, and the Python and TypeScript test suites reproduce it.
+A seed fixes the whole run, bit for bit, across platforms, including wasm32. The
+only transcendental function in the simulation, the logarithm in the exponential
+sampler, comes from the pure-Rust `libm` crate so that it rounds the same
+everywhere.
+
+To ensure deterministic reproducibility, the core crate contains a pinned
+"golden hash" of a long run that the Python and TypeScript test suites must
+reproduce.

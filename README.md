@@ -4,25 +4,24 @@ Action-based stochastic simulation of loop-extrusion factors (LEFs) on a 1D
 lattice.
 
 LEFs bind chromatin, extrude loops by walking two legs outward, and are stopped
-or turned back by CTCF boundary elements, depending on their orientation.
-lefsim simulates this exactly and event by event, with a Rust core and bindings
-for Python and the browser. A seed gives the same run, bit for bit, in all
-three.
+or turned back by CTCF boundary elements, depending on their orientation. lefsim
+simulates this exactly and event by event, with a Rust core and bindings for
+Python and the browser. A seed gives the same run, bit for bit, in all three.
 
 - **Rust**: the `lefsim` crate (`crates/lefsim`).
 - **Python**: the `lefsim` package (`python/`, built from `crates/lefsim-py`
-  with pyo3 and maturin). Results come back as Arrow data, for pyarrow, polars,
-  pandas and duckdb.
+    with pyo3 and maturin). Results come back as Arrow data, for pyarrow,
+    polars, pandas and duckdb.
 - **Browser**: the `lefsim` TypeScript package (`packages/lefsim`, wrapping the
-  WebAssembly build in `crates/lefsim-wasm`), with live demos in
-  `packages/demo`.
+    WebAssembly build in `crates/lefsim-wasm`), with live demos in
+    `packages/demo`.
 
 ## Documentation
 
-The documentation lives in [`docs/`](docs/index.md): getting started, the
-model, recording and replay, effective distance, and a guide per language.
-Preview it as a site with [Zensical](https://zensical.org), configured in
-`zensical.toml`, without installing anything:
+The documentation lives in [`docs/`](docs/index.md): getting started, the model,
+recording and replay, effective distance, and a guide per language. Preview it
+as a site with [Zensical](https://zensical.org), configured in `zensical.toml`,
+without installing anything:
 
 ```
 uvx zensical serve

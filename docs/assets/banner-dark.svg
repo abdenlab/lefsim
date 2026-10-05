@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 260" role="img" aria-label="Loops extruded by LEFs on a lattice, drawn as arcs, some held at CTCF boundaries">
+<line x1="24.0" y1="220" x2="1176.0" y2="220" stroke="#b9bcc2" stroke-width="1.5"/>
+<path d="M129.0 235.0 L137.4 228 L137.4 242 Z" fill="#b9bcc2"/>
+<path d="M419.0 235.0 L410.6 228 L410.6 242 Z" fill="#b9bcc2"/>
+<path d="M455.9 235.0 L464.3 228 L464.3 242 Z" fill="#b9bcc2"/>
+<path d="M784.5 235.0 L776.1 228 L776.1 242 Z" fill="#b9bcc2"/>
+<path d="M821.3 235.0 L829.7 228 L829.7 242 Z" fill="#b9bcc2"/>
+<path d="M1072.9 235.0 L1064.5 228 L1064.5 242 Z" fill="#b9bcc2"/>
+<path d="M1064.5 220 A54.8 72.7 0 0 1 1174.1 220" fill="none" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+<rect x="1062.5" y="213" width="4" height="9" fill="#3987e5"/>
+<rect x="1172.1" y="213" width="4" height="9" fill="#3987e5"/>
+<path d="M560.6 220 A44.2 58.6 0 0 1 649.0 220" fill="none" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+<rect x="558.6" y="213" width="4" height="9" fill="#3987e5"/>
+<rect x="647.0" y="213" width="4" height="9" fill="#3987e5"/>
+<path d="M412.5 220 A26.0 34.4 0 0 1 464.4 220" fill="none" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+<rect x="410.5" y="213" width="4" height="9" fill="#3987e5"/>
+<rect x="462.4" y="213" width="4" height="9" fill="#3987e5"/>
+<path d="M25.9 220 A55.8 74.0 0 0 1 137.5 220" fill="none" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+<rect x="23.9" y="213" width="4" height="9" fill="#3987e5"/>
+<rect x="135.5" y="213" width="4" height="9" fill="#3987e5"/>
+<path d="M501.0 220 A134.6 178.5 0 0 1 770.2 220" fill="none" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+<rect x="499.0" y="213" width="4" height="9" fill="#3987e5"/>
+<rect x="768.2" y="213" width="4" height="9" fill="#3987e5"/>
+<path d="M537.5 220 A115.4 153.0 0 0 1 768.3 220" fill="none" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+<rect x="535.5" y="213" width="4" height="9" fill="#3987e5"/>
+<rect x="766.3" y="213" width="4" height="9" fill="#3987e5"/>
+<path d="M879.8 220 A83.7 110.9 0 0 1 1047.1 220" fill="none" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+<rect x="877.8" y="213" width="4" height="9" fill="#3987e5"/>
+<rect x="1045.1" y="213" width="4" height="9" fill="#3987e5"/>
+<path d="M187.5 220 A66.4 88.0 0 0 1 320.2 220" fill="none" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+<rect x="185.5" y="213" width="4" height="9" fill="#3987e5"/>
+<rect x="318.2" y="213" width="4" height="9" fill="#3987e5"/>
+<path d="M776.0 220 A26.9 35.7 0 0 1 829.8 220" fill="none" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+<rect x="774.0" y="213" width="4" height="9" fill="#3987e5"/>
+<rect x="827.8" y="213" width="4" height="9" fill="#3987e5"/>
+<path d="M408.6 220 A181.7 204.0 0 0 1 772.1 220" fill="none" stroke="#d95926" stroke-width="3" stroke-linecap="round"/>
+<rect x="406.6" y="213" width="4" height="9" fill="#d95926"/>
+<rect x="770.1" y="213" width="4" height="9" fill="#d95926"/>
+<path d="M1062.5 220 A56.7 75.2 0 0 1 1176.0 220" fill="none" stroke="#d95926" stroke-width="3" stroke-linecap="round"/>
+<rect x="1060.5" y="213" width="4" height="9" fill="#d95926"/>
+<rect x="1174.0" y="213" width="4" height="9" fill="#d95926"/>
+<path d="M774.1 220 A28.8 38.2 0 0 1 831.7 220" fill="none" stroke="#d95926" stroke-width="3" stroke-linecap="round"/>
+<rect x="772.1" y="213" width="4" height="9" fill="#d95926"/>
+<rect x="829.7" y="213" width="4" height="9" fill="#d95926"/>
+<path d="M410.6 220 A27.9 37.0 0 0 1 466.3 220" fill="none" stroke="#d95926" stroke-width="3" stroke-linecap="round"/>
+<rect x="408.6" y="213" width="4" height="9" fill="#d95926"/>
+<rect x="464.3" y="213" width="4" height="9" fill="#d95926"/>
+<path d="M24.0 220 A57.7 76.5 0 0 1 139.4 220" fill="none" stroke="#d95926" stroke-width="3" stroke-linecap="round"/>
+<rect x="22.0" y="213" width="4" height="9" fill="#d95926"/>
+<rect x="137.4" y="213" width="4" height="9" fill="#d95926"/>
+</svg>

@@ -1,13 +1,13 @@
 # Rust
 
-The `lefsim` crate is the core: the model, the engine, recording and replay.
-The other bindings wrap it.
+The `lefsim` crate is the core: the model, the engine, recording and replay. The
+other bindings wrap it.
 
 ## Building a model
 
 A `Model` is a `World` (the lattice and the LEFs on it), its `Rates`, and a
-spawn rule. `Sim` runs a model from a seed: it owns the world, the event
-engine, the random number generator and the spawn rule for one run.
+spawn rule. `Sim` runs a model from a seed: it owns the world, the event engine,
+the random number generator and the spawn rule for one run.
 
 ```rust
 use lefsim::*;
@@ -44,8 +44,8 @@ sim.run_events(10_000);
 
 `sim.world()` shows the current state, and `sim.model()` returns it as a new
 `Model`, to save or to restart from with `Sim::with_start_time`. `Sim` is
-`Clone`, and a clone continues the run bit for bit. For a custom spawn rule,
-use `Sim::with_spawn(world, rates, rule, seed)`.
+`Clone`, and a clone continues the run bit for bit. For a custom spawn rule, use
+`Sim::with_spawn(world, rates, rule, seed)`.
 
 With the `serde` feature, a `Model` (and `World`, `Lattice`, `Rates` and
 `LefStates` on their own) saves and loads as the versioned JSON document
@@ -53,8 +53,8 @@ described in [Recording and replay](../concepts/recording.md#files).
 
 ## Recording
 
-The `*_with` drivers feed observers as they run: a `Recorder` takes snapshots
-on a grid, and an `EventRecorder` logs deltas.
+The `*_with` drivers feed observers as they run: a `Recorder` takes snapshots on
+a grid, and an `EventRecorder` logs deltas.
 
 ```rust
 let mut rec = sim.recorder(SampleMode::every_dt(1.0));
@@ -81,9 +81,9 @@ loop {
 }
 ```
 
-Frames are plain `Vec`s with no Arrow dependency; the bindings wrap them
-without copying. `EventRecorder::with_keyframes(n_legs)` opens every batch with
-a keyframe.
+Frames are plain `Vec`s with no Arrow dependency; the bindings wrap them without
+copying. `EventRecorder::with_keyframes(n_legs)` opens every batch with a
+keyframe.
 
 ## Replaying
 

@@ -1,36 +1,37 @@
 # Effective distance
 
-Loops bring their anchors together, so two sites far apart on the lattice can
-be close in space. The **effective distance** between two sites is the shortest
+Loops bring their anchors together, so two sites far apart on the lattice can be
+close in space. The **effective distance** between two sites is the shortest
 path between them when a path walks the lattice and may also cross LEFs.
 
 ## The rules
 
 - A **step** moves one site along the lattice and costs `step_length` (s).
 - A **hop** crosses a LEF, from one leg to the other, and costs `hop_length`
-  (h).
+    (h).
 - Both are integers you choose; neither has a default. s must be positive, h can
-  be 0. Distances are therefore exact integers.
+    be 0. Distances are therefore exact integers.
 - Only leg positions matter: whether a leg is moving or captured, and where the
-  CTCFs are, doesn't.
+    CTCFs are, doesn't.
 
 **Rosettes.** Two LEFs are linked when one's right leg sits at site p and the
-other's left leg at p + 1. A chain of linked LEFs is a rosette. Crossing it costs
-one hop per LEF crossed, and the junctions between linked LEFs are free. Walking
-across a junction is still an ordinary step.
+other's left leg at p + 1. A chain of linked LEFs is a rosette. Crossing it
+costs one hop per LEF crossed, and the junctions between linked LEFs are free.
+Walking across a junction is still an ordinary step.
 
 For linked LEFs 1 (legs l₁, r₁) and 2 (l₂, r₂), with h ≥ s:
 
-| Between | Distance | Route |
-|---|---|---|
-| r₁ and l₂ | s | the junction step |
-| r₁ and r₂ | s + h | step, then hop across LEF 2 |
-| l₁ and r₂ | 2h | across the chain, the junction free |
-| l₁ and l₂ | h + s | hop across LEF 1, then step |
+| Between   | Distance | Route                               |
+| --------- | -------- | ----------------------------------- |
+| r₁ and l₂ | s        | the junction step                   |
+| r₁ and r₂ | s + h    | step, then hop across LEF 2         |
+| l₁ and r₂ | 2h       | across the chain, the junction free |
+| l₁ and l₂ | h + s    | hop across LEF 1, then step         |
 
 !!! warning "Keep hops at least as long as steps"
+
     With `hop_length < step_length`, a path can double back across a LEF it just
-    crossed and beat a direct step: r₁ to l₂ becomes min(s, 4h). Nothing
+    crossed and beat a direct step: r₁ to l₂ becomes min(s, 4h). Nothing currently
     prevents this; a fix is sketched in the design notes.
 
 ## How it's computed

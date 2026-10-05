@@ -1,0 +1,20 @@
+/* Tables whose rows come in groups of three (the snapshot example in
+   concepts/recording.md: one group per grid point). The first column of each
+   group gets a tint, alternating between two colors. */
+.row-groups tbody tr:nth-child(6n + 1) td:first-child,
+.row-groups tbody tr:nth-child(6n + 2) td:first-child,
+.row-groups tbody tr:nth-child(6n + 3) td:first-child {
+  background-color: rgb(66 135 245 / 0.18);
+}
+
+.row-groups tbody tr:nth-child(6n + 4) td:first-child,
+.row-groups tbody tr:nth-child(6n + 5) td:first-child,
+.row-groups tbody tr:nth-child(6n) td:first-child {
+  background-color: rgb(240 160 40 / 0.22);
+}
+
+/* The keyframe example in concepts/recording.md: its first six rows (one per
+   leg) are the batch's Keyframe rows. */
+.keyframe-rows tbody tr:nth-child(-n + 6) {
+  background-color: rgb(140 100 220 / 0.14);
+}

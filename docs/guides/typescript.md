@@ -32,22 +32,23 @@ function frame() {
 ```
 
 !!! note "Views into wasm memory"
+
     The arrays from `state()` are only valid until the next call into the sim,
     because wasm memory can grow and invalidate them. Copy anything you need to
     keep; `sim.world()` returns a copy.
 
 Seeded runs match the Rust and Python bindings exactly. `sim.model()` returns
 the current state as a model, `sim.clone()` forks the run exactly, and
-`modelToJson` / `modelFromJson` read and write the same model document as
-Python and Rust.
+`modelToJson` / `modelFromJson` read and write the same model document as Python
+and Rust.
 
 ## Recording and replaying
 
 `sim.recordEventChunk(tEnd)` records keyframed event deltas as typed-array
-chunks, and a `Replayer` rebuilds live state from them in plain TypeScript,
-with no wasm. Its `state()` has the same shape as `Sim.state()`, so a renderer
-doesn't care whether it's watching a local sim or replaying recorded or
-streamed data.
+chunks, and a `Replayer` rebuilds live state from them in plain TypeScript, with
+no wasm. Its `state()` has the same shape as `Sim.state()`, so a renderer
+doesn't care whether it's watching a local sim or replaying recorded or streamed
+data.
 
 ```ts
 const replayer = new Replayer(sim.lattice, sim.nLefs);
