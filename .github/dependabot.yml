@@ -17,6 +17,24 @@ updates:
     groups:
       cargo:
         patterns: ["*"]
+    # Patch updates only for these; upgrade them by hand. Dependabot counts
+    # 0.8 -> 0.10 as a minor update, though for a 0.x crate it's breaking.
+    ignore:
+      # A new rand or rand_pcg can change how random draws map to values,
+      # which changes seeded trajectories (a new golden hash, a minor
+      # release; see CHANGELOG.md).
+      - dependency-name: "rand"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "rand_pcg"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # pyo3, pyo3-arrow, pythonize and arrow-* must move together (the
+      # arrow major has to match pyo3-arrow's, pythonize pyo3's).
+      - dependency-name: "pyo3*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "pythonize"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "arrow-*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   # The pnpm workspace (packages/*), from the root lockfile.
   - package-ecosystem: npm
