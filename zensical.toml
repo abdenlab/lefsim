@@ -63,4 +63,6 @@ toc.permalink = true
 pymdownx.details = {}
 pymdownx.highlight = {}
 pymdownx.superfences = {}
+# Include files in pages, e.g. the model schema (paths from the repo root).
+pymdownx.snippets.check_paths = true
 pymdownx.tabbed.alternate_style = true

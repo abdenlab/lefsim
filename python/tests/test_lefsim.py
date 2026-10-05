@@ -258,6 +258,49 @@ def test_model_json_round_trip_and_shape():
         lefsim.Model.from_json(json.dumps(doc))
 
 
+MODEL_SCHEMA = pathlib.Path(__file__).parents[2] / "docs" / "schemas" / "model.v2.json"
+
+
+def test_model_json_schema_matches_the_loader():
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(MODEL_SCHEMA.read_text())
+    jsonschema.Draft202012Validator.check_schema(schema)
+    validator = jsonschema.Draft202012Validator(schema)
+
+    # Documents the bindings write are valid: the shared fixture, and a model
+    # saved mid-run, with captured legs.
+    validator.validate(json.loads((FIXTURES / "model.json").read_text()))
+    sim = lefsim.Sim(make_model(n_lefs=6), seed=1)
+    sim.run_until(5_000.0)
+    doc = json.loads(sim.model().to_json())
+    assert any("captured" in (lef["left_mobility"], lef["right_mobility"]) for lef in doc["lefs"])
+    validator.validate(doc)
+
+    # Structural mistakes are rejected by both the schema and the loader.
+    def broken(edit):
+        d = copy.deepcopy(doc)
+        edit(d)
+        return d
+
+    for bad in [
+        broken(lambda d: d.update(version=1)),
+        broken(lambda d: d.update(extra=1)),
+        broken(lambda d: d.pop("spawn")),
+        broken(lambda d: d["lattice"].update(n_sites=0)),
+        broken(lambda d: d["lattice"]["ctcfs"][0].pop("strength")),
+        broken(lambda d: d["lattice"]["ctcfs"][0].update(strength=1.5)),
+        broken(lambda d: d["lattice"]["ctcfs"][0].update(captures_from="up")),
+        broken(lambda d: d["lefs"][0].update(left_mobility="evicted")),
+        broken(lambda d: d["lefs"][0].update(left_pos=-1)),
+        broken(lambda d: d["rates"].update(step=0)),
+        broken(lambda d: d["rates"].update(respawn_stalled=1.0)),
+        broken(lambda d: d["spawn"].update(rule="anywhere")),
+    ]:
+        assert not validator.is_valid(bad), bad
+        with pytest.raises((ValueError, OverflowError)):
+            lefsim.Model.from_json(json.dumps(bad))
+
+
 @pytest.mark.parametrize(
     "obj",
     [make_lattice(), lefsim.populate(make_lattice(), 4, seed=2), RATES, make_model()],

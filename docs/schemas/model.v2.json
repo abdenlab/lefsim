@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://abdenlab.github.io/lefsim/schemas/model.v2.json",
+  "title": "lefsim model",
+  "description": "A lefsim model, version 2: a lattice with CTCFs, the LEFs on it, their rates and a spawn rule. Loading also runs the checks a schema can't express, such as CTCF sites and leg positions lying inside the lattice.",
+  "type": "object",
+  "properties": {
+    "format": { "const": "lefsim.model" },
+    "version": { "const": 2 },
+    "lattice": { "$ref": "#/$defs/lattice" },
+    "lefs": {
+      "description": "One entry per LEF; LEF i is entry i.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/lef" }
+    },
+    "rates": { "$ref": "#/$defs/rates" },
+    "spawn": { "$ref": "#/$defs/spawn" }
+  },
+  "required": ["format", "version", "lattice", "lefs", "rates", "spawn"],
+  "additionalProperties": false,
+  "$defs": {
+    "position": {
+      "description": "A site index, from 0 to n_sites - 1.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "mobility": {
+      "description": "A leg's intrinsic mobility. Whether it's blocked is derived, not stored.",
+      "enum": ["moving", "captured"]
+    },
+    "lattice": {
+      "type": "object",
+      "properties": {
+        "n_sites": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
+        "ctcfs": {
+          "description": "At most one CTCF per site. Defaults to none.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/ctcf" }
+        }
+      },
+      "required": ["n_sites"],
+      "additionalProperties": false
+    },
+    "ctcf": {
+      "type": "object",
+      "properties": {
+        "site": { "$ref": "#/$defs/position" },
+        "captures_from": {
+          "description": "The CTCF's capture side. Legs arriving from the other side may be evicted.",
+          "enum": ["left", "right"]
+        },
+        "strength": {
+          "description": "The probability p of capture from the capture side, or eviction from the other side.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": ["site", "captures_from", "strength"],
+      "additionalProperties": false
+    },
+    "lef": {
+      "description": "left_pos <= right_pos. A LEF's two legs may share a site; two LEFs may not. A captured leg sits on a CTCF that captures from the side it arrived from: right for a left leg, left for a right leg.",
+      "type": "object",
+      "properties": {
+        "left_pos": { "$ref": "#/$defs/position" },
+        "right_pos": { "$ref": "#/$defs/position" },
+        "left_mobility": { "$ref": "#/$defs/mobility", "default": "moving" },
+        "right_mobility": { "$ref": "#/$defs/mobility", "default": "moving" }
+      },
+      "required": ["left_pos", "right_pos"],
+      "additionalProperties": false
+    },
+    "rate": {
+      "description": "Events per unit time, positive and finite.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "rates": {
+      "type": "object",
+      "properties": {
+        "step": { "$ref": "#/$defs/rate", "description": "A leg's step rate." },
+        "respawn": { "$ref": "#/$defs/rate", "description": "The basal unloading rate." },
+        "respawn_blocked": { "$ref": "#/$defs/rate", "description": "The unloading rate while either leg is blocked." },
+        "respawn_captured": { "$ref": "#/$defs/rate", "description": "The unloading rate while either leg is captured; it takes precedence over respawn_blocked." }
+      },
+      "required": ["step", "respawn", "respawn_blocked", "respawn_captured"],
+      "additionalProperties": false
+    },
+    "spawn": {
+      "description": "Where an unloaded LEF binds again.",
+      "type": "object",
+      "properties": {
+        "rule": {
+          "description": "uniform_non_ctcf: a uniformly random site that isn't a CTCF and isn't occupied, with both legs on it. It needs at least 2n - 1 non-CTCF sites for n LEFs.",
+          "enum": ["uniform_non_ctcf"]
+        }
+      },
+      "required": ["rule"]
+    }
+  }
+}

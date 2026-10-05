@@ -49,7 +49,7 @@ sim.run_events(10_000);
 
 With the `serde` feature, a `Model` (and `World`, `Lattice`, `Rates` and
 `LefStates` on their own) saves and loads as the versioned JSON document
-described in [Recording and replay](../concepts/recording.md#files).
+described in [Recording and replay](../concepts/recording.md#persistence).
 
 ## Recording
 

@@ -57,12 +57,13 @@ uninterrupted one.
 LEFs and legs are identified by dense ids: `lef_id` runs over `0..n_lefs`, and
 `leg_id = 2 * lef_id + side`, with side 0 the left leg and 1 the right.
 
-## Bounded recording and streams
+## Bounded recording and streaming
 
 A recorder can be bounded. When it fills, the run returns *before* firing
-another event, so nothing is lost: hand off the chunk and continue. In Python
-and TypeScript, `sim.stream(...)` wraps this as a lazy stream that runs only as
-it's read, so a run of any length takes bounded memory.
+another event, so nothing is lost: it can hand off the chunk to the caller and
+continue where it left off. In Python and TypeScript, `sim.stream(...)` wraps
+this as a lazy stream that runs only as it's read, so a run of any length will
+consume bounded memory.
 
 ## Keyframes
 
@@ -113,12 +114,12 @@ Replayers exist in all three languages. The TypeScript one is plain TypeScript,
 with no WebAssembly, so a page can replay streamed data without loading the
 simulator.
 
-## Files
+## Persistence
 
 ### Simulations - Parquet
 
 The Python binding writes keyframed event logs to **Parquet**, one row group per
-keyframed batch, compressed with zstd. The file's metadata records where the run
+keyframed batch, compressed with zstd. The file's metadata stores where the run
 came from: `lefsim.model`, the model it started from, and `lefsim.run`, with the
 seed, start time and recorded span.
 
@@ -128,8 +129,9 @@ requests, so a recording of any size can be scrubbed without downloading it.
 
 ### Models - JSON
 
-Models (as in `lefsim.model` above) also save and load as a standalone versioned
-JSON document, the same in all three languages:
+Models (as in the `lefsim.model` serialization above) also save and load as a
+standalone versioned JSON document, described by a
+[JSON Schema](../schemas/model.v2.json), the same in all three languages:
 
 ```json
 {
@@ -143,7 +145,15 @@ JSON document, the same in all three languages:
 }
 ```
 
-Loading goes through the same checks as building in code, so a document that
-describes an invalid model is rejected with the reason. As a result, a valid
-model JSON decodes to a valid simulation state, and a simulation snapshot at any
-time can be serialized as a valid model JSON.
+Moreover, when a model is loaded in lefsim it is validated, which is something a
+schema cannot express: CTCF sites and leg positions inside the lattice, legs in
+order, no two LEFs on one site, captured legs on a CTCF that captures from their
+side, enough free sites for the spawn rule, etc. As a result, a valid model JSON
+decodes to a valid simulation state, and a simulation snapshot at any time can
+be serialized as a valid model JSON.
+
+??? note "The schema"
+
+    ```json
+    --8<-- "docs/schemas/model.v2.json"
+    ```
