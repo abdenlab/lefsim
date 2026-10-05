@@ -84,7 +84,7 @@ See [Effective distance](../concepts/effective-distance.md) for the rules.
 
 ## The tour notebook
 
-`notebooks/lefsim_tour.ipynb` walks through a model with a few TADs: leg
+`python/notebooks/lefsim_tour.ipynb` walks through a model with a few TADs: leg
 trajectories, an occupancy profile, where loops anchor, loop sizes, the event
 log, a streamed run, saving, replaying and branching. Run it with the `python/`
 venv as its kernel.

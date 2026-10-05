@@ -5,6 +5,8 @@
 __pycache__/
 .pytest_cache/
 *.so
+# Written by the tour notebook's model-saving cell
+python/notebooks/model.json
 
 # JS
 node_modules/

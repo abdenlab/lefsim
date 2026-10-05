@@ -83,10 +83,10 @@ crates/lefsim-py/       Python bindings (pyo3): Sim, Batch, Stream; Arrow conver
 python/                 the Python package built from them (maturin)
   lefsim/               package, type stubs
   tests/                pytest suite
+  notebooks/            a tour of the package (not shipped in the sdist)
 crates/lefsim-wasm/     WebAssembly bindings (wasm-bindgen)
 packages/lefsim/        TypeScript package wrapping them (wasm-pack builds into wasm/)
 packages/demo/          browser demos (Vite)
-notebooks/              a tour of the Python package
 docs/                   documentation (Zensical, configured in zensical.toml)
 scripts/                release helpers: bump and check the version
 .github/workflows/      CI, docs deployment, releases
