@@ -1,7 +1,10 @@
 [package]
 name = "lefsim-py"
+description = "Python bindings for lefsim (pyo3); built and published as the lefsim wheel"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
 publish = false
 
 [lib]

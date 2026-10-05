@@ -13,7 +13,7 @@ import {
   check_world,
   default_rates as wasmDefaultRates,
   populate as wasmPopulate,
-} from "lefsim-wasm";
+} from "#wasm";
 
 import { DIRECTION, MOBILITY, type Ctcfs, type Lattice, type Lefs, type Model, type Rates, type SpawnRule, type World } from "./types.ts";
 

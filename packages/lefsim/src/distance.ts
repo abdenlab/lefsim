@@ -14,7 +14,7 @@
  * Computed by the core, in WebAssembly, so call `init()` first.
  */
 
-import { effective_distances, effective_distances_over } from "lefsim-wasm";
+import { effective_distances, effective_distances_over } from "#wasm";
 
 import { toU32Array } from "./model.ts";
 import type { Lattice, SnapshotColumns, World } from "./types.ts";

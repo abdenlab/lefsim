@@ -1,4 +1,2 @@
 packages:
   - "packages/*"
-  # wasm-pack output, so packages can depend on it by name ("lefsim-wasm").
-  - "crates/lefsim-wasm/pkg"

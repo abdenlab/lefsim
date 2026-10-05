@@ -1,5 +1,4 @@
 /target
-Cargo.lock
 
 # Python
 .venv/
@@ -9,8 +8,11 @@ __pycache__/
 
 # JS
 node_modules/
-crates/lefsim-wasm/pkg/
+# wasm-pack output, built into the npm package (pnpm build:wasm)
+packages/lefsim/wasm/
 packages/*/dist/
+# Copied in from the repo root when the npm package is packed
+packages/lefsim/LICENSE
 
 # Demo sample written by packages/demo/make_sample.py
 packages/demo/public/sample.parquet

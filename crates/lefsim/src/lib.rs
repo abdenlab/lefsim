@@ -1,7 +1,8 @@
 //! Action-based simulation primitives for loop-extrusion-factor (LEF) models
 //! on a 1D lattice.
 //!
-//! See `AGENTS.md` for the design rationale. The short version:
+//! See the [documentation](https://abdenlab.github.io/lefsim/) for the model and
+//! the design rationale. The short version:
 //!
 //! - **Entities** live in typed slot-map arenas in [`World`].
 //! - **Actions** are a sum-type enum ([`Action`]) addressed by entity key,

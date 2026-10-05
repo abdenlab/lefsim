@@ -39,7 +39,7 @@ repository.
 
     ```
     pnpm install
-    pnpm build:wasm   # wasm-pack → crates/lefsim-wasm/pkg
+    pnpm build:wasm   # wasm-pack → packages/lefsim/wasm
     pnpm test         # vitest, against the real wasm build
     ```
 

@@ -1,0 +1,13 @@
+{
+  // The published build: src/ to dist/, JavaScript plus declarations.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "rewriteRelativeImportExtensions": true,
+    "types": []
+  },
+  "include": ["src"]
+}

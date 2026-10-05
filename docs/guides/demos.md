@@ -5,7 +5,7 @@ browser:
 
 ```
 pnpm install
-pnpm build:wasm      # wasm-pack → crates/lefsim-wasm/pkg
+pnpm build:wasm      # wasm-pack → packages/lefsim/wasm
 pnpm demo            # Vite dev server
 ```
 

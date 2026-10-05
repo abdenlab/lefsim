@@ -6,6 +6,17 @@ as Python, in camelCase. Lattices, worlds and models are plain objects with
 typed-array columns, built by functions that check them through the core, so an
 invalid one is reported where it's written.
 
+The WebAssembly module ships inside the npm package. `init()` with no arguments
+fetches it from next to the package, which works in browsers and bundlers. Node
+can't fetch `file:` URLs, so there you pass the bytes:
+
+```ts
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+
+await init(await readFile(fileURLToPath(import.meta.resolve("lefsim/lefsim_wasm_bg.wasm"))));
+```
+
 ## A live run
 
 A `Sim` is the same single run as in Rust and Python, advanced in place. Each

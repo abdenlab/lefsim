@@ -5,9 +5,15 @@ members = ["crates/*"]
 # (cdylibs) may need toolchains that aren't installed.
 default-members = ["crates/lefsim"]
 
+# One version for the core crate and both bindings (the Python wheel reads it
+# through maturin; packages/lefsim/package.json is kept in step by
+# scripts/bump-version.sh). See "Releasing" in the README.
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/abdenlab/lefsim"
+homepage = "https://abdenlab.github.io/lefsim/"
 
 [workspace.dependencies]
 lefsim = { path = "crates/lefsim" }

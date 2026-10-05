@@ -1,23 +1,65 @@
 {
   "name": "lefsim",
   "version": "0.1.0",
-  "private": true,
   "description": "Stochastic simulation of loop-extrusion factors on a 1D lattice, in WebAssembly",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abdenlab/lefsim.git",
+    "directory": "packages/lefsim"
+  },
+  "homepage": "https://abdenlab.github.io/lefsim/",
+  "keywords": [
+    "loop extrusion",
+    "chromatin",
+    "cohesin",
+    "simulation",
+    "gillespie",
+    "webassembly"
+  ],
   "type": "module",
+  "sideEffects": false,
+  "imports": {
+    "#wasm": "./wasm/lefsim_wasm.js"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./arrow": "./src/arrow.ts",
     "./parquet": "./src/parquet.ts"
   },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./arrow": {
+        "types": "./dist/arrow.d.ts",
+        "default": "./dist/arrow.js"
+      },
+      "./parquet": {
+        "types": "./dist/parquet.d.ts",
+        "default": "./dist/parquet.js"
+      },
+      "./lefsim_wasm_bg.wasm": "./wasm/lefsim_wasm_bg.wasm"
+    }
+  },
+  "files": [
+    "dist",
+    "wasm/lefsim_wasm.js",
+    "wasm/lefsim_wasm.d.ts",
+    "wasm/lefsim_wasm_bg.wasm"
+  ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepack": "cp ../../LICENSE LICENSE && pnpm build"
   },
   "dependencies": {
     "apache-arrow": "^21.2.0",
     "fzstd": "^0.1.1",
-    "hyparquet": "^1.31.2",
-    "lefsim-wasm": "workspace:*"
+    "hyparquet": "^1.31.2"
   },
   "devDependencies": {
     "@types/node": "^25.0.0",

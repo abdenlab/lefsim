@@ -1,7 +1,15 @@
 [package]
 name = "lefsim"
+description = "Stochastic, event-driven simulation of loop-extrusion factors on a 1D lattice"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/lefsim"
+readme = "README.md"
+keywords = ["loop-extrusion", "chromatin", "simulation", "gillespie", "biology"]
+categories = ["science", "simulation"]
 
 [dependencies]
 slotmap.workspace = true

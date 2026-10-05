@@ -2,8 +2,9 @@
   "name": "lefsim-workspace",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@9.15.3",
   "scripts": {
-    "build:wasm": "wasm-pack build crates/lefsim-wasm --target web --profile wasm-release --weak-refs",
+    "build:wasm": "wasm-pack build crates/lefsim-wasm --target web --profile wasm-release --weak-refs --no-pack --out-dir ../../packages/lefsim/wasm && rm -f packages/lefsim/wasm/.gitignore",
     "test": "pnpm --filter lefsim test",
     "demo": "pnpm --filter demo dev",
     "typecheck": "pnpm -r typecheck"

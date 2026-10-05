@@ -10,8 +10,8 @@
  * {@link Sim.step}.
  */
 
-import wasmInit, { initSync as wasmInitSync, names, WasmSim } from "lefsim-wasm";
-import type { InitInput } from "lefsim-wasm";
+import wasmInit, { initSync as wasmInitSync, names, WasmSim } from "#wasm";
+import type { InitInput } from "#wasm";
 
 import { lefArgs, modelArgs, seedBigInt } from "./model.ts";
 import { ROW_KIND } from "./types.ts";

@@ -4,6 +4,7 @@
 [project]
 site_name = "lefsim"
 site_description = "Stochastic simulation of loop-extrusion factors on a 1D lattice"
+site_url = "https://abdenlab.github.io/lefsim/"
 repo_url = "https://github.com/abdenlab/lefsim"
 edit_uri = "edit/main/docs/"
 nav = [

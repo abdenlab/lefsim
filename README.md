@@ -56,7 +56,7 @@ maturin develop --uv --release
 uv run --no-sync pytest tests
 
 pnpm install                                 # the TypeScript package and demos
-pnpm build:wasm                              # wasm-pack → crates/lefsim-wasm/pkg
+pnpm build:wasm                              # wasm-pack → packages/lefsim/wasm
 pnpm test                                    # vitest, against the real wasm build
 pnpm demo                                    # the demos, on a Vite dev server
 ```
@@ -85,8 +85,72 @@ python/                 the Python package built from them (maturin)
   lefsim/               package, type stubs
   tests/                pytest suite
 crates/lefsim-wasm/     WebAssembly bindings (wasm-bindgen)
-packages/lefsim/        TypeScript package wrapping them
+packages/lefsim/        TypeScript package wrapping them (wasm-pack builds into wasm/)
 packages/demo/          browser demos (Vite)
 notebooks/              a tour of the Python package
 docs/                   documentation (Zensical, configured in zensical.toml)
+scripts/                release helpers: bump and check the version
+.github/workflows/      CI, docs deployment, releases
 ```
+
+## Releasing
+
+The `lefsim` crate, the Python wheel and the npm package share one version and
+are released together. While it's 0.x, bump the minor version for any breaking
+API change in any language *or any change to seeded trajectories* (a new golden
+hash), and the patch version for anything else.
+
+1. On `main`, with CI green, set the version and start its changelog section:
+
+    ```
+    scripts/bump-version.sh 0.2.0
+    ```
+
+    This updates `Cargo.toml` (which the wheel reads too),
+    `packages/lefsim/package.json` and `Cargo.lock`, and turns the "Unreleased"
+    section of `CHANGELOG.md` into a `0.2.0` section.
+
+1. Review `CHANGELOG.md`, then commit, tag and push:
+
+    ```
+    git commit -am "Release 0.2.0"
+    git tag v0.2.0
+    git push origin main v0.2.0
+    ```
+
+The tag starts `.github/workflows/release.yml`, which:
+
+- checks that the tag matches the version, and runs the full CI suite;
+- builds the wheels (Linux, musllinux, macOS and Windows, x86_64 and arm64, each
+    tested on its own platform where a runner exists), the sdist and the npm
+    tarball;
+- once all of that passes, publishes to crates.io, PyPI and npm in parallel;
+- creates a GitHub release with the changelog section and the built files.
+
+A version with a pre-release suffix (`0.2.0-rc.1`) is published as a
+pre-release: PyPI gets `0.2.0rc1`, and npm gets the `next` dist-tag, so
+`npm install lefsim` still installs the latest stable version.
+
+Each publish job skips a registry that already has the version, so if one fails,
+fix the cause and re-run the workflow. A registry never accepts the same version
+twice, so never move a tag that reached any registry: bump to the next patch
+version instead.
+
+### One-time setup
+
+Publishing uses trusted publishing (OIDC), so the repository stores no tokens.
+Each registry is told which repository, workflow (`release.yml`) and GitHub
+environment may publish:
+
+- **GitHub:** create the environments `crates-io`, `pypi` and `npm` (Settings →
+    Environments), optionally requiring approval. Under Settings → Pages, set
+    the source to "GitHub Actions" for the docs.
+- **PyPI:** add a pending trusted publisher for the project `lefsim`
+    (environment `pypi`). It works before the project exists.
+- **crates.io and npm:** both need the package to exist before trusted
+    publishing can be configured, so publish the first version by hand:
+    `cargo publish -p lefsim` and, after `pnpm build:wasm`,
+    `pnpm --filter lefsim publish`. Then add the trusted publisher in each
+    package's settings (environments `crates-io` and `npm`). After that, push
+    the tag as usual: the workflow skips those two, publishes to PyPI and
+    creates the GitHub release.
