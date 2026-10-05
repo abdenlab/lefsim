@@ -81,30 +81,56 @@ With this architecture, a model author is responsible for defining action types 
 
 The application I have in mind is LEF simulation.
 
-I have in mind a single 1D lattice, where some sites are CTCFs (and maybe other things). The state of the lattice does not change. The lefs have a pair of "legs" and these are the actual entities. There are two types of action:
+Imagine a single 1D lattice, where some sites are extrusion barriers (CTCFs and maybe other things). The state of the lattice does not change. The LEFs have a pair of "legs" and these are the actual entities. There are three types of action:
 
-* Step (left or right):  a single leg makes one step in a given direction
-* Respawn: A pair of legs unbind and respawn at a single (non-CTCF) site
+1. **Step** (left or right): a single leg makes one step in a given direction
+2. **Respawn**: a pair of legs unbind and respawn at a single (non-CTCF) site
+3. **Evict**: a single leg steps onto a barrier from its rear side is "evicted" by it: its LEF respawns at once at a single (non-CTCF) site
+
+> [!NOTE] Allowing two legs to be situated at one site (rather than at two adjacent sites) in the special case of a spawn/respawn event adds some complexity to the architecture but eliminates the need for rules that decide how to place two adjacent legs and the unintended discrete lattice effects that can occur when those rules are implemented naively.
 
 The legs themselves possess state:
 * their position on the lattice
-* their partner leg or shared lef identifier
-* their intrinsic mobility status: moving, captured (by a ctcf), evicted (by a ctcf in the opposite orientation)
+* their partner leg or shared LEF identifier
+* their _intrinsic_ mobility status: `Moving` or `Captured` (by a barrier)
 
-The legs also have an extrinsic mobility, which could be determined on the fly, based on whether a neighbor site is populated with another leg blocking it.
+The legs also have an _extrinsic_ mobility, derived on the fly rather than stored: a moving leg is **blocked** if the next site ahead is occupied by another leg, or lies past the end of the lattice. There is one exception (see below).
 
-Steps:
-* The scheduling of step actions depend on whether there is another leg blocking it in the direction it wishes to step (next time = inf) and otherwise potentially on the context of the lattice cell it is on (adding "friction").
-* The firing of a step action will influence any rear-facing neighbor leg before the step and any posterior-facing neighbor leg after the step.
+A leg stepping onto the rear face of a CTCF site may be evicted if it is not protected. A leg is **protected** (immune to eviction) while its partner leg is captured. If not protected and the next site is a bare rear-facing CTCF site, the leg may succesfully step or get evicted. If not protected and the next site is a rear-facing CTCF site that holds a captured leg, the leg is not considered blocked because its next "step" will result in immediate eviction (like entering a black hole).
 
-Respawns:
-* The scheduling depends on the mobility status of both legs taken together -- different rules may be considered. If either leg gets "evicted", that should lead to an immediate respawn event (dt=0). If either is captured a longer lifetime is applied.
-* The firing will depend on a custom rule about how a new spawn site is selected or sampled. The event will influence any neighbors of either leg before the action and any neighbors of the spawn site.
+### Actions
 
-A CTCF has an intrinsic polarity, expressed by which side is its capture side:
+#### Steps (per leg)
+
+* A step is scheduled only for a moving leg that isn't blocked (otherwise next time = inf). The actual step rate could also depend on the lattice cell the leg is on (adding "friction") - not yet implemented.
+* The firing of a leg's step action will influence its neighbor legs before and after the translocation: any rear neighbor before the step and any posterior neighbor after the step will need to reschedule their own actions. If the step ends in a capture, the partner leg must reschedule too, since the LEF is now protected from eviction.
+
+#### Evictions (per leg)
+* An eviction is scheduled only for a moving, unprotected leg facing a CTCF from its rear side, either bare or held by a captured leg (otherwise next time = inf).
+* Its firing unloads the LEF at once: it respawns in the same event, so no transient state is ever stored.
+
+#### Respawns (per LEF)
+
+* The scheduling depends on the mobility status of both legs taken together. Many rules could be imagined here. Currently, a LEF unloads at the rate corresponding to the first of three situations that applies:
+    * `respawn_captured` if either leg is captured: capture protects the LEF, whatever the other leg is doing;
+    * `respawn_blocked` if either leg is blocked;
+    * `respawn`, the basal rate, otherwise.
+
+### Spawn rule
+
+The firing of a respawn action depends on a custom **spawn rule** determining how a new spawn site is selected or sampled. The respawn event will influence any neighbors of either leg before the action and any neighbors of the spawn site.
+
+### Barrier sites
+
+A CTCF has an intrinsic _polarity_, expressed by which side is its capture (front) side:
+
 * `captures_from: Right` → the CTCF's right side is its capture side; its left side evicts.
 * `captures_from: Left` → the CTCF's left side is its capture side; its right side evicts.
-* When a leg lands at the CTCF, the side it arrived from decides the outcome:
-    * Arrival side matches `captures_from` → Captured (with probability p).
-    * Arrival side is the opposite → Evicted (with probability p).
-    * Otherwise → passes through (Moving) with probability 1 - p.
+
+What happens:
+
+* A leg stepping onto a CTCF from its capture side is captured with probability *p*, else it passes through (moving). The dice roll crudely models whether the CTCF is occupied or able to capture.
+* A moving leg sitting on the CTCF is ordinary traffic: the leg behind it is blocked.
+* A protected leg ignores a CTCF's evict (rear) side: it passes a bare site at the full step rate, and a site holding a leg blocks it.
+* An unprotected leg facing a bare CTCF from its evict side races two events: a regular step at *(1 − p) × step rate* passing onto the CTCF and moving on, and an eviction at *p × step rate*. These are exactly one step at the full rate followed by a coin flip with probability *p*. If a captured leg is already held by that CTCF site, then eviction is certain at the full step rate. 
+* If a respawn rule allows spawning at a CTCF site, it may capture but not evict.
