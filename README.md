@@ -21,17 +21,12 @@ three.
 
 The documentation lives in [`docs/`](docs/index.md): getting started, the
 model, recording and replay, effective distance, and a guide per language.
-Preview it as a site with [MkDocs](https://www.mkdocs.org) and the Material
-theme, without installing anything:
+Preview it as a site with [Zensical](https://zensical.org), configured in
+`zensical.toml`, without installing anything:
 
 ```
-uvx --with "mkdocs<2" --with mkdocs-material mkdocs serve
+uvx zensical serve
 ```
-
-MkDocs 2 drops the plugin and theme systems Material relies on, hence the pin.
-The same `mkdocs.yml` also builds with
-[Zensical](https://zensical.org), the Material team's successor:
-`uvx zensical serve`.
 
 ## A quick look
 
@@ -94,5 +89,5 @@ crates/lefsim-wasm/     WebAssembly bindings (wasm-bindgen)
 packages/lefsim/        TypeScript package wrapping them
 packages/demo/          browser demos (Vite)
 notebooks/              a tour of the Python package
-docs/                   documentation (MkDocs)
+docs/                   documentation (Zensical, configured in zensical.toml)
 ```

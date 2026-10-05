@@ -10,5 +10,5 @@ they're published, build them locally:
 | TypeScript | TSDoc comments in `packages/lefsim/src` | your editor (a TypeDoc build is to come) |
 
 Next steps for this page: render the Python reference from the stubs with
-mkdocstrings, generate the TypeScript reference with TypeDoc, and link the
-rustdoc build.
+mkdocstrings (which Zensical supports), generate the TypeScript reference with
+TypeDoc, and link the rustdoc build.
