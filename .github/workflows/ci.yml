@@ -89,7 +89,7 @@ jobs:
       # clean project in plain Node.
       - name: Pack and import the npm package
         run: |
-          pnpm --filter lefsim pack --pack-destination "$RUNNER_TEMP"
+          pnpm --dir packages/lefsim pack --pack-destination "$RUNNER_TEMP"
           cd "$RUNNER_TEMP"
           echo '{ "type": "module" }' > package.json
           npm install --no-save ./lefsim-*.tgz
