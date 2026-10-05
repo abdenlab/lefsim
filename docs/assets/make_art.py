@@ -4,7 +4,7 @@ The banner is a real snapshot: loops as arcs over the lattice, in the browser
 demos' style and colors (blue extruding, orange held at a CTCF). Run from
 python/, where lefsim is installed:
 
-    uv run --no-sync python ../docs/assets/make_art.py
+    uv run python ../docs/assets/make_art.py
 """
 
 from pathlib import Path

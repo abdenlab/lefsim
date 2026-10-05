@@ -42,9 +42,10 @@ Read as needed:
 - Rust: `cargo test`,
     `cargo clippy --workspace --all-targets --all-features -- -D warnings`,
     `cargo fmt --all`
-- Python, from `python/`: `uv run --no-sync maturin develop --uv --release`,
-    then `uv run --no-sync pytest tests`. Always go through `uv run --no-sync`,
-    never the venv's python directly.
+- Python, from `python/`: `uv run pytest tests`. `uv sync` and `uv run` rebuild
+    the extension whenever the Rust code changes (`tool.uv.cache-keys` in
+    `python/pyproject.toml`). Go through `uv run`, not the venv's python, which
+    may hold a stale build.
 - TypeScript: `pnpm build:wasm` (after any Rust change), then `pnpm test` and
     `pnpm typecheck`
 - Docs: `uvx zensical build --strict`. Format Markdown with

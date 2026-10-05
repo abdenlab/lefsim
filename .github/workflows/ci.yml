@@ -56,9 +56,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v10
-      - run: uv venv --python 3.13
-      - run: uv pip install maturin pytest pyarrow polars duckdb pandas numpy
-      - run: uv run --no-sync maturin develop --uv --release
+      # The dev group only: the notebook stack isn't needed here.
+      - run: uv sync --locked --python 3.13 --no-default-groups --group dev
       - run: uv run --no-sync pytest tests
 
   typescript:

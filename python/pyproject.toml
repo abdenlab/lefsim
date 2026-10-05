@@ -24,12 +24,28 @@ dynamic = ["version"]
 # PyCapsule Interface, readable by pyarrow, polars, duckdb, etc.
 dependencies = []
 
-[project.optional-dependencies]
-test = ["pytest", "pyarrow>=15", "polars>=1.3", "duckdb>=1.1", "pandas", "numpy"]
+[dependency-groups]
+dev = ["pytest", "pyarrow>=15", "polars>=1.3", "duckdb>=1.1", "pandas", "numpy"]
+notebook = ["jupyter", "matplotlib"]
 
 [project.urls]
 Documentation = "https://abdenlab.github.io/lefsim/"
 Repository = "https://github.com/abdenlab/lefsim"
+
+[tool.uv]
+# `uv sync` and `uv run` install everything, so running one never removes
+# what another needs.
+default-groups = "all"
+# Rebuild the extension when the Rust code changes, not just this file.
+cache-keys = [
+  { file = "pyproject.toml" },
+  { file = "../Cargo.toml" },
+  { file = "../Cargo.lock" },
+  { file = "../crates/lefsim/**/*.rs" },
+  { file = "../crates/lefsim/Cargo.toml" },
+  { file = "../crates/lefsim-py/**/*.rs" },
+  { file = "../crates/lefsim-py/Cargo.toml" },
+]
 
 [tool.maturin]
 # The pyo3 bindings live with the other Rust crates; this directory is the

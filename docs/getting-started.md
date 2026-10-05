@@ -24,9 +24,8 @@ repository.
 
     ```
     cd python
-    uv venv && uv pip install maturin pytest pyarrow polars duckdb pandas numpy
-    maturin develop --uv --release
-    uv run --no-sync pytest tests
+    uv sync              # venv, dependencies, and the extension, built with maturin
+    uv run pytest tests  # rebuilds the extension first if the Rust code changed
     ```
 
     It builds one abi3 wheel for Python 3.9 and later, with no Python dependencies

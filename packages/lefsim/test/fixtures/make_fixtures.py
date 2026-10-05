@@ -2,7 +2,7 @@
 
 Run with the Python dev venv, from python/:
 
-    uv run --no-sync python ../packages/lefsim/test/fixtures/make_fixtures.py
+    uv run python ../packages/lefsim/test/fixtures/make_fixtures.py
 
 The TS tests check that the wasm build, driven through the TS wrapper,
 reproduces these values exactly (both bindings wrap the same core, and the

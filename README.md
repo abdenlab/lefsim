@@ -51,9 +51,8 @@ cargo test                                   # the core
 cargo run --example single_lef               # a single LEF's trajectory
 
 cd python                                    # the Python package
-uv venv && uv pip install maturin pytest pyarrow polars duckdb pandas numpy
-maturin develop --uv --release
-uv run --no-sync pytest tests
+uv sync                                      # venv, dependencies and the extension
+uv run pytest tests                          # rebuilds first if the Rust code changed
 
 pnpm install                                 # the TypeScript package and demos
 pnpm build:wasm                              # wasm-pack → packages/lefsim/wasm

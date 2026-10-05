@@ -5,7 +5,7 @@ convergent CTCF pairs) and writes a keyframed event log with
 `Stream.to_parquet` to `public/sample.parquet`, which the page offers when
 it's there. Run with the Python dev venv, from python/:
 
-    uv run --no-sync python ../packages/demo/make_sample.py [--lefs 30] [--t-end 100000]
+    uv run python ../packages/demo/make_sample.py [--lefs 30] [--t-end 100000]
 
 Any file written this way can also be opened on the page, by picking it,
 dropping it, or passing `?url=...`.
