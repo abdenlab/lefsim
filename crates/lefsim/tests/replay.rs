@@ -11,7 +11,7 @@ fn lattice() -> Lattice {
     .unwrap()
 }
 
-const RATES: Rates = Rates { step: 1.0, respawn: 0.02, respawn_stalled: 0.02, respawn_captured: 0.005 };
+const RATES: Rates = Rates { step: 1.0, respawn: 0.02, respawn_blocked: 0.02, respawn_captured: 0.005 };
 const N_LEFS: usize = 8;
 
 fn model(seed: u64) -> Model {

@@ -212,7 +212,7 @@ export function createModel(world: World, rates: Partial<Rates> = {}, options: {
 /** The core's arguments for a model. */
 export function modelArgs(m: Model) {
   const r = m.rates;
-  return [...latticeArgs(m.world.lattice), ...lefArgs(m.world.lefs), r.step, r.respawn, r.respawnStalled, r.respawnCaptured, m.spawnRule] as const;
+  return [...latticeArgs(m.world.lattice), ...lefArgs(m.world.lefs), r.step, r.respawn, r.respawnBlocked, r.respawnCaptured, m.spawnRule] as const;
 }
 
 /**
@@ -266,7 +266,7 @@ export function modelToJson(model: Model, indent?: number | string): string {
     rates: {
       step: model.rates.step,
       respawn: model.rates.respawn,
-      respawn_stalled: model.rates.respawnStalled,
+      respawn_blocked: model.rates.respawnBlocked,
       respawn_captured: model.rates.respawnCaptured,
     },
     spawn: { rule: model.spawnRule },
@@ -307,7 +307,7 @@ export function modelFromJson(text: string): Model {
   const rates: Rates = {
     step: field<number>(r, "step", "rates"),
     respawn: field<number>(r, "respawn", "rates"),
-    respawnStalled: field<number>(r, "respawn_stalled", "rates"),
+    respawnBlocked: field<number>(r, "respawn_blocked", "rates"),
     respawnCaptured: field<number>(r, "respawn_captured", "rates"),
   };
   const spawnRule = field<SpawnRule>(field<object>(doc, "spawn", "model"), "rule", "spawn");

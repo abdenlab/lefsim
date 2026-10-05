@@ -181,7 +181,7 @@
  "rates": {
   "step": 1.0,
   "respawn": 0.01,
-  "respawn_stalled": 0.05,
+  "respawn_blocked": 0.05,
   "respawn_captured": 0.002
  },
  "spawn": {

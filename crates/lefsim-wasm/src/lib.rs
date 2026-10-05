@@ -217,7 +217,7 @@ fn model_from(
     right_mob: &[u8],
     step: f64,
     respawn: f64,
-    respawn_stalled: f64,
+    respawn_blocked: f64,
     respawn_captured: f64,
     spawn_rule: &str,
 ) -> Result<Model, JsError> {
@@ -227,7 +227,7 @@ fn model_from(
     let rates = Rates {
         step,
         respawn,
-        respawn_stalled,
+        respawn_blocked,
         respawn_captured,
     };
     Model::new(world, rates, rule_from(spawn_rule)?).map_err(js_err)
@@ -280,7 +280,7 @@ pub fn check_model(
     right_mob: &[u8],
     step: f64,
     respawn: f64,
-    respawn_stalled: f64,
+    respawn_blocked: f64,
     respawn_captured: f64,
     spawn_rule: &str,
 ) -> Result<(), JsError> {
@@ -295,7 +295,7 @@ pub fn check_model(
         right_mob,
         step,
         respawn,
-        respawn_stalled,
+        respawn_blocked,
         respawn_captured,
         spawn_rule,
     )
@@ -330,7 +330,7 @@ fn rates_object(r: Rates) -> Object {
     let obj = Object::new();
     set(&obj, "step", r.step);
     set(&obj, "respawn", r.respawn);
-    set(&obj, "respawnStalled", r.respawn_stalled);
+    set(&obj, "respawnBlocked", r.respawn_blocked);
     set(&obj, "respawnCaptured", r.respawn_captured);
     obj
 }
@@ -364,7 +364,7 @@ impl WasmSim {
         right_mob: &[u8],
         step: f64,
         respawn: f64,
-        respawn_stalled: f64,
+        respawn_blocked: f64,
         respawn_captured: f64,
         spawn_rule: &str,
         seed: u64,
@@ -386,7 +386,7 @@ impl WasmSim {
             right_mob,
             step,
             respawn,
-            respawn_stalled,
+            respawn_blocked,
             respawn_captured,
             spawn_rule,
         )?;

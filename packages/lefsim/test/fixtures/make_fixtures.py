@@ -26,7 +26,7 @@ config = {
     "ctcfStrength": 0.7,
     "nLefs": 20,
     "seed": 0x5EED,
-    "rates": {"step": 1.0, "respawn": 0.01, "respawnStalled": 0.05, "respawnCaptured": 0.002},
+    "rates": {"step": 1.0, "respawn": 0.01, "respawnBlocked": 0.05, "respawnCaptured": 0.002},
     "tEnd": 1000.0,
 }
 
@@ -42,7 +42,7 @@ def make_sim(config):
         lefsim.Rates(
             step=rates["step"],
             respawn=rates["respawn"],
-            respawn_stalled=rates["respawnStalled"],
+            respawn_blocked=rates["respawnBlocked"],
             respawn_captured=rates["respawnCaptured"],
         ),
     )

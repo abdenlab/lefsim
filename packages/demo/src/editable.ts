@@ -34,7 +34,7 @@ export interface ModelInputs {
   nRight: HTMLInputElement;
   step: HTMLInputElement;
   respawn: HTMLInputElement;
-  respawnStalled: HTMLInputElement;
+  respawnBlocked: HTMLInputElement;
   respawnHeld: HTMLInputElement;
   strength: HTMLInputElement;
 }
@@ -59,10 +59,10 @@ export class EditableRun {
     inputs.nRight.value = String(this.ctcfs.filter((c) => !c.left).length);
     inputs.step.value = String(this.rates.step);
     inputs.respawn.value = String(this.rates.respawn);
-    inputs.respawnStalled.value = String(this.rates.respawnStalled);
+    inputs.respawnBlocked.value = String(this.rates.respawnBlocked);
     inputs.respawnHeld.value = String(this.rates.respawnCaptured);
     inputs.strength.value = String(this.strength);
-    for (const input of [inputs.step, inputs.respawn, inputs.respawnStalled, inputs.respawnHeld, inputs.strength]) {
+    for (const input of [inputs.step, inputs.respawn, inputs.respawnBlocked, inputs.respawnHeld, inputs.strength]) {
       input.addEventListener("change", () => {
         this.#readParams();
         this.rebuild();
@@ -133,7 +133,7 @@ export class EditableRun {
    * input back to the current value.
    */
   #readParams() {
-    const { step, respawn, respawnStalled, respawnHeld, strength } = this.#inputs;
+    const { step, respawn, respawnBlocked, respawnHeld, strength } = this.#inputs;
     const positive = (input: HTMLInputElement, current: number) => {
       const v = Number(input.value);
       if (input.value.trim() !== "" && Number.isFinite(v) && v > 0) return v;
@@ -143,7 +143,7 @@ export class EditableRun {
     this.rates = {
       step: positive(step, this.rates.step),
       respawn: positive(respawn, this.rates.respawn),
-      respawnStalled: positive(respawnStalled, this.rates.respawnStalled),
+      respawnBlocked: positive(respawnBlocked, this.rates.respawnBlocked),
       respawnCaptured: positive(respawnHeld, this.rates.respawnCaptured),
     };
     const st = Number(strength.value);

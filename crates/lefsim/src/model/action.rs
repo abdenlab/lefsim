@@ -19,9 +19,9 @@ pub struct Rates {
     pub step: f64,
     /// Respawn rate of a LEF with both legs free to move (the basal rate).
     pub respawn: f64,
-    /// Respawn rate of a stalled LEF: either leg blocked (a leg directly
+    /// Respawn rate of a blocked LEF: either leg blocked (a leg directly
     /// ahead, or the lattice's end), the other free or blocked.
-    pub respawn_stalled: f64,
+    pub respawn_blocked: f64,
     /// Respawn rate of a LEF with either leg captured, whatever the other leg
     /// is doing: capture protects a LEF from faster unloading, and its other
     /// leg from eviction.
@@ -30,13 +30,13 @@ pub struct Rates {
 
 impl Default for Rates {
     /// Reasonable demo rates: stepping is the fast process; respawns take
-    /// thousands of steps; stalled LEFs unload ten times faster, and captured
+    /// thousands of steps; blocked LEFs unload ten times faster, and captured
     /// ones at the basal rate.
     fn default() -> Self {
         Rates {
             step: 1.0,
             respawn: 1e-3,
-            respawn_stalled: 1e-2,
+            respawn_blocked: 1e-2,
             respawn_captured: 1e-3,
         }
     }
@@ -269,14 +269,14 @@ fn schedule_respawn(
 }
 
 /// A LEF's respawn rate in the current state, the first that applies:
-/// `respawn_captured` if either leg is captured, `respawn_stalled` if either
+/// `respawn_captured` if either leg is captured, `respawn_blocked` if either
 /// is blocked, else `respawn`.
 fn respawn_rate(lef_k: LefKey, world: &World, rates: &Rates) -> f64 {
     let legs = world.lefs[lef_k].legs;
     if legs.iter().any(|&l| world.legs[l].mobility == Mobility::Captured) {
         rates.respawn_captured
     } else if legs.iter().any(|&l| blocked(world, l)) {
-        rates.respawn_stalled
+        rates.respawn_blocked
     } else {
         rates.respawn
     }
@@ -507,7 +507,7 @@ mod tests {
     }
 
     /// Distinct rates, so the chosen one names the rule that chose it.
-    const RATES: Rates = Rates { step: 1.0, respawn: 1.0, respawn_stalled: 2.0, respawn_captured: 3.0 };
+    const RATES: Rates = Rates { step: 1.0, respawn: 1.0, respawn_blocked: 2.0, respawn_captured: 3.0 };
 
     /// A LEF as `((left_pos, mobility), (right_pos, mobility))`.
     type LefSpec = ((u32, Mobility), (u32, Mobility));
@@ -551,12 +551,12 @@ mod tests {
         // Both legs free: basal.
         assert_eq!(rate(&[((5, Moving), (8, Moving))], 0), RATES.respawn);
         assert_eq!(rate(&[((5, Moving), (8, Moving)), ((10, Moving), (12, Moving))], 1), RATES.respawn);
-        // Either leg blocked, by a leg ahead or the lattice's end: stalled.
-        assert_eq!(rate(&[((5, Moving), (8, Moving)), ((9, Moving), (12, Moving))], 0), RATES.respawn_stalled);
-        assert_eq!(rate(&[((0, Moving), (8, Moving))], 0), RATES.respawn_stalled);
+        // Either leg blocked, by a leg ahead or the lattice's end: blocked.
+        assert_eq!(rate(&[((5, Moving), (8, Moving)), ((9, Moving), (12, Moving))], 0), RATES.respawn_blocked);
+        assert_eq!(rate(&[((0, Moving), (8, Moving))], 0), RATES.respawn_blocked);
         let rosette = [((2, Moving), (5, Moving)), ((6, Moving), (9, Moving)), ((10, Moving), (13, Moving))];
         for lef in 0..3 {
-            assert_eq!(rate(&rosette, lef), RATES.respawn_stalled, "LEF {lef}");
+            assert_eq!(rate(&rosette, lef), RATES.respawn_blocked, "LEF {lef}");
         }
         // Facing a CTCF from behind isn't blocked: an eviction is pending.
         assert_eq!(rate(&[((26, Moving), (30, Moving))], 0), RATES.respawn);

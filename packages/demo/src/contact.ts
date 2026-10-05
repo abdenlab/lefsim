@@ -59,7 +59,7 @@ const run = new EditableRun(
     nRight: $<HTMLInputElement>("nctcf-right"),
     step: $<HTMLInputElement>("rate-step"),
     respawn: $<HTMLInputElement>("rate-respawn"),
-    respawnStalled: $<HTMLInputElement>("rate-respawn-stalled"),
+    respawnBlocked: $<HTMLInputElement>("rate-respawn-blocked"),
     respawnHeld: $<HTMLInputElement>("rate-respawn-held"),
     strength: $<HTMLInputElement>("strength"),
   },

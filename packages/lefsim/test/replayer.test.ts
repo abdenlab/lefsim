@@ -13,7 +13,7 @@ const OPTIONS: Setup = {
     { site: 140, capturesFrom: "left", strength: 0.9 },
   ],
   nLefs: 8,
-  rates: { step: 1, respawn: 0.02, respawnStalled: 0.02, respawnCaptured: 0.005 },
+  rates: { step: 1, respawn: 0.02, respawnBlocked: 0.02, respawnCaptured: 0.005 },
 };
 
 const LATTICE = createLattice(OPTIONS.nSites, OPTIONS.ctcfs);

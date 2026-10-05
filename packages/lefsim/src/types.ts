@@ -92,7 +92,7 @@ export interface Rates {
    * Respawn rate of a LEF with either leg blocked (by a leg ahead or the
    * lattice's end), unless the other is captured.
    */
-  respawnStalled: number;
+  respawnBlocked: number;
   /** Respawn rate of a LEF with a captured leg, whatever the other leg does. */
   respawnCaptured: number;
 }

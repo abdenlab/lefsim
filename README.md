@@ -137,7 +137,7 @@ Arenas:
 - `Respawn { lef }` looks at _both_ legs together, and draws an exponential
   wait at the first rate that applies:
   - `rates.respawn_captured` if either leg is `Captured`: capture protects.
-  - `rates.respawn_stalled` if either leg is blocked.
+  - `rates.respawn_blocked` if either leg is blocked.
   - `rates.respawn`, the basal rate, otherwise.
 
   Since blocking depends on neighbors, a step or respawn reschedules the
@@ -235,7 +235,7 @@ document (and so do `World`, `Lattice`, `Rates` and `LefStates` on their own):
                "ctcfs": [{ "site": 30, "captures_from": "right", "strength": 0.8 }] },
   "lefs": [{ "left_pos": 10, "right_pos": 12,
               "left_mobility": "moving", "right_mobility": "moving" }],
-  "rates": { "step": 1.0, "respawn": 0.001, "respawn_stalled": 0.01, "respawn_captured": 0.001 },
+  "rates": { "step": 1.0, "respawn": 0.001, "respawn_blocked": 0.01, "respawn_captured": 0.001 },
   "spawn": { "rule": "uniform_non_ctcf" }
 }
 ```
@@ -345,7 +345,7 @@ import polars as pl
 
 lattice = lefsim.Lattice(1000, {"site": [300, 700], "captures_from": ["right", "left"], "strength": 0.9})
 world = lefsim.populate(lattice, 10, seed=1)  # or lefsim.World(lattice, table_of_lefs)
-model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=1e-3, respawn_stalled=1e-2, respawn_captured=1e-3))
+model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=1e-3, respawn_blocked=1e-2, respawn_captured=1e-3))
 sim = lefsim.Sim(model, seed=42)
 
 sim.run_until(100.0)  # advance only
@@ -450,7 +450,7 @@ const lattice = createLattice(3000, [
   { site: 600, capturesFrom: "left", strength: 0.8 },
   { site: 601, capturesFrom: "right", strength: 0.8 },
 ]);
-const model = createModel(populate(lattice, 20, { seed: 1 }), { step: 1, respawn: 2e-3, respawnStalled: 2e-2, respawnCaptured: 2e-3 });
+const model = createModel(populate(lattice, 20, { seed: 1 }), { step: 1, respawn: 2e-3, respawnBlocked: 2e-2, respawnCaptured: 2e-3 });
 using sim = new Sim(model, { seed: 1 });
 
 function frame() {

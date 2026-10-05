@@ -15,7 +15,7 @@ fn lattice(strength: f64) -> Lattice {
 fn build(seed: u64, strength: f64) -> Sim {
     let rule = SpawnRule::UniformNonCtcf;
     let world = populate(lattice(strength), 8, &rule, seed).unwrap();
-    let rates = Rates { step: 1.0, respawn: 0.02, respawn_stalled: 0.02, respawn_captured: 0.005 };
+    let rates = Rates { step: 1.0, respawn: 0.02, respawn_blocked: 0.02, respawn_captured: 0.005 };
     Sim::new(Model::new(world, rates, rule).unwrap(), seed)
 }
 

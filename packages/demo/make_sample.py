@@ -36,7 +36,7 @@ lattice = lefsim.Lattice(
 )
 model = lefsim.Model(
     lefsim.populate(lattice, args.lefs, seed=args.seed),
-    lefsim.Rates(step=1.0, respawn=0.002, respawn_stalled=0.02, respawn_captured=0.002),
+    lefsim.Rates(step=1.0, respawn=0.002, respawn_blocked=0.02, respawn_captured=0.002),
 )
 args.out.parent.mkdir(parents=True, exist_ok=True)
 lefsim.Sim(model, seed=args.seed).stream(args.t_end, events=True, keyframes=True, max_rows=20_000).to_parquet(args.out)

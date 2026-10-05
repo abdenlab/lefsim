@@ -458,9 +458,9 @@ pub fn populate(lattice: &PyLattice, n_lefs: usize, seed: u64, spawn_rule: &str)
 /// Event rates (per unit time): `step` for a moving, unblocked leg (a leg
 /// facing a CTCF from behind splits it between passing and eviction);
 /// `respawn`, the basal rate, for a LEF with both legs free to move;
-/// `respawn_stalled` for a LEF with either leg blocked (by a leg ahead or the
+/// `respawn_blocked` for a LEF with either leg blocked (by a leg ahead or the
 /// lattice's end); `respawn_captured` for one with either leg captured,
-/// which wins over stalled. Eviction unloads a LEF at once; a leg whose
+/// which wins over blocked. Eviction unloads a LEF at once; a leg whose
 /// partner is captured is immune to it. Checked (positive and finite) by
 /// `Model`.
 #[pyclass(module = "lefsim", name = "Rates", frozen, eq, skip_from_py_object)]
@@ -470,13 +470,13 @@ pub struct PyRates(pub lefsim::Rates);
 #[pymethods]
 impl PyRates {
     #[new]
-    #[pyo3(signature = (step = None, respawn = None, respawn_stalled = None, respawn_captured = None))]
-    fn new(step: Option<f64>, respawn: Option<f64>, respawn_stalled: Option<f64>, respawn_captured: Option<f64>) -> Self {
+    #[pyo3(signature = (step = None, respawn = None, respawn_blocked = None, respawn_captured = None))]
+    fn new(step: Option<f64>, respawn: Option<f64>, respawn_blocked: Option<f64>, respawn_captured: Option<f64>) -> Self {
         let d = lefsim::Rates::default();
         PyRates(lefsim::Rates {
             step: step.unwrap_or(d.step),
             respawn: respawn.unwrap_or(d.respawn),
-            respawn_stalled: respawn_stalled.unwrap_or(d.respawn_stalled),
+            respawn_blocked: respawn_blocked.unwrap_or(d.respawn_blocked),
             respawn_captured: respawn_captured.unwrap_or(d.respawn_captured),
         })
     }
@@ -492,8 +492,8 @@ impl PyRates {
     }
 
     #[getter]
-    fn respawn_stalled(&self) -> f64 {
-        self.0.respawn_stalled
+    fn respawn_blocked(&self) -> f64 {
+        self.0.respawn_blocked
     }
 
     #[getter]
@@ -529,8 +529,8 @@ impl PyRates {
     fn __repr__(&self) -> String {
         let r = &self.0;
         format!(
-            "lefsim.Rates(step={:?}, respawn={:?}, respawn_stalled={:?}, respawn_captured={:?})",
-            r.step, r.respawn, r.respawn_stalled, r.respawn_captured
+            "lefsim.Rates(step={:?}, respawn={:?}, respawn_blocked={:?}, respawn_captured={:?})",
+            r.step, r.respawn, r.respawn_blocked, r.respawn_captured
         )
     }
 }

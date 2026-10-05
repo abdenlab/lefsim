@@ -31,7 +31,7 @@ fn lef_extrudes_outward_on_empty_lattice() {
             // wait), but a respawn will still fire once step actions are
             // exhausted at the boundaries.
             respawn: 1e-9,
-            respawn_stalled: 1e-9,
+            respawn_blocked: 1e-9,
            
             respawn_captured: 1e-9,
         },
@@ -67,7 +67,7 @@ fn right_facing_leg_captured_at_compatible_ctcf() {
         Rates {
             step: 1.0,
             respawn: 1e-12,
-            respawn_stalled: 1e-12,
+            respawn_blocked: 1e-12,
            
             respawn_captured: 1e-12,
         },
@@ -94,7 +94,7 @@ fn an_unprotected_eviction_unloads_the_lef_in_one_event() {
     // can't pass.
     let mut sites = vec![Site::plain(); 50];
     sites[20] = Site::ctcf(Direction::Right, 1.0);
-    let rates = Rates { step: 1.0, respawn: 1e-12, respawn_stalled: 1e-12, respawn_captured: 1e-12 };
+    let rates = Rates { step: 1.0, respawn: 1e-12, respawn_blocked: 1e-12, respawn_captured: 1e-12 };
     let mut sim = one_lef(Lattice::new(sites).unwrap(), 10, rates, 13);
     loop {
         let (_, action) = sim.step().expect("queue exhausted before reaching the CTCF");
@@ -121,7 +121,7 @@ fn a_fresh_lefs_right_leg_moves_on_when_the_leg_ahead_leaves() {
         world.add_lef((1, Mobility::Moving), (5, Mobility::Moving)).unwrap(); // B
         world.add_lef((2, Mobility::Moving), (3, Mobility::Moving)).unwrap(); // C
         world.add_lef((4, Mobility::Moving), (4, Mobility::Moving)).unwrap(); // A
-        let rates = Rates { step: 1.0, respawn: 1e-12, respawn_stalled: 1e-12, respawn_captured: 1e-12 };
+        let rates = Rates { step: 1.0, respawn: 1e-12, respawn_blocked: 1e-12, respawn_captured: 1e-12 };
         let mut sim = Sim::new(Model::new(world, rates, SpawnRule::UniformNonCtcf).unwrap(), seed);
         sim.run_until(200.0);
         let (_, (a_right, _)) = sim.world().lef_state(2).unwrap();

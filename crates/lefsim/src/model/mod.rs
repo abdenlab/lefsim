@@ -47,7 +47,7 @@ pub enum Schedule {
 ///                "ctcfs": [{ "site": 30, "captures_from": "right", "strength": 0.8 }] },
 ///   "lefs": [{ "left_pos": 10, "right_pos": 12,
 ///               "left_mobility": "moving", "right_mobility": "moving" }],
-///   "rates": { "step": 1.0, "respawn": 0.001, "respawn_stalled": 0.01, "respawn_captured": 0.001 },
+///   "rates": { "step": 1.0, "respawn": 0.001, "respawn_blocked": 0.01, "respawn_captured": 0.001 },
 ///   "spawn": { "rule": "uniform_non_ctcf" }
 /// }
 /// ```
@@ -99,7 +99,7 @@ pub(crate) fn check(world: &World, rates: &Rates, spawn: &dyn Spawn) -> Result<(
     for (name, value) in [
         ("step", rates.step),
         ("respawn", rates.respawn),
-        ("respawn_stalled", rates.respawn_stalled),
+        ("respawn_blocked", rates.respawn_blocked),
         ("respawn_captured", rates.respawn_captured),
     ] {
         if !(value.is_finite() && value > 0.0) {

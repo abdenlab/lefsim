@@ -27,7 +27,7 @@ it("reproduces the Rust golden fingerprint from Arrow JS columns", () => {
     ctcfs: sites.map((site) => ({ site, capturesFrom: site % 100 === 25 ? "right" : "left", strength: 0.7 })),
     nLefs: 20,
     seed: 0x5eed,
-    rates: { step: 1, respawn: 0.01, respawnStalled: 0.05, respawnCaptured: 0.002 },
+    rates: { step: 1, respawn: 0.01, respawnBlocked: 0.05, respawnCaptured: 0.002 },
   });
   const rec = sim.recordEvents(50_000, { dt: 5, events: true });
   expect(rec.nEvents).toBe(50_000);

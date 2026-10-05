@@ -24,7 +24,7 @@ RUST_GOLDEN = 0xD5D3254ED77FF3E9
 
 FIXTURES = pathlib.Path(__file__).parents[3] / "packages" / "lefsim" / "test" / "fixtures"
 
-RATES = lefsim.Rates(step=1.0, respawn=0.02, respawn_stalled=0.02, respawn_captured=0.005)
+RATES = lefsim.Rates(step=1.0, respawn=0.02, respawn_blocked=0.02, respawn_captured=0.005)
 
 
 def make_lattice(strength=0.8):
@@ -199,7 +199,7 @@ def test_world_rejects_non_tables():
 
 def test_rates_default_to_the_core():
     r = lefsim.Rates()
-    assert (r.step, r.respawn, r.respawn_stalled, r.respawn_captured) == (1.0, 1e-3, 1e-2, 1e-3)
+    assert (r.step, r.respawn, r.respawn_blocked, r.respawn_captured) == (1.0, 1e-3, 1e-2, 1e-3)
     assert lefsim.Rates(respawn=0.5) == lefsim.Rates(1.0, 0.5, 1e-2, 1e-3)
 
 
@@ -218,7 +218,7 @@ def test_model_parts():
     [
         (lefsim.Rates(step=0.0), "step rate must be positive"),
         (lefsim.Rates(respawn=float("nan")), "respawn rate must be positive"),
-        (lefsim.Rates(respawn_stalled=0.0), "respawn_stalled rate"),
+        (lefsim.Rates(respawn_blocked=0.0), "respawn_blocked rate"),
         (lefsim.Rates(respawn_captured=-1.0), "respawn_captured rate"),
     ],
 )
@@ -241,7 +241,7 @@ def test_model_json_round_trip_and_shape():
     assert doc["format"] == "lefsim.model" and doc["version"] == 2
     assert doc["lattice"]["n_sites"] == 200
     assert doc["lattice"]["ctcfs"][0] == {"site": 60, "captures_from": "right", "strength": 0.8}
-    assert doc["rates"] == {"step": 1.0, "respawn": 0.02, "respawn_stalled": 0.02, "respawn_captured": 0.005}
+    assert doc["rates"] == {"step": 1.0, "respawn": 0.02, "respawn_blocked": 0.02, "respawn_captured": 0.005}
     assert doc["spawn"] == {"rule": "uniform_non_ctcf"}
     rows = table(model.world.to_arrow()).drop_columns(["lef_id"]).to_pylist()
     assert doc["lefs"] == [{k: v.lower() if isinstance(v, str) else v for k, v in r.items()} for r in rows]
@@ -452,7 +452,7 @@ def test_python_reproduces_the_rust_golden_stream():
     sides = ["right" if i % 100 == 25 else "left" for i in sites]
     lattice = lefsim.Lattice(500, {"site": sites, "captures_from": sides, "strength": 0.7})
     world = lefsim.populate(lattice, 20, seed=0x5EED)
-    model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=0.01, respawn_stalled=0.05, respawn_captured=0.002))
+    model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=0.01, respawn_blocked=0.05, respawn_captured=0.002))
     rec = lefsim.Sim(model, seed=0x5EED).record_events(50_000, dt=5.0, events=True)
     assert rec.n_events == 50_000
 
@@ -1105,7 +1105,7 @@ def test_replayer_reproduces_the_cross_language_fixture():
         lefsim.Rates(
             step=rates["step"],
             respawn=rates["respawn"],
-            respawn_stalled=rates["respawnStalled"],
+            respawn_blocked=rates["respawnBlocked"],
             respawn_captured=rates["respawnCaptured"],
         ),
     )

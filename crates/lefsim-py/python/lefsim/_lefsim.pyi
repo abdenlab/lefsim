@@ -107,7 +107,7 @@ class Rates:
         self,
         step: Optional[float] = None,
         respawn: Optional[float] = None,
-        respawn_stalled: Optional[float] = None,
+        respawn_blocked: Optional[float] = None,
         respawn_captured: Optional[float] = None,
     ) -> None: ...
     @property
@@ -117,7 +117,7 @@ class Rates:
     def respawn(self) -> float:
         """Basal respawn rate: a LEF with both legs free to move."""
     @property
-    def respawn_stalled(self) -> float:
+    def respawn_blocked(self) -> float:
         """Respawn rate of a LEF with either leg blocked (by a leg ahead or the
         lattice's end), unless the other is captured."""
     @property

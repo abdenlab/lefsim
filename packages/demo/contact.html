@@ -77,8 +77,8 @@
             <input type="number" id="rate-respawn" min="0" step="any" />
           </label>
           <label title="Respawns per time unit of a LEF with either leg blocked, by a leg ahead or the lattice's end">
-            Respawn rate when stalled
-            <input type="number" id="rate-respawn-stalled" min="0" step="any" />
+            Respawn rate when blocked
+            <input type="number" id="rate-respawn-blocked" min="0" step="any" />
           </label>
           <label title="Respawns per time unit of a LEF with a leg captured at a CTCF">
             Respawn rate when captured
@@ -130,7 +130,7 @@
         plotted, from its value between the farthest sites (white) to its value between neighboring bins (black).
         Above the diagonal is the current state. Below it is the average over simulation time since the last
         reset (or restart, or change of bin size), each frame's state weighted by the time it covers.
-        A leg meeting a CTCF from behind may be evicted, which unloads its LEF at once; a leg whose partner is captured is immune; a leg blocked by another or by the lattice's end stalls its LEF.
+        A leg meeting a CTCF from behind may be evicted, which unloads its LEF at once; a leg whose partner is captured is immune; a leg blocked by another or by the lattice's end speeds its LEF's unloading.
       </p>
     </main>
     <script type="module" src="/src/contact.ts"></script>

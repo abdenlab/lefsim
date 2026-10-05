@@ -31,7 +31,7 @@
   "rates": {
    "step": 1.0,
    "respawn": 0.01,
-   "respawnStalled": 0.05,
+   "respawnBlocked": 0.05,
    "respawnCaptured": 0.002
   },
   "tEnd": 300.0,

@@ -9,7 +9,7 @@ export const CTCFS = BOUNDARIES.flatMap((b) => [
   { site: b, capturesFrom: "left" as const, strength: 0.8 },
   { site: b + 1, capturesFrom: "right" as const, strength: 0.8 },
 ]);
-export const RATES = { step: 1, respawn: 0.002, respawnStalled: 0.02, respawnCaptured: 0.002 };
+export const RATES = { step: 1, respawn: 0.002, respawnBlocked: 0.02, respawnCaptured: 0.002 };
 
 /**
  * A new run of the model with `nLefs` LEFs: placed with `seed`, and run with
