@@ -108,7 +108,6 @@ class Rates:
         step: Optional[float] = None,
         respawn: Optional[float] = None,
         respawn_stalled: Optional[float] = None,
-        respawn_evicted: Optional[float] = None,
         respawn_captured: Optional[float] = None,
     ) -> None: ...
     @property
@@ -120,11 +119,7 @@ class Rates:
     @property
     def respawn_stalled(self) -> float:
         """Respawn rate of a LEF with either leg blocked (by a leg ahead or the
-        lattice's end), unless the other is evicted or captured."""
-    @property
-    def respawn_evicted(self) -> float:
-        """Respawn rate of a LEF with either leg evicted (stopped by a CTCF
-        met from behind), unless the other is captured."""
+        lattice's end), unless the other is captured."""
     @property
     def respawn_captured(self) -> float:
         """Respawn rate of a LEF with a captured leg, whatever the other leg does."""
@@ -238,7 +233,7 @@ class Sim:
         """The current state as a one-snapshot Batch."""
     def __copy__(self) -> "Sim": ...
     def __deepcopy__(self, memo: Any) -> "Sim": ...
-    def step(self) -> Optional[tuple[float, Literal["Step", "Respawn"], int]]:
+    def step(self) -> Optional[tuple[float, Literal["Step", "Respawn", "Evict"], int]]:
         """Fire one event: ``(time, action, id)``, or ``None`` if none remain."""
     def run_until(self, t_end: float) -> RunReport: ...
     def run_events(self, n: int) -> RunReport: ...

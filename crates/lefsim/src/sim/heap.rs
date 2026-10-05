@@ -68,6 +68,8 @@ pub(super) struct IndexedHeap {
     step_pos: SecondaryMap<LegKey, usize>,
     /// Heap index of `Action::Respawn { lef }`.
     respawn_pos: SecondaryMap<LefKey, usize>,
+    /// Heap index of `Action::Evict { leg }`.
+    evict_pos: SecondaryMap<LegKey, usize>,
 }
 
 impl IndexedHeap {
@@ -76,6 +78,7 @@ impl IndexedHeap {
             nodes: Vec::new(),
             step_pos: SecondaryMap::new(),
             respawn_pos: SecondaryMap::new(),
+            evict_pos: SecondaryMap::new(),
         }
     }
 
@@ -84,6 +87,7 @@ impl IndexedHeap {
             nodes: Vec::with_capacity(cap),
             step_pos: SecondaryMap::with_capacity(cap),
             respawn_pos: SecondaryMap::with_capacity(cap),
+            evict_pos: SecondaryMap::with_capacity(cap),
         }
     }
 
@@ -135,6 +139,7 @@ impl IndexedHeap {
         match action {
             Action::Step { leg } => self.step_pos.get(leg).copied(),
             Action::Respawn { lef } => self.respawn_pos.get(lef).copied(),
+            Action::Evict { leg } => self.evict_pos.get(leg).copied(),
         }
     }
 
@@ -145,6 +150,9 @@ impl IndexedHeap {
             }
             Action::Respawn { lef } => {
                 self.respawn_pos.insert(lef, idx);
+            }
+            Action::Evict { leg } => {
+                self.evict_pos.insert(leg, idx);
             }
         }
     }

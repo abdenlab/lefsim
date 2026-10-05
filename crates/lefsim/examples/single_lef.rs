@@ -27,6 +27,7 @@ fn describe(sim: &Sim, action: Action) -> String {
     match action {
         Action::Step { leg } => format!("Step leg {}", sim.leg_id(leg).unwrap()),
         Action::Respawn { lef } => format!("Respawn lef {}", sim.lef_id(lef).unwrap()),
+        Action::Evict { leg } => format!("Evict leg {}", sim.leg_id(leg).unwrap()),
     }
 }
 

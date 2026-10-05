@@ -218,7 +218,6 @@ fn model_from(
     step: f64,
     respawn: f64,
     respawn_stalled: f64,
-    respawn_evicted: f64,
     respawn_captured: f64,
     spawn_rule: &str,
 ) -> Result<Model, JsError> {
@@ -229,7 +228,6 @@ fn model_from(
         step,
         respawn,
         respawn_stalled,
-        respawn_evicted,
         respawn_captured,
     };
     Model::new(world, rates, rule_from(spawn_rule)?).map_err(js_err)
@@ -283,7 +281,6 @@ pub fn check_model(
     step: f64,
     respawn: f64,
     respawn_stalled: f64,
-    respawn_evicted: f64,
     respawn_captured: f64,
     spawn_rule: &str,
 ) -> Result<(), JsError> {
@@ -299,7 +296,6 @@ pub fn check_model(
         step,
         respawn,
         respawn_stalled,
-        respawn_evicted,
         respawn_captured,
         spawn_rule,
     )
@@ -335,7 +331,6 @@ fn rates_object(r: Rates) -> Object {
     set(&obj, "step", r.step);
     set(&obj, "respawn", r.respawn);
     set(&obj, "respawnStalled", r.respawn_stalled);
-    set(&obj, "respawnEvicted", r.respawn_evicted);
     set(&obj, "respawnCaptured", r.respawn_captured);
     obj
 }
@@ -370,7 +365,6 @@ impl WasmSim {
         step: f64,
         respawn: f64,
         respawn_stalled: f64,
-        respawn_evicted: f64,
         respawn_captured: f64,
         spawn_rule: &str,
         seed: u64,
@@ -393,7 +387,6 @@ impl WasmSim {
             step,
             respawn,
             respawn_stalled,
-            respawn_evicted,
             respawn_captured,
             spawn_rule,
         )?;
@@ -658,13 +651,14 @@ impl WasmSim {
     }
 
     /// Fire one event. Returns `[time, actionCode, id]` (`id` is a `leg_id`
-    /// for a step, a `lef_id` for a respawn) or `null` if none remain.
+    /// for a step or an eviction, a `lef_id` for a respawn) or `null` if none
+    /// remain.
     pub fn step(&mut self) -> JsValue {
         match self.sim.step() {
             None => JsValue::NULL,
             Some((t, action)) => {
                 let id = match action {
-                    lefsim::Action::Step { leg } => self.sim.leg_id(leg),
+                    lefsim::Action::Step { leg } | lefsim::Action::Evict { leg } => self.sim.leg_id(leg),
                     lefsim::Action::Respawn { lef } => self.sim.lef_id(lef),
                 }
                 .expect("the sim's own entity");

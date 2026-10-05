@@ -13,7 +13,7 @@ export const DIRECTION = ["Left", "Right"] as const;
 export const SITE_KIND = ["Plain", "Ctcf"] as const;
 
 /** Row-kind names, indexed by the codes in a {@link DeltaChunk}'s `kind`. */
-export const ROW_KIND = ["Step", "Respawn", "Keyframe"] as const;
+export const ROW_KIND = ["Step", "Respawn", "Keyframe", "Evict"] as const;
 
 /** The `kind` code of keyframe rows. */
 export const KEYFRAME = 2;
@@ -90,14 +90,9 @@ export interface Rates {
   respawn: number;
   /**
    * Respawn rate of a LEF with either leg blocked (by a leg ahead or the
-   * lattice's end), unless the other is evicted or captured.
+   * lattice's end), unless the other is captured.
    */
   respawnStalled: number;
-  /**
-   * Respawn rate of a LEF with either leg evicted (stopped by a CTCF met
-   * from behind), unless the other is captured.
-   */
-  respawnEvicted: number;
   /** Respawn rate of a LEF with a captured leg, whatever the other leg does. */
   respawnCaptured: number;
 }

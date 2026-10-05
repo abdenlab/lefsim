@@ -123,12 +123,13 @@ pub enum WorldError {
     /// left-facing leg can only be captured by a CTCF that captures from the
     /// right, and a right-facing leg by one that captures from the left.
     CapturedWrongSide { lef: usize, pos: Position, facing: Direction },
-    /// An evicted leg must sit on, or just before, a CTCF it met from
-    /// behind: one whose capture side is the side the leg faces (a
-    /// left-facing leg is evicted by a CTCF capturing from the left). On it
-    /// when it stepped onto a bare CTCF; just before it when a captured leg
-    /// held the CTCF.
+    /// An evicted leg must sit just before a CTCF it met from behind: one
+    /// whose capture side is the side the leg faces (a left-facing leg is
+    /// evicted by a CTCF capturing from the left)...
     EvictedWithoutCtcf { lef: usize, pos: Position, facing: Direction },
+    /// ...and its partner must be captured: without that protection,
+    /// eviction unloads the LEF at once, so an evicted leg never waits.
+    EvictedUnprotected { lef: usize, pos: Position },
 }
 
 impl std::fmt::Display for WorldError {
@@ -154,10 +155,15 @@ impl std::fmt::Display for WorldError {
                 Direction::NAMES[facing.code() as usize].to_lowercase(),
                 Direction::NAMES[facing.code() as usize].to_lowercase(),
             ),
+            WorldError::EvictedUnprotected { lef, pos } => write!(
+                f,
+                "LEF {lef}: the leg at {pos} is Evicted, but its partner isn't Captured \
+                 (unprotected, eviction unloads the LEF at once)"
+            ),
             WorldError::EvictedWithoutCtcf { lef, pos, facing } => write!(
                 f,
-                "LEF {lef}: the {}-facing leg at {pos} is Evicted, but neither its site nor \
-                 the next one ahead is a CTCF capturing from the {}",
+                "LEF {lef}: the {}-facing leg at {pos} is Evicted, but the next site ahead \
+                 isn't a CTCF capturing from the {}",
                 Direction::NAMES[facing.code() as usize].to_lowercase(),
                 Direction::NAMES[facing.code() as usize].to_lowercase(),
             ),
@@ -291,14 +297,17 @@ impl World {
             match mobility {
                 Mobility::Moving => {}
                 Mobility::Evicted => {
-                    let evicts = |p: Position| {
+                    let ahead = facing.shift(pos).filter(|&p| (p as usize) < n_sites);
+                    let ok = ahead.is_some_and(|p| {
                         matches!(self.lattice.sites[p as usize].kind,
                                  SiteKind::Ctcf { captures_from, .. } if captures_from == facing)
-                    };
-                    let ahead = facing.shift(pos).filter(|&p| (p as usize) < n_sites);
-                    let ok = evicts(pos) || ahead.is_some_and(evicts);
+                    });
                     if !ok {
                         return Err(WorldError::EvictedWithoutCtcf { lef, pos, facing });
+                    }
+                    let partner = if facing == Direction::Left { right.1 } else { left.1 };
+                    if partner != Mobility::Captured {
+                        return Err(WorldError::EvictedUnprotected { lef, pos });
                     }
                 }
                 Mobility::Captured => match self.lattice.sites[pos as usize].kind {
@@ -431,19 +440,18 @@ mod tests {
     }
 
     #[test]
-    fn an_evicted_leg_waits_on_or_before_a_ctcf_met_from_behind() {
-        // The CTCF at 5 captures from the left, so it evicts left-facing legs
-        // meeting it from the right: on it (5) or, if it was held, at 6. The
-        // one at 15 (captures from the right) evicts right-facing legs, on it
-        // or at 14.
-        let mut world = World::new(lattice());
-        world.add_lef((6, Evicted), (8, Moving)).unwrap();
-        world.add_lef((10, Moving), (14, Evicted)).unwrap();
-        assert_eq!(world.lef_state(1), Some(((10, Moving), (14, Evicted))));
-        let mut world = World::new(lattice());
-        world.add_lef((5, Evicted), (8, Moving)).unwrap();
-        world.add_lef((10, Moving), (15, Evicted)).unwrap();
-        assert_eq!(world.lef_state(0), Some(((5, Evicted), (8, Moving))));
+    fn an_evicted_leg_waits_before_its_ctcf_with_a_captured_partner() {
+        let ctcf = |site, captures_from| Ctcf { site, captures_from, strength: 1.0 };
+        // CTCFs capturing from the left at 5 and 12: a left leg evicted at 6
+        // (before 5), its partner captured at 12.
+        let mut world = World::new(Lattice::with_ctcfs(20, &[ctcf(5, Direction::Left), ctcf(12, Direction::Left)]).unwrap());
+        world.add_lef((6, Evicted), (12, Captured)).unwrap();
+        assert_eq!(world.lef_state(0), Some(((6, Evicted), (12, Captured))));
+        // CTCFs capturing from the right at 3 and 15: a right leg evicted at
+        // 14 (before 15), its partner captured at 3.
+        let mut world = World::new(Lattice::with_ctcfs(20, &[ctcf(3, Direction::Right), ctcf(15, Direction::Right)]).unwrap());
+        world.add_lef((3, Captured), (14, Evicted)).unwrap();
+        assert_eq!(world.lef_state(0), Some(((3, Captured), (14, Evicted))));
     }
 
     #[test]
@@ -471,6 +479,8 @@ mod tests {
             ((16, Evicted), (17, Moving), WorldError::EvictedWithoutCtcf { lef: 1, pos: 16, facing: Direction::Left }),
             // Two sites before it is too far.
             ((7, Evicted), (10, Moving), WorldError::EvictedWithoutCtcf { lef: 1, pos: 7, facing: Direction::Left }),
+            // Before the right CTCF, but with no captured partner to protect it.
+            ((6, Evicted), (7, Moving), WorldError::EvictedUnprotected { lef: 1, pos: 6 }),
             ((1, Captured), (2, Moving), WorldError::CapturedOffCtcf { lef: 1, pos: 1 }),
             // A left-facing leg can't be captured by a CTCF capturing from the left.
             ((5, Captured), (6, Moving), WorldError::CapturedWrongSide { lef: 1, pos: 5, facing: Direction::Left }),

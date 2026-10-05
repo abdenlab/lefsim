@@ -36,15 +36,16 @@ impl Engine {
     /// once after constructing the engine. Subsequent rescheduling
     /// updates entries in place.
     pub(crate) fn initialize(&mut self, world: &World, rng: &mut SimRng) {
-        let total = world.legs.len() + world.lefs.len();
+        let total = 2 * world.legs.len() + world.lefs.len();
         self.heap = IndexedHeap::with_capacity(total);
         for k in world.legs.keys().collect::<Vec<_>>() {
-            let action = Action::Step { leg: k };
-            let priority = match action.schedule(world, &self.rates, self.clock, rng) {
-                Schedule::At(t) => Priority(t),
-                Schedule::Never => Priority::NEVER,
-            };
-            self.heap.insert(action, priority);
+            for action in [Action::Step { leg: k }, Action::Evict { leg: k }] {
+                let priority = match action.schedule(world, &self.rates, self.clock, rng) {
+                    Schedule::At(t) => Priority(t),
+                    Schedule::Never => Priority::NEVER,
+                };
+                self.heap.insert(action, priority);
+            }
         }
         for k in world.lefs.keys().collect::<Vec<_>>() {
             let action = Action::Respawn { lef: k };

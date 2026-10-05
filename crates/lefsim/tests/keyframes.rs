@@ -15,7 +15,7 @@ fn lattice(strength: f64) -> Lattice {
 fn build(seed: u64, strength: f64) -> Sim {
     let rule = SpawnRule::UniformNonCtcf;
     let world = populate(lattice(strength), 8, &rule, seed).unwrap();
-    let rates = Rates { step: 1.0, respawn: 0.02, respawn_stalled: 0.02, respawn_evicted: 0.5, respawn_captured: 0.005 };
+    let rates = Rates { step: 1.0, respawn: 0.02, respawn_stalled: 0.02, respawn_captured: 0.005 };
     Sim::new(Model::new(world, rates, rule).unwrap(), seed)
 }
 
@@ -67,8 +67,9 @@ fn rows(f: &EventFrames) -> impl Iterator<Item = (Time, u32, u32, u8, u8)> + '_ 
 }
 
 #[test]
-fn keyframe_kinds_extend_the_action_names() {
-    assert_eq!(EventFrames::KIND_NAMES[..2], Action::NAMES);
+fn row_kinds_name_the_actions_and_keyframes() {
+    // Codes 0, 1 and 3 are the actions (`Action::code`); 2 is the keyframe.
+    assert_eq!(EventFrames::KIND_NAMES, ["Step", "Respawn", "Keyframe", "Evict"]);
     assert_eq!(EventFrames::KIND_NAMES[KEYFRAME as usize], "Keyframe");
 }
 

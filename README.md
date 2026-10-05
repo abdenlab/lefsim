@@ -92,10 +92,11 @@ site. In the simulation:
 - A leg's **mobility** is one of:
   - `Moving`: free to step (unless blocked, see below).
   - `Captured`: a CTCF reached from its capture side has held it in place,
-    which protects its LEF from faster unloading.
-  - `Evicted`: a CTCF met from its other side has stopped it, and it waits
-    for its LEF to unload: on the CTCF if it stepped onto a bare one, or just
-    before it if a captured leg held it.
+    which protects its LEF from faster unloading, and from eviction.
+  - `Evicted`: a CTCF met from its other side has evicted it while its
+    partner is captured. The partner's capture protects the LEF, so instead
+    of unloading at once, it waits just before the CTCF until its LEF
+    unloads.
 
   A moving leg is also **blocked** while another leg sits on the next site
   ahead (unless that's a captured leg holding a CTCF met from behind, which
@@ -123,13 +124,19 @@ Arenas:
 #### Scheduling rules
 
 - `Step { leg }`
-  - schedules to `Never` if the leg isn't `Moving` or is blocked.
-  - otherwise it draws an exponential wait with rate `rates.step`. That
-    includes a leg facing a held CTCF from behind: its step evicts it.
+  - schedules to `Never` if the leg isn't `Moving`, is blocked, or faces a
+    held CTCF from behind.
+  - otherwise it draws an exponential wait with rate `rates.step`, or
+    `(1 − strength) × rates.step` if it faces a bare CTCF from behind (it
+    passes only if the CTCF turns out unbound).
+- `Evict { leg }` competes with the step of a moving leg facing a CTCF from
+  behind: rate `strength × rates.step` for a bare CTCF (it turns out bound),
+  or `rates.step` for one a captured leg holds (bound for certain); `Never`
+  otherwise. Two independent clocks at `(1 − p) k` and `p k` are exactly a
+  step at `k` followed by a coin flip with probability `p`.
 - `Respawn { lef }` looks at _both_ legs together, and draws an exponential
   wait at the first rate that applies:
   - `rates.respawn_captured` if either leg is `Captured`: capture protects.
-  - `rates.respawn_evicted` if either leg is `Evicted`.
   - `rates.respawn_stalled` if either leg is blocked.
   - `rates.respawn`, the basal rate, otherwise.
 
@@ -152,17 +159,18 @@ starting LEFs, exactly as respawns would.
 A CTCF acts on a leg in two places. Its `captures_from` names its capture
 side; the other side evicts.
 
-- **On landing.** After each `Step` or `Respawn`, the leg(s) are reassessed
-  by `resolve_mobility(site, arrived_from, landing, rng)`, where
-  `arrived_from` is the side of the landing site the leg came from. On a
-  CTCF, with probability `strength` (a crude stand-in for whether it's
-  bound): `Captured` if `arrived_from == captures_from`, else `Evicted`;
-  otherwise `Moving`. Landing at a spawn site isn't a step, so it can capture
-  but never evict.
-- **Before a step, a held CTCF.** A CTCF already holding a captured leg is
-  bound for certain: a leg about to step onto it from behind is evicted
-  where it stands, without moving. Any other leg on the next site is plain
-  traffic.
+- **Eviction**, when `Evict` fires. Unless the leg's partner is captured,
+  the LEF unloads at once: it respawns in the same event, like stepping into
+  a black hole, so no transient state is stored. A captured partner protects
+  the LEF: the leg is marked `Evicted` and waits where it stands, and the LEF
+  keeps unloading at `respawn_captured`. In the event log, an eviction is
+  one row (the evicted leg) or two (both legs at their new site).
+- **Capture, on landing.** After each `Step` or `Respawn`, the leg(s) are
+  reassessed by `resolve_mobility(site, arrived_from, rng)`, where
+  `arrived_from` is the side of the landing site the leg came from: on a
+  CTCF with `arrived_from == captures_from`, `Captured` with probability
+  `strength`, else `Moving`. A leg landing from the other side won the race
+  against eviction, so it moves on.
 
 This is called _only_ once at actual landings, never during scheduling.
 Otherwise a leg standing still on a CTCF that already failed to capture it would
@@ -229,7 +237,7 @@ document (and so do `World`, `Lattice`, `Rates` and `LefStates` on their own):
                "ctcfs": [{ "site": 30, "captures_from": "right", "strength": 0.8 }] },
   "lefs": [{ "left_pos": 10, "right_pos": 12,
               "left_mobility": "moving", "right_mobility": "moving" }],
-  "rates": { "step": 1.0, "respawn": 0.001, "respawn_stalled": 0.01, "respawn_evicted": 0.1, "respawn_captured": 0.001 },
+  "rates": { "step": 1.0, "respawn": 0.001, "respawn_stalled": 0.01, "respawn_captured": 0.001 },
   "spawn": { "rule": "uniform_non_ctcf" }
 }
 ```
@@ -339,7 +347,7 @@ import polars as pl
 
 lattice = lefsim.Lattice(1000, {"site": [300, 700], "captures_from": ["right", "left"], "strength": 0.9})
 world = lefsim.populate(lattice, 10, seed=1)  # or lefsim.World(lattice, table_of_lefs)
-model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=1e-3, respawn_stalled=1e-2, respawn_evicted=1e-1, respawn_captured=1e-3))
+model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=1e-3, respawn_stalled=1e-2, respawn_captured=1e-3))
 sim = lefsim.Sim(model, seed=42)
 
 sim.run_until(100.0)  # advance only
@@ -444,7 +452,7 @@ const lattice = createLattice(3000, [
   { site: 600, capturesFrom: "left", strength: 0.8 },
   { site: 601, capturesFrom: "right", strength: 0.8 },
 ]);
-const model = createModel(populate(lattice, 20, { seed: 1 }), { step: 1, respawn: 2e-3, respawnStalled: 2e-2, respawnEvicted: 2e-1, respawnCaptured: 2e-3 });
+const model = createModel(populate(lattice, 20, { seed: 1 }), { step: 1, respawn: 2e-3, respawnStalled: 2e-2, respawnCaptured: 2e-3 });
 using sim = new Sim(model, { seed: 1 });
 
 function frame() {

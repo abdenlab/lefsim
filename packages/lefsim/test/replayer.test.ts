@@ -13,7 +13,7 @@ const OPTIONS: Setup = {
     { site: 140, capturesFrom: "left", strength: 0.9 },
   ],
   nLefs: 8,
-  rates: { step: 1, respawn: 0.02, respawnStalled: 0.02, respawnEvicted: 0.5, respawnCaptured: 0.005 },
+  rates: { step: 1, respawn: 0.02, respawnStalled: 0.02, respawnCaptured: 0.005 },
 };
 
 const LATTICE = createLattice(OPTIONS.nSites, OPTIONS.ctcfs);
@@ -245,7 +245,7 @@ describe("Replayer", () => {
     expect(() => r.seek(0)).toThrow(/no keyframe/);
   });
 
-  it("carries evicted legs, waiting on or just before their CTCF, through keyframes", () => {
+  it("carries protected evicted legs, waiting just before their CTCF, through keyframes", () => {
     const strong = { ...OPTIONS, ctcfs: (OPTIONS.ctcfs as { site: number; capturesFrom: "left" | "right" }[]).map((c) => ({ ...c, strength: 1 })) };
     const ctcfSites = new Set((OPTIONS.ctcfs as { site: number }[]).map((c) => c.site));
     using sim = makeSim({ ...strong, seed: 3 });
@@ -254,9 +254,9 @@ describe("Replayer", () => {
       const c = sim.recordEventChunk(3000, { maxRows: 2 * sim.nLefs + 4 });
       for (let i = 0; i < c.kind.length; i++) {
         if (c.mobility[i] === EVICTED) {
-          // The CTCF is its site, or the next one ahead: left of a left leg (even leg id), right of a right one.
+          // The CTCF is the next site ahead: left of a left leg (even leg id), right of a right one.
           const ahead = c.legId[i]! % 2 === 0 ? c.pos[i]! - 1 : c.pos[i]! + 1;
-          expect(ctcfSites.has(c.pos[i]!) || ctcfSites.has(ahead)).toBe(true);
+          expect(ctcfSites.has(ahead)).toBe(true);
           evicted++;
         }
       }

@@ -127,7 +127,7 @@ export interface Recording extends RunReport {
 /** One fired event: its time, action, and the `leg_id` (a step) or `lef_id` (a respawn). */
 export interface FiredEvent {
   time: number;
-  action: "Step" | "Respawn";
+  action: "Step" | "Respawn" | "Evict";
   id: number;
 }
 

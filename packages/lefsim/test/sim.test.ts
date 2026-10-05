@@ -25,7 +25,7 @@ const TADS: Setup = {
     { site: b + 1, capturesFrom: "right" as const, strength: 0.8 },
   ]),
   nLefs: 20,
-  rates: { step: 1, respawn: 0.002, respawnStalled: 0.02, respawnEvicted: 0.2, respawnCaptured: 0.0004 },
+  rates: { step: 1, respawn: 0.002, respawnStalled: 0.02, respawnCaptured: 0.0004 },
 };
 
 const make = (seed = 1, extra: Partial<Setup> = {}) => makeSim({ ...TADS, seed, ...extra });
@@ -81,7 +81,7 @@ describe("building a model", () => {
 
   it("createModel fills missing rates with the core's defaults", () => {
     const model = createModel(createWorld(createLattice(100)));
-    expect(model.rates).toEqual({ step: 1, respawn: 1e-3, respawnStalled: 1e-2, respawnEvicted: 1e-1, respawnCaptured: 1e-3 });
+    expect(model.rates).toEqual({ step: 1, respawn: 1e-3, respawnStalled: 1e-2, respawnCaptured: 1e-3 });
     expect(model.spawnRule).toBe("uniform_non_ctcf");
   });
 
@@ -101,9 +101,11 @@ describe("building a model", () => {
     [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 5 }, { leftPos: 5, rightPos: 6 }]), /already occupied/],
     [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "captured" }]), /not a CTCF/],
     [() => createWorld(lattice10(), [{ leftPos: 3, rightPos: 5, leftMobility: "captured" }]), /can't be captured/],
-    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "evicted" }]), /neither its site nor/],
+    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "evicted" }]), /isn't a CTCF/],
+    // Before the CTCF at 3 (capturing from the left), but no captured partner protects it.
+    [() => createWorld(lattice10(), [{ leftPos: 4, rightPos: 6, leftMobility: "evicted" }]), /partner isn't Captured/],
     // The CTCF at 3 captures from the left: it captures right-facing legs, so it can't evict one.
-    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, rightMobility: "evicted" }]), /neither its site nor/],
+    [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, rightMobility: "evicted" }]), /isn't a CTCF/],
     [() => createWorld(lattice10(), [{ leftPos: 1, rightPos: 2, leftMobility: "stuck" }]), /"moving" or "captured" or "evicted"/],
     [() => createWorld(lattice10(), { leftPos: [1, 2], rightPos: [3] }), /different lengths/],
     [() => populate(lattice10(), 6), /too many LEFs/],
@@ -114,7 +116,6 @@ describe("building a model", () => {
     [() => createModel(createWorld(lattice10()), { step: 0 }), /step rate must be positive/],
     [() => createModel(createWorld(lattice10()), { respawn: Number.NaN }), /respawn rate must be positive/],
     [() => createModel(createWorld(lattice10()), { respawnStalled: 0 }), /respawn_stalled rate must be positive/],
-    [() => createModel(createWorld(lattice10()), { respawnEvicted: -1 }), /respawn_evicted rate must be positive/],
     [() => createModel(createWorld(lattice10()), {}, { spawnRule: "anywhere" as "uniform_non_ctcf" }), /unknown spawn rule/],
     [() => new Sim(makeModel({ nSites: 10 }), { startTime: Number.POSITIVE_INFINITY }), /startTime/],
   ] as [() => unknown, RegExp][])("rejects case %#", (build, message) => {
@@ -124,7 +125,7 @@ describe("building a model", () => {
   it("new Sim checks the model too, so a hand-edited one can't slip through", () => {
     const world = createWorld(createLattice(10), [{ leftPos: 1, rightPos: 2 }]);
     world.lefs.leftPos[0] = 5; // now crossed
-    const model = { world, rates: { step: 1, respawn: 1, respawnStalled: 1, respawnEvicted: 1, respawnCaptured: 1 }, spawnRule: "uniform_non_ctcf" } as const;
+    const model = { world, rates: { step: 1, respawn: 1, respawnStalled: 1, respawnCaptured: 1 }, spawnRule: "uniform_non_ctcf" } as const;
     expect(() => new Sim(model)).toThrow(/right of the right leg/);
   });
 
@@ -286,7 +287,7 @@ describe("state as a model", () => {
     expect(Array.from(world.lefs.leftPos)).toEqual(Array.from(live.leftPos));
     expect(world.lattice).toBe(sim.lattice);
     const model = sim.model();
-    expect(model.rates).toEqual({ step: 1, respawn: 0.002, respawnStalled: 0.02, respawnEvicted: 0.2, respawnCaptured: 0.0004 });
+    expect(model.rates).toEqual({ step: 1, respawn: 0.002, respawnStalled: 0.02, respawnCaptured: 0.0004 });
     world.lefs.leftPos[0] = 2999; // a copy: changing it leaves the sim alone
     expect(sim.state().leftPos[0]).toBe(live.leftPos[0]);
     expect(sim.state().leftPos[0]).not.toBe(2999);
@@ -324,10 +325,10 @@ describe("state as a model", () => {
     for (let i = 0; i < 3000; i++) {
       const e = sim.step()!;
       expect(e.time).toBe(sim.time);
-      expect(e.id).toBeLessThan(e.action === "Step" ? 4 : 2);
+      expect(e.id).toBeLessThan(e.action === "Respawn" ? 2 : 4); // a lefId, else a legId
       seen.add(e.action);
     }
-    expect(seen).toEqual(new Set(["Step", "Respawn"]));
+    expect(seen).toEqual(new Set(["Step", "Respawn", "Evict"]));
     using empty = makeSim({ nSites: 10 });
     expect(empty.step()).toBeNull();
   });

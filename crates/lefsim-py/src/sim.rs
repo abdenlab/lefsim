@@ -402,12 +402,14 @@ impl PySim {
     // ----- running -----
 
     /// Fire one event. Returns `(time, action, id)` — `id` is a `leg_id`
-    /// for "Step" and a `lef_id` for "Respawn" — or `None` if no events remain.
+    /// for "Step" and "Evict", a `lef_id` for "Respawn" — or `None` if no
+    /// events remain.
     fn step(&mut self) -> PyResult<Option<(f64, &'static str, u32)>> {
         let sim = self.sim.as_mut().ok_or_else(consumed)?;
         Ok(sim.step().map(|(t, action)| match action {
             Action::Step { leg } => (t, "Step", sim.leg_id(leg).expect("own leg")),
             Action::Respawn { lef } => (t, "Respawn", sim.lef_id(lef).expect("own lef")),
+            Action::Evict { leg } => (t, "Evict", sim.leg_id(leg).expect("own leg")),
         }))
     }
 

@@ -279,7 +279,8 @@ impl Recorder {
 /// Per-event deltas: one row per leg changed by a fired event.
 ///
 /// A `Step` produces one row, a `Respawn` two (one per leg, sharing a
-/// `time`). With keyframes enabled (see [`EventRecorder::with_keyframes`]),
+/// `time`), and an `Evict` one (the leg, waiting, evicted) or two (both legs
+/// at their new site, if it unloaded the LEF). With keyframes enabled (see [`EventRecorder::with_keyframes`]),
 /// each batch also opens with one `Keyframe` row per leg.
 ///
 /// `kind` holds codes into [`EventFrames::KIND_NAMES`] (for events these
@@ -330,9 +331,10 @@ impl TryFrom<EventColumns> for EventFrames {
 }
 
 impl EventFrames {
-    /// Row-kind names, indexed by the codes in the `kind` column. The first
-    /// two are the [`Action`] variants; `Keyframe` is not an action.
-    pub const KIND_NAMES: [&str; 3] = ["Step", "Respawn", "Keyframe"];
+    /// Row-kind names, indexed by the codes in the `kind` column: the
+    /// [`Action`] variants, by [`Action::code`], and `Keyframe`, which isn't
+    /// an action. (`Evict` came after `Keyframe`, so it's last.)
+    pub const KIND_NAMES: [&str; 4] = ["Step", "Respawn", "Keyframe", "Evict"];
 
     /// The `kind` code of keyframe rows.
     pub const KEYFRAME: u8 = 2;
@@ -421,6 +423,13 @@ impl EventFrames {
         let legs = match action {
             Action::Step { leg } => [Some(leg), None],
             Action::Respawn { lef } => sim.world().lefs[lef].legs.map(Some),
+            // A protected eviction changes only the leg; one that unloaded
+            // the LEF moved both legs to their new site, like a respawn.
+            Action::Evict { leg } if sim.world().legs[leg].mobility == Mobility::Evicted => [Some(leg), None],
+            Action::Evict { leg } => {
+                let lef = sim.world().legs[leg].lef;
+                sim.world().lefs[lef].legs.map(Some)
+            }
         };
         for leg in legs.into_iter().flatten() {
             let state = &sim.world().legs[leg];

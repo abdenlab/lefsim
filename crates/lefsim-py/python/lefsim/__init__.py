@@ -4,7 +4,7 @@ Describe a model, then run it::
 
     lattice = lefsim.Lattice(3000, ctcf_sites=[600, 1300], ctcf_captures_from=["left", "right"])
     world = lefsim.populate(lattice, 20, seed=1)       # or lefsim.World(lattice, lefs_table)
-    model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=2e-3, respawn_stalled=2e-2, respawn_evicted=2e-1, respawn_captured=2e-3))
+    model = lefsim.Model(world, lefsim.Rates(step=1.0, respawn=2e-3, respawn_stalled=2e-2, respawn_captured=2e-3))
     sim = lefsim.Sim(model, seed=1)
 
     sim.run_until(1_000.0)                             # advance

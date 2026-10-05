@@ -1,6 +1,6 @@
 // A live run whose model can be edited while it runs: the CTCFs (moved by
 // dragging them in two lanes, one per orientation, or added and removed by
-// count), the five rates and the CTCF strength. Shared by the pages that
+// count), the four rates and the CTCF strength. Shared by the pages that
 // offer these controls.
 //
 // A change builds a new model and carries the LEFs over to it at the current
@@ -36,7 +36,6 @@ export interface ModelInputs {
   step: HTMLInputElement;
   respawn: HTMLInputElement;
   respawnStalled: HTMLInputElement;
-  respawnEvicted: HTMLInputElement;
   respawnHeld: HTMLInputElement;
   strength: HTMLInputElement;
 }
@@ -62,10 +61,9 @@ export class EditableRun {
     inputs.step.value = String(this.rates.step);
     inputs.respawn.value = String(this.rates.respawn);
     inputs.respawnStalled.value = String(this.rates.respawnStalled);
-    inputs.respawnEvicted.value = String(this.rates.respawnEvicted);
     inputs.respawnHeld.value = String(this.rates.respawnCaptured);
     inputs.strength.value = String(this.strength);
-    for (const input of [inputs.step, inputs.respawn, inputs.respawnStalled, inputs.respawnEvicted, inputs.respawnHeld, inputs.strength]) {
+    for (const input of [inputs.step, inputs.respawn, inputs.respawnStalled, inputs.respawnHeld, inputs.strength]) {
       input.addEventListener("change", () => {
         this.#readParams();
         this.rebuild();
@@ -97,8 +95,8 @@ export class EditableRun {
   /**
    * The same LEFs on the current model, continuing from the current time. A
    * captured leg stays so only if a CTCF that can hold it is still at its
-   * site, and an evicted leg only if the CTCF that turned it back is still
-   * just ahead of it. Otherwise it's moving again.
+   * site, and an evicted leg only if the CTCF that evicted it is still just
+   * ahead of it and its partner is still captured. Otherwise it's moving again.
    */
   rebuild() {
     const old = this.sim;
@@ -111,21 +109,19 @@ export class EditableRun {
     const leftMob = st.leftMobility.slice();
     const rightMob = st.rightMobility.slice();
     const capturesLeftAt = new Map(this.ctcfs.map((c) => [c.site, c.left]));
-    const keep = (mob: number, site: number, leftLeg: boolean) => {
-      // Captured: on a CTCF capturing from the side it came from.
-      if (mob === CAPTURED && capturesLeftAt.get(site) === !leftLeg) return CAPTURED;
-      // Evicted: on, or just before, a CTCF whose capture side faces the way it faces.
-      const evicts = (p: number) => capturesLeftAt.get(p) === leftLeg;
-      if (mob === EVICTED && (evicts(site) || evicts(leftLeg ? site - 1 : site + 1))) return EVICTED;
-      return MOVING;
-    };
+    // Captured: on a CTCF capturing from the side it came from.
+    const captured = (mob: number, site: number, leftLeg: boolean) =>
+      mob === CAPTURED && capturesLeftAt.get(site) === !leftLeg ? CAPTURED : MOVING;
+    const leftMobility = Array.from(leftMob, (m, i) => captured(m, leftPos[i]!, true));
+    const rightMobility = Array.from(rightMob, (m, i) => captured(m, rightPos[i]!, false));
+    // Evicted: just before a CTCF whose capture side faces the way it faces,
+    // and protected by a partner that's still captured.
+    for (let i = 0; i < leftPos.length; i++) {
+      if (leftMob[i] === EVICTED && capturesLeftAt.get(leftPos[i]! - 1) === true && rightMobility[i] === CAPTURED) leftMobility[i] = EVICTED;
+      if (rightMob[i] === EVICTED && capturesLeftAt.get(rightPos[i]! + 1) === false && leftMobility[i] === CAPTURED) rightMobility[i] = EVICTED;
+    }
     const lattice = this.lattice();
-    const world = createWorld(lattice, {
-      leftPos,
-      rightPos,
-      leftMobility: Array.from(leftMob, (m, i) => keep(m, leftPos[i]!, true)),
-      rightMobility: Array.from(rightMob, (m, i) => keep(m, rightPos[i]!, false)),
-    });
+    const world = createWorld(lattice, { leftPos, rightPos, leftMobility, rightMobility });
     this.sim = new Sim(createModel(world, this.rates), { seed: this.#seed + ++this.#rebuilds, startTime: time });
     old.free();
     setLattice(lattice);
@@ -145,7 +141,7 @@ export class EditableRun {
    * input back to the current value.
    */
   #readParams() {
-    const { step, respawn, respawnStalled, respawnEvicted, respawnHeld, strength } = this.#inputs;
+    const { step, respawn, respawnStalled, respawnHeld, strength } = this.#inputs;
     const positive = (input: HTMLInputElement, current: number) => {
       const v = Number(input.value);
       if (input.value.trim() !== "" && Number.isFinite(v) && v > 0) return v;
@@ -156,7 +152,6 @@ export class EditableRun {
       step: positive(step, this.rates.step),
       respawn: positive(respawn, this.rates.respawn),
       respawnStalled: positive(respawnStalled, this.rates.respawnStalled),
-      respawnEvicted: positive(respawnEvicted, this.rates.respawnEvicted),
       respawnCaptured: positive(respawnHeld, this.rates.respawnCaptured),
     };
     const st = Number(strength.value);

@@ -58,122 +58,122 @@
  },
  "lefs": [
   {
-   "left_pos": 25,
+   "left_pos": 200,
+   "right_pos": 215,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 1,
+   "right_pos": 74,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 227,
+   "right_pos": 273,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 237,
+   "right_pos": 248,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 0,
    "right_pos": 75,
-   "left_mobility": "captured",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 372,
-   "right_pos": 374,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 325,
-   "right_pos": 375,
-   "left_mobility": "captured",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 125,
-   "right_pos": 174,
-   "left_mobility": "captured",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 241,
-   "right_pos": 266,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 76,
-   "right_pos": 175,
-   "left_mobility": "evicted",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 183,
-   "right_pos": 224,
-   "left_mobility": "moving",
-   "right_mobility": "evicted"
-  },
-  {
-   "left_pos": 464,
-   "right_pos": 467,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 485,
-   "right_pos": 491,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 97,
-   "right_pos": 108,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 425,
-   "right_pos": 475,
-   "left_mobility": "captured",
-   "right_mobility": "captured"
-  },
-  {
-   "left_pos": 226,
-   "right_pos": 267,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 427,
-   "right_pos": 463,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 435,
-   "right_pos": 442,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 443,
-   "right_pos": 460,
-   "left_mobility": "moving",
-   "right_mobility": "moving"
-  },
-  {
-   "left_pos": 269,
-   "right_pos": 275,
    "left_mobility": "moving",
    "right_mobility": "captured"
   },
   {
-   "left_pos": 27,
-   "right_pos": 51,
+   "left_pos": 329,
+   "right_pos": 361,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 440,
+   "right_pos": 474,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
    "left_pos": 225,
-   "right_pos": 268,
+   "right_pos": 275,
    "left_mobility": "captured",
-   "right_mobility": "moving"
+   "right_mobility": "captured"
   },
   {
-   "left_pos": 378,
-   "right_pos": 385,
+   "left_pos": 216,
+   "right_pos": 217,
    "left_mobility": "moving",
    "right_mobility": "moving"
   },
   {
-   "left_pos": 426,
-   "right_pos": 474,
+   "left_pos": 29,
+   "right_pos": 49,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 96,
+   "right_pos": 106,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 325,
+   "right_pos": 374,
+   "left_mobility": "captured",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 145,
+   "right_pos": 175,
+   "left_mobility": "moving",
+   "right_mobility": "captured"
+  },
+  {
+   "left_pos": 226,
+   "right_pos": 274,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 439,
+   "right_pos": 475,
+   "left_mobility": "moving",
+   "right_mobility": "captured"
+  },
+  {
+   "left_pos": 276,
+   "right_pos": 375,
+   "left_mobility": "evicted",
+   "right_mobility": "captured"
+  },
+  {
+   "left_pos": 338,
+   "right_pos": 347,
+   "left_mobility": "moving",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 425,
+   "right_pos": 438,
+   "left_mobility": "captured",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 125,
+   "right_pos": 144,
+   "left_mobility": "captured",
+   "right_mobility": "moving"
+  },
+  {
+   "left_pos": 13,
+   "right_pos": 14,
    "left_mobility": "moving",
    "right_mobility": "moving"
   }
@@ -182,7 +182,6 @@
   "step": 1.0,
   "respawn": 0.01,
   "respawn_stalled": 0.05,
-  "respawn_evicted": 0.2,
   "respawn_captured": 0.002
  },
  "spawn": {
