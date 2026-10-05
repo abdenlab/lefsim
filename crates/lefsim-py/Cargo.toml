@@ -20,10 +20,10 @@ pyo3 = { version = "0.29", features = ["abi3-py39"] }
 # No buffer_protocol: we only export, and it would need abi3-py311.
 pyo3-arrow = { version = "0.19", default-features = false }
 # Must match pyo3-arrow's arrow major version.
-arrow-array = "59"
-arrow-buffer = "59"
-arrow-schema = "59"
-arrow-cast = { version = "59", default-features = false }
+arrow-array = "60"
+arrow-buffer = "60"
+arrow-schema = "60"
+arrow-cast = { version = "60", default-features = false }
 serde_json.workspace = true
 serde.workspace = true
 # serde <-> Python objects; must match the pyo3 version.

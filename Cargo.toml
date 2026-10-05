@@ -19,8 +19,8 @@ homepage = "https://abdenlab.github.io/lefsim/"
 lefsim = { path = "crates/lefsim" }
 slotmap = "1"
 smallvec = "1"
-rand = { version = "0.8", default-features = false }
-rand_pcg = { version = "0.3", default-features = false }
+rand = { version = "0.10", default-features = false }
+rand_pcg = { version = "0.10", default-features = false }
 libm = "0.2"
 bytemuck = { version = "1", features = ["derive", "extern_crate_alloc"] }
 serde = { version = "1", default-features = false, features = ["derive", "std"] }
