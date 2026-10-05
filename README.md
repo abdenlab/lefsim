@@ -333,7 +333,8 @@ including wasm32. `tests/determinism.rs` pins a golden hash of a long run.
 ## Python
 
 `crates/lefsim-py` wraps the core as a Python extension (pyo3 + maturin, one
-abi3 wheel for Python >= 3.9). The classes mirror the Rust types. Results come
+abi3 wheel for Python >= 3.9), and `python/` is the `lefsim` package built from
+it, with its tests. The classes mirror the Rust types. Results come
 back as Arrow data through the
 [Arrow PyCapsule Interface](https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html),
 so pyarrow, polars and duckdb read them directly, without copying, and the
@@ -425,7 +426,7 @@ the sites, so 1,000 sites among 5,000 LEFs take about a second.
 Develop with:
 
 ```
-cd crates/lefsim-py
+cd python
 uv venv && uv pip install maturin pytest pyarrow polars duckdb pandas numpy
 maturin develop --uv --release
 uv run --no-sync pytest tests
@@ -584,9 +585,9 @@ crates/lefsim/          core crate
     engine.rs, heap.rs    event loop and indexed heap (internal)
   examples/single_lef.rs
   tests/
-crates/lefsim-py/       Python bindings
-  src/                  Sim, Batch, Stream (pyo3); Arrow conversion
-  python/lefsim/        package, type stubs
+crates/lefsim-py/       Python bindings (pyo3): Sim, Batch, Stream; Arrow conversion
+python/                 the Python package built from them (maturin)
+  lefsim/               package, type stubs
   tests/                pytest suite
 crates/lefsim-wasm/     WebAssembly bindings (wasm-bindgen)
 packages/lefsim/        TypeScript package wrapping them

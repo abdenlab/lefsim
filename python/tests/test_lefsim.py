@@ -22,7 +22,7 @@ import lefsim
 # The golden fingerprint pinned by crates/lefsim/tests/determinism.rs.
 RUST_GOLDEN = 0xD5D3254ED77FF3E9
 
-FIXTURES = pathlib.Path(__file__).parents[3] / "packages" / "lefsim" / "test" / "fixtures"
+FIXTURES = pathlib.Path(__file__).parents[2] / "packages" / "lefsim" / "test" / "fixtures"
 
 RATES = lefsim.Rates(step=1.0, respawn=0.02, respawn_blocked=0.02, respawn_captured=0.005)
 

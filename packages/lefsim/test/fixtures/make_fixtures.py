@@ -1,8 +1,8 @@
 """Regenerate cross-language fixtures from the Python binding.
 
-Run with the lefsim-py dev venv, from crates/lefsim-py:
+Run with the Python dev venv, from python/:
 
-    uv run --no-sync python ../../packages/lefsim/test/fixtures/make_fixtures.py
+    uv run --no-sync python ../packages/lefsim/test/fixtures/make_fixtures.py
 
 The TS tests check that the wasm build, driven through the TS wrapper,
 reproduces these values exactly (both bindings wrap the same core, and the
