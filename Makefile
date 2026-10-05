@@ -1,8 +1,12 @@
 # Shortcuts for the commands in AGENTS.md and the README. `make` lists them.
 # Written for GNU Make 3.81 (the macOS default) and later.
 
-MDFORMAT := uvx --with mdformat-mkdocs --with mdformat-tables mdformat
+MDFORMAT := uvx --with mdformat-mkdocs --with mdformat-tables mdformat --wrap 80
 MARKDOWN := docs/ README.md AGENTS.md CHANGELOG.md crates/lefsim/README.md python/README.md packages/lefsim/README.md
+# ruff from the Python dev group, with python/pyproject.toml's settings for all
+# the repo's Python (including the scripts in packages/ and docs/).
+RUFF := uv run --project python ruff
+RUFF_CONFIG := --config python/pyproject.toml
 
 .DEFAULT_GOAL := help
 
@@ -18,6 +22,10 @@ setup: ## Create the Python venv (with the extension) and install the JS depende
 	pnpm install
 
 # ---------------------------------------------------------------- build
+
+.PHONY: build
+build: ## Build the core crate
+	cargo build
 
 .PHONY: wasm
 wasm: ## Build the wasm module into packages/lefsim/wasm
@@ -48,15 +56,21 @@ test-ts: wasm ## TypeScript tests and typecheck, after rebuilding the wasm
 # ---------------------------------------------------------------- lint and format
 
 .PHONY: lint
-lint: ## Check formatting and clippy, as CI does
+lint: ## Check everything CI checks: Rust, Python, TypeScript, Markdown, versions
 	cargo fmt --all --check
 	cargo clippy --workspace --all-targets --all-features -- -D warnings
+	$(RUFF) check $(RUFF_CONFIG) .
+	$(RUFF) format --check $(RUFF_CONFIG) .
+	pnpm exec biome ci .
 	$(MDFORMAT) --check $(MARKDOWN)
 	scripts/check-version.sh
 
 .PHONY: fmt
-fmt: ## Format the Rust code and the Markdown
+fmt: ## Format everything and apply safe lint fixes (e.g. import order)
 	cargo fmt --all
+	$(RUFF) check --fix $(RUFF_CONFIG) .
+	$(RUFF) format $(RUFF_CONFIG) .
+	pnpm exec biome check --write .
 	$(MDFORMAT) $(MARKDOWN)
 
 # ---------------------------------------------------------------- docs and demos
@@ -65,8 +79,8 @@ fmt: ## Format the Rust code and the Markdown
 docs: ## Build the docs site into site/ (strict, as CI does)
 	uvx zensical build --strict
 
-.PHONY: serve
-serve: ## Preview the docs with live reload
+.PHONY: docs-serve
+docs-serve: ## Preview the docs with live reload
 	uvx zensical serve
 
 .PHONY: demo

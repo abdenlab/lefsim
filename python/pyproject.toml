@@ -25,7 +25,7 @@ dynamic = ["version"]
 dependencies = []
 
 [dependency-groups]
-dev = ["pytest", "pyarrow>=15", "polars>=1.3", "duckdb>=1.1", "pandas", "numpy", "jsonschema"]
+dev = ["pytest", "pyarrow>=15", "polars>=1.3", "duckdb>=1.1", "pandas", "numpy", "jsonschema", "ruff"]
 notebook = ["jupyter", "matplotlib"]
 
 [project.urls]
@@ -56,3 +56,21 @@ module-name = "lefsim._lefsim"
 # Bytecode written while developing in place doesn't belong in a wheel.
 exclude = ["lefsim/__pycache__/**"]
 features = ["pyo3/extension-module"]
+
+# Lint and format settings for all the repo's Python, including the scripts
+# in packages/ and docs/: the Makefile passes --config python/pyproject.toml.
+[tool.ruff]
+line-length = 120
+# The oldest Python the wheel supports (requires-python above).
+target-version = "py39"
+# The tour notebook's cells are edited by hand, and mdformat owns Markdown
+# (ruff would reformat its code examples, aligned comments and all).
+extend-exclude = ["*.ipynb", "*.md"]
+
+[tool.ruff.lint]
+# Listed explicitly, so a ruff upgrade doesn't change the rules: pyflakes,
+# pycodestyle's error checks and sorted imports.
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["lefsim"]

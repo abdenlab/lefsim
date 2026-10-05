@@ -39,15 +39,5 @@ Read as needed:
 
 ## Commands
 
-- Rust: `cargo test`,
-    `cargo clippy --workspace --all-targets --all-features -- -D warnings`,
-    `cargo fmt --all`
-- Python, from `python/`: `uv run pytest tests`. `uv sync` and `uv run` rebuild
-    the extension whenever the Rust code changes (`tool.uv.cache-keys` in
-    `python/pyproject.toml`). Go through `uv run`, not the venv's python, which
-    may hold a stale build.
-- TypeScript: `pnpm build:wasm` (after any Rust change), then `pnpm test` and
-    `pnpm typecheck`
-- Docs: `uvx zensical build --strict`. Format Markdown with
-    `uvx --with mdformat-mkdocs --with mdformat-tables mdformat docs/ README.md`
-- Versions: `scripts/bump-version.sh <version>`; never edit versions by hand.
+The Makefile wraps these; `make` lists its targets. Versions:
+`scripts/bump-version.sh <version>`; never edit versions by hand.

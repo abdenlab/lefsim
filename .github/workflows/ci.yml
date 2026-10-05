@@ -59,6 +59,11 @@ jobs:
       # The dev group only: the notebook stack isn't needed here.
       - run: uv sync --locked --python 3.13 --no-default-groups --group dev
       - run: uv run --no-sync pytest tests
+      # ruff, over all the repo's Python, once.
+      - if: runner.os == 'Linux'
+        run: |
+          uv run --no-sync ruff check --config pyproject.toml ..
+          uv run --no-sync ruff format --check --config pyproject.toml ..
 
   typescript:
     name: TypeScript
@@ -75,6 +80,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec biome ci .
       - run: pnpm build:wasm
       - run: pnpm typecheck
       - run: pnpm test
@@ -106,3 +112,6 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10
       - run: uvx zensical build --strict
+      - run: >-
+          uvx --with mdformat-mkdocs --with mdformat-tables mdformat --wrap 80 --check
+          docs/ README.md AGENTS.md CHANGELOG.md crates/lefsim/README.md python/README.md packages/lefsim/README.md
