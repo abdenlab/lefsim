@@ -30,7 +30,7 @@ two time grid points, one time unit apart:
 </div>
 
 **Event deltas.** Each row gives a **leg**'s new state and the action that set
-it. These are the events between those two grid points (times rounded):
+it. These are the events between those same two grid points (times rounded):
 
 | time  | leg_id | lef_id | pos | mobility | action |
 | ----- | ------ | ------ | --- | -------- | ------ |
@@ -51,30 +51,33 @@ reloaded at site 62 with both legs on that one site.
 A time grid point records the state after every event at or before it. Recording
 doesn't modify the random state, so a simulation run with the same seed and
 initial state fires the same events regardless of how they are recorded.
-Similarly, s run that is paused and resumed will record the same events as an
+Similarly, a run that is paused and resumed will record the same events as an
 uninterrupted one.
 
 LEFs and legs are identified by dense ids: `lef_id` runs over `0..n_lefs`, and
-`leg_id = 2 * lef_id + side`, with side 0 the left leg and 1 the right.
+`leg_id = 2 * lef_id + side`, with `side` 0 for the left leg and 1 for the
+right.
 
 ## Bounded recording and streaming
 
-A recorder can be bounded. When it fills, the run returns *before* firing
-another event, so nothing is lost: it can hand off the chunk to the caller and
-continue where it left off. In Python and TypeScript, `sim.stream(...)` wraps
-this as a lazy stream that runs only as it's read, so a run of any length will
-consume bounded memory.
+A recorder can have a bounded capacity. When it fills, the run returns *before*
+firing another event, so nothing is lost: it can hand off the chunk to the
+caller and continue where it left off. In Python and TypeScript,
+`sim.stream(...)` wraps this as a lazy stream that runs only as it's read, so a
+run of any length will consume bounded memory.
 
 ## Keyframes
 
-Keyframes are optional snapshots included in the event delta log.
+Keyframes are optional snapshots included in the event delta log as a set of
+rows, one per leg in the system.
 
-We prepend batches of event deltas with keyframes, such that every batch opens
-with one `Keyframe` pseudo-action row per leg, thus encoding the full world
-state. This way, each batch can be replayed on its own, allowing for seeking
-across a stream or collection of batches, or for playing from a stream already
-partway through. Rows carry absolute values, so replaying is an idempotent
-overwrite, and dropping the keyframe rows leaves exactly the plain event log.
+We prepend batches of event deltas with a full keyframe, such that every batch
+opens with one `Keyframe` pseudo-action row per leg, thus encoding the full
+world state. This way, each batch can be replayed on its own, allowing for
+seeking across a stream or collection of batches, or for playing from a stream
+already partway through. Rows carry absolute values, so replaying is an
+idempotent overwrite, and dropping the keyframe rows leaves exactly the plain
+event log.
 
 Here is the start of a keyframed batch from the same run, recorded from t = 2.
 The six `Keyframe` rows restate the snapshot at 2.0 one leg at a time, and the
@@ -145,7 +148,7 @@ standalone versioned JSON document, described by a
 }
 ```
 
-Moreover, when a model is loaded in lefsim it is validated, which is something a
+Moreover, when a model is loaded in lefsim it is validated, which covers what a
 schema cannot express: CTCF sites and leg positions inside the lattice, legs in
 order, no two LEFs on one site, captured legs on a CTCF that captures from their
 side, enough free sites for the spawn rule, etc. As a result, a valid model JSON

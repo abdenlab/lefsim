@@ -26,11 +26,11 @@ current rate; `k` below is the step rate, `rates.step`.
 **Step** (per leg): the leg moves one site in the direction it faces.
 
 - Scheduled at rate `k` for a moving, unblocked leg.
-- At a CTCF met from behind (see below), its rate is reduced, or it can't step
-    at all if a captured leg holds that CTCF.
+- Facing a CTCF's evict side, the leg still advances, but an advance can end in
+    eviction instead of a step (see [Eviction](#ctcfs)).
 
-**Evict** (per leg): a leg meeting a CTCF from behind is turned back by it, and
-its LEF unbinds at once.
+**Evict** (per leg): a leg advancing onto a CTCF from its evict side is ejected,
+and its LEF unbinds at once.
 
 **Respawn** (per LEF): the LEF unbinds and rebinds at a site chosen by the spawn
 rule, both legs on that one site. It fires at the first rate that applies:
@@ -50,18 +50,21 @@ A CTCF's `captures_from` names its capture side; the other side evicts.
 probability `strength`, else it passes through, still moving. A captured leg
 stays until its LEF respawns.
 
-**Eviction.** A leg facing a CTCF from its other side races two clocks:
+**Eviction.** A leg facing a CTCF from its evict side still advances at rate
+`k`, but each advance ends one of two ways: it passes onto the site (a Step) or
+it's ejected (an Evict). The two independent outcomes split `k`:
 
-| The CTCF             | Step                                         | Evict                        |
-| -------------------- | -------------------------------------------- | ---------------------------- |
-| Empty                | `(1 − strength) · k`: passes onto it, moving | `strength · k`               |
-| Holds a captured leg | never                                        | `k`: it's certainly occupied |
-| Holds a moving leg   | never (traffic)                              | never                        |
+| The CTCF             | Step                                         | Evict                            |
+| -------------------- | -------------------------------------------- | -------------------------------- |
+| Empty                | `(1 − strength) · k`: passes onto it, moving | `strength · k`                   |
+| Holds a captured leg | never: every advance is an eviction          | `k`: the CTCF is certainly there |
+| Holds a moving leg   | never: blocked, as traffic                   | never                            |
 
-Two independent clocks at `(1 − p)·k` and `p·k` are exactly a step at `k`
+Two competing events at rates `(1 − p)·k` and `p·k` are exactly a step at `k`
 followed by a coin flip with probability `p`, so `strength` crudely models how
 often the site is occupied by CTCF, or more generally, is functional. Eviction
-unbinds the LEF in the same event, so no transient state is ever stored.
+unbinds (respawns) the LEF in the same event, so no transient state is ever
+stored.
 
 **Protection.** A leg whose partner is captured ignores a CTCF's rear side: it
 steps onto an empty one at the full rate `k`, and a held one blocks it, as
