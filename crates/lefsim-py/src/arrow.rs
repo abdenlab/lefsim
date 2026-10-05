@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow_array::types::{Float64Type, UInt32Type, UInt8Type};
+use arrow_array::types::{Float64Type, UInt8Type, UInt32Type};
 use arrow_array::{ArrayRef, DictionaryArray, PrimitiveArray, RecordBatch, StringArray};
 use arrow_buffer::ScalarBuffer;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaRef};
@@ -46,11 +46,17 @@ fn exact<T>(len: usize, iter: impl Iterator<Item = T>) -> Vec<T> {
 }
 
 fn u32_col(v: Vec<u32>) -> ArrayRef {
-    Arc::new(PrimitiveArray::<UInt32Type>::new(ScalarBuffer::from(v), None))
+    Arc::new(PrimitiveArray::<UInt32Type>::new(
+        ScalarBuffer::from(v),
+        None,
+    ))
 }
 
 fn f64_col(v: Vec<f64>) -> ArrayRef {
-    Arc::new(PrimitiveArray::<Float64Type>::new(ScalarBuffer::from(v), None))
+    Arc::new(PrimitiveArray::<Float64Type>::new(
+        ScalarBuffer::from(v),
+        None,
+    ))
 }
 
 /// A dictionary column whose keys index into `names`.
@@ -129,13 +135,21 @@ pub fn state_batch(
 ) -> Result<RecordBatch, ArrowError> {
     let n_tables = time.as_ref().map_or(1, |t| t.len());
     let schema = state_schema(layout, time.is_some(), n_lefs);
-    let LefStates { left_pos, right_pos, left_mobility, right_mobility } = lefs;
+    let LefStates {
+        left_pos,
+        right_pos,
+        left_mobility,
+        right_mobility,
+    } = lefs;
     let columns = match layout {
         Layout::Lef => {
             let n_rows = n_tables * n_lefs;
             let mut columns = Vec::with_capacity(6);
             if let Some(time) = time {
-                columns.push(f64_col(exact(n_rows, time.iter().flat_map(|&t| std::iter::repeat_n(t, n_lefs)))));
+                columns.push(f64_col(exact(
+                    n_rows,
+                    time.iter().flat_map(|&t| std::iter::repeat_n(t, n_lefs)),
+                )));
             }
             columns.extend([
                 u32_col(exact(n_rows, (0..n_tables).flat_map(|_| 0..n_lefs as u32))),
@@ -150,10 +164,23 @@ pub fn state_batch(
             // Rows ordered by snapshot, then leg_id = 2 * lef_id + side.
             let time = time.expect("callers pass time for leg rows");
             let n_rows = 2 * n_tables * n_lefs;
-            let pos = exact(n_rows, left_pos.iter().zip(&right_pos).flat_map(|(&a, &b)| [a, b]));
-            let mob = exact(n_rows, left_mobility.iter().zip(&right_mobility).flat_map(|(&a, &b)| [a, b]));
+            let pos = exact(
+                n_rows,
+                left_pos.iter().zip(&right_pos).flat_map(|(&a, &b)| [a, b]),
+            );
+            let mob = exact(
+                n_rows,
+                left_mobility
+                    .iter()
+                    .zip(&right_mobility)
+                    .flat_map(|(&a, &b)| [a, b]),
+            );
             leg_columns(
-                exact(n_rows, time.iter().flat_map(|&t| std::iter::repeat_n(t, 2 * n_lefs))),
+                exact(
+                    n_rows,
+                    time.iter()
+                        .flat_map(|&t| std::iter::repeat_n(t, 2 * n_lefs)),
+                ),
                 exact(n_rows, (0..n_tables).flat_map(|_| 0..2 * n_lefs as u32)),
                 pos,
                 mob,
@@ -170,7 +197,12 @@ pub fn frames_batch(frames: LefFrames, layout: Layout) -> Result<RecordBatch, Ar
 }
 
 /// The leg-row columns: `time, leg_id, lef_id, pos, mobility`.
-fn leg_columns(time: Vec<f64>, leg_id: Vec<u32>, pos: Vec<u32>, mob: Vec<Mobility>) -> Vec<ArrayRef> {
+fn leg_columns(
+    time: Vec<f64>,
+    leg_id: Vec<u32>,
+    pos: Vec<u32>,
+    mob: Vec<Mobility>,
+) -> Vec<ArrayRef> {
     let lef_id = leg_id.iter().map(|&leg| leg / 2).collect();
     vec![
         f64_col(time),
@@ -215,7 +247,10 @@ pub fn lattice_batch(lattice: &Lattice) -> Result<RecordBatch, ArrowError> {
         ),
         vec![
             u32_col(ctcfs.iter().map(|c| c.site).collect()),
-            dict_col(ctcfs.iter().map(|c| c.captures_from.code()).collect(), &Direction::NAMES),
+            dict_col(
+                ctcfs.iter().map(|c| c.captures_from.code()).collect(),
+                &Direction::NAMES,
+            ),
             f64_col(ctcfs.iter().map(|c| c.strength).collect()),
         ],
     )
@@ -227,15 +262,19 @@ pub fn lattice_batch(lattice: &Lattice) -> Result<RecordBatch, ArrowError> {
 pub struct ColumnError(pub String);
 
 fn column<'a>(batch: &'a RecordBatch, name: &str) -> Result<&'a ArrayRef, ColumnError> {
-    batch.column_by_name(name).ok_or_else(|| ColumnError(format!("missing column {name:?}")))
+    batch
+        .column_by_name(name)
+        .ok_or_else(|| ColumnError(format!("missing column {name:?}")))
 }
 
 fn cast_to(array: &ArrayRef, to: &DataType, name: &str) -> Result<ArrayRef, ColumnError> {
-    let cast = arrow_cast::cast(array, to)
-        .map_err(|e| ColumnError(format!("column {name:?}: {e}")))?;
+    let cast =
+        arrow_cast::cast(array, to).map_err(|e| ColumnError(format!("column {name:?}: {e}")))?;
     // Safe casts turn values that don't fit into nulls.
     if cast.null_count() > array.null_count() || array.null_count() > 0 {
-        return Err(ColumnError(format!("column {name:?} has missing or out-of-range values")));
+        return Err(ColumnError(format!(
+            "column {name:?} has missing or out-of-range values"
+        )));
     }
     Ok(cast)
 }
@@ -244,33 +283,56 @@ fn cast_to(array: &ArrayRef, to: &DataType, name: &str) -> Result<ArrayRef, Colu
 pub fn u32_values(batch: &RecordBatch, name: &str) -> Result<Vec<u32>, ColumnError> {
     let array = column(batch, name)?;
     if !array.data_type().is_integer() {
-        return Err(ColumnError(format!("column {name:?} must hold integers, got {}", array.data_type())));
+        return Err(ColumnError(format!(
+            "column {name:?} must hold integers, got {}",
+            array.data_type()
+        )));
     }
     let cast = cast_to(array, &DataType::UInt32, name)?;
-    Ok(cast.as_any().downcast_ref::<PrimitiveArray<UInt32Type>>().expect("cast").values().to_vec())
+    Ok(cast
+        .as_any()
+        .downcast_ref::<PrimitiveArray<UInt32Type>>()
+        .expect("cast")
+        .values()
+        .to_vec())
 }
 
 /// A float column as `f64`.
 pub fn f64_values(batch: &RecordBatch, name: &str) -> Result<Vec<f64>, ColumnError> {
     let cast = cast_to(column(batch, name)?, &DataType::Float64, name)?;
-    Ok(cast.as_any().downcast_ref::<PrimitiveArray<Float64Type>>().expect("cast").values().to_vec())
+    Ok(cast
+        .as_any()
+        .downcast_ref::<PrimitiveArray<Float64Type>>()
+        .expect("cast")
+        .values()
+        .to_vec())
 }
 
 /// A categorical column as codes into `names`: either names (strings or a
 /// dictionary of strings, matched case-insensitively) or the codes
 /// themselves (integers).
-pub fn code_values(batch: &RecordBatch, name: &str, names: &[&str]) -> Result<Vec<u8>, ColumnError> {
+pub fn code_values(
+    batch: &RecordBatch,
+    name: &str,
+    names: &[&str],
+) -> Result<Vec<u8>, ColumnError> {
     let array = column(batch, name)?;
     if array.data_type().is_integer() {
         let codes = cast_to(array, &DataType::UInt8, name)?;
-        let codes = codes.as_any().downcast_ref::<PrimitiveArray<UInt8Type>>().expect("cast");
+        let codes = codes
+            .as_any()
+            .downcast_ref::<PrimitiveArray<UInt8Type>>()
+            .expect("cast");
         if let Some(&bad) = codes.values().iter().find(|&&c| c as usize >= names.len()) {
             return Err(ColumnError(format!("column {name:?}: invalid code {bad}")));
         }
         return Ok(codes.values().to_vec());
     }
     let strings = cast_to(array, &DataType::Utf8, name)?;
-    let strings = strings.as_any().downcast_ref::<StringArray>().expect("cast");
+    let strings = strings
+        .as_any()
+        .downcast_ref::<StringArray>()
+        .expect("cast");
     strings
         .iter()
         .map(|s| {
@@ -279,7 +341,11 @@ pub fn code_values(batch: &RecordBatch, name: &str, names: &[&str]) -> Result<Ve
                 .iter()
                 .position(|n| n.eq_ignore_ascii_case(s))
                 .map(|i| i as u8)
-                .ok_or_else(|| ColumnError(format!("column {name:?}: unknown value {s:?} (expected one of {names:?})")))
+                .ok_or_else(|| {
+                    ColumnError(format!(
+                        "column {name:?}: unknown value {s:?} (expected one of {names:?})"
+                    ))
+                })
         })
         .collect()
 }

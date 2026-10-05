@@ -15,7 +15,12 @@ fn lattice(strength: f64) -> Lattice {
 fn build(seed: u64, strength: f64) -> Sim {
     let rule = SpawnRule::UniformNonCtcf;
     let world = populate(lattice(strength), 8, &rule, seed).unwrap();
-    let rates = Rates { step: 1.0, respawn: 0.02, respawn_blocked: 0.02, respawn_captured: 0.005 };
+    let rates = Rates {
+        step: 1.0,
+        respawn: 0.02,
+        respawn_blocked: 0.02,
+        respawn_captured: 0.005,
+    };
     Sim::new(Model::new(world, rates, rule).unwrap(), seed)
 }
 
@@ -50,7 +55,9 @@ fn state_at(traj: &[(Time, LegState)], t: Time) -> &LegState {
 /// Run to `t_end` with a bounded keyframed recorder, draining a batch
 /// each time it fills.
 fn keyframed_batches(sim: &mut Sim, t_end: Time, max_rows: usize) -> Vec<EventFrames> {
-    let mut rec = EventRecorder::new().with_max_rows(max_rows).with_keyframes(sim.n_legs());
+    let mut rec = EventRecorder::new()
+        .with_max_rows(max_rows)
+        .with_keyframes(sim.n_legs());
     let mut batches = Vec::new();
     loop {
         let report = sim.run_until_with(t_end, &mut rec);
@@ -63,13 +70,24 @@ fn keyframed_batches(sim: &mut Sim, t_end: Time, max_rows: usize) -> Vec<EventFr
 
 /// Rows `lo..hi` of a batch as `(time, leg_id, pos, mob, kind)`.
 fn rows(f: &EventFrames) -> impl Iterator<Item = (Time, u32, u32, u8, u8)> + '_ {
-    (0..f.n_rows()).map(|i| (f.time()[i], f.leg_id()[i], f.pos()[i], f.mob()[i].code(), f.kind()[i]))
+    (0..f.n_rows()).map(|i| {
+        (
+            f.time()[i],
+            f.leg_id()[i],
+            f.pos()[i],
+            f.mob()[i].code(),
+            f.kind()[i],
+        )
+    })
 }
 
 #[test]
 fn row_kinds_name_the_actions_and_keyframes() {
     // Codes 0, 1 and 3 are the actions (`Action::code`); 2 is the keyframe.
-    assert_eq!(EventFrames::KIND_NAMES, ["Step", "Respawn", "Keyframe", "Evict"]);
+    assert_eq!(
+        EventFrames::KIND_NAMES,
+        ["Step", "Respawn", "Keyframe", "Evict"]
+    );
     assert_eq!(EventFrames::KIND_NAMES[KEYFRAME as usize], "Keyframe");
 }
 
@@ -79,18 +97,33 @@ fn every_batch_opens_with_a_keyframe() {
     let n_legs = sim.n_legs();
     let max_rows = 200;
     let batches = keyframed_batches(&mut sim, 400.0, max_rows);
-    assert!(batches.len() > 10, "want many batches, got {}", batches.len());
+    assert!(
+        batches.len() > 10,
+        "want many batches, got {}",
+        batches.len()
+    );
 
     for (b, batch) in batches.iter().enumerate() {
         let head: Vec<_> = rows(batch).take(n_legs).collect();
         assert_eq!(head.len(), n_legs, "batch {b} is shorter than a keyframe");
         let t0 = head[0].0;
         for (id, &(t, leg, _, _, kind)) in head.iter().enumerate() {
-            assert_eq!((kind, leg, t), (KEYFRAME, id as u32, t0), "batch {b} row {id}");
+            assert_eq!(
+                (kind, leg, t),
+                (KEYFRAME, id as u32, t0),
+                "batch {b} row {id}"
+            );
         }
-        assert!(rows(batch).skip(n_legs).all(|r| r.4 != KEYFRAME), "keyframe mid-batch {b}");
+        assert!(
+            rows(batch).skip(n_legs).all(|r| r.4 != KEYFRAME),
+            "keyframe mid-batch {b}"
+        );
         // The cap is soft only by a zero-delay chain in progress.
-        assert!(batch.n_rows() <= max_rows + 2, "batch {b} has {} rows", batch.n_rows());
+        assert!(
+            batch.n_rows() <= max_rows + 2,
+            "batch {b} has {} rows",
+            batch.n_rows()
+        );
     }
 }
 
@@ -120,7 +153,11 @@ fn replaying_from_any_batch_reproduces_the_run() {
             state[leg as usize] = (pos, mob);
         }
         let t_key = all[start].0;
-        assert_eq!(&state, state_at(&traj, t_key), "keyframe of batch {b} at t={t_key}");
+        assert_eq!(
+            &state,
+            state_at(&traj, t_key),
+            "keyframe of batch {b} at t={t_key}"
+        );
 
         // Replay forward a few batches, checking after each group of rows
         // sharing a time. Later keyframes must agree with the replay.
@@ -131,12 +168,20 @@ fn replaying_from_any_batch_reproduces_the_run() {
             while i < end && all[i].0 == t {
                 let (_, leg, pos, mob, kind) = all[i];
                 if kind == KEYFRAME {
-                    assert_eq!(state[leg as usize], (pos, mob), "later keyframe disagrees at t={t}");
+                    assert_eq!(
+                        state[leg as usize],
+                        (pos, mob),
+                        "later keyframe disagrees at t={t}"
+                    );
                 }
                 state[leg as usize] = (pos, mob);
                 i += 1;
             }
-            assert_eq!(&state, state_at(&traj, t), "replay from batch {b}, at t={t}");
+            assert_eq!(
+                &state,
+                state_at(&traj, t),
+                "replay from batch {b}, at t={t}"
+            );
         }
     }
 }
@@ -150,7 +195,11 @@ fn dropping_keyframes_leaves_the_plain_event_log() {
 
     let mut sim = build(5, 0.8);
     let batches = keyframed_batches(&mut sim, t_end, 120);
-    let events: Vec<_> = batches.iter().flat_map(rows).filter(|r| r.4 != KEYFRAME).collect();
+    let events: Vec<_> = batches
+        .iter()
+        .flat_map(rows)
+        .filter(|r| r.4 != KEYFRAME)
+        .collect();
     assert_eq!(events, rows(plain.frames()).collect::<Vec<_>>());
     assert_eq!(leg_state(&sim), leg_state(&plain_sim));
 }

@@ -89,9 +89,17 @@ fn replayer_from_rows(
         None => {
             let first = (0..rows.time.len())
                 .find(|&i| is_keyframe(&rows, i))
-                .ok_or_else(|| value_error("no keyframe in the log: pass n_lefs, or record with keyframes=True"))?;
+                .ok_or_else(|| {
+                    value_error(
+                        "no keyframe in the log: pass n_lefs, or record with keyframes=True",
+                    )
+                })?;
             let len = (first..rows.time.len())
-                .take_while(|&i| is_keyframe(&rows, i) && rows.time[i] == rows.time[first] && rows.leg_id[i] as usize == i - first)
+                .take_while(|&i| {
+                    is_keyframe(&rows, i)
+                        && rows.time[i] == rows.time[first]
+                        && rows.leg_id[i] as usize == i - first
+                })
                 .count();
             len / 2
         }
@@ -109,7 +117,9 @@ fn replayer_from_rows(
     }
     let last = rows.time.last().copied().unwrap_or(Time::NEG_INFINITY);
     if !rows.time.is_empty() {
-        replayer.push(frames(rows), end.unwrap_or(last)).map_err(replay_error)?;
+        replayer
+            .push(frames(rows), end.unwrap_or(last))
+            .map_err(replay_error)?;
     }
     Ok(replayer)
 }
@@ -124,7 +134,9 @@ fn footer_entry(file: &Bound<'_, PyAny>, key: &str) -> PyResult<Option<String>> 
     if value.is_none() {
         return Ok(None);
     }
-    Ok(Some(String::from_utf8_lossy(&value.extract::<Vec<u8>>()?).into_owned()))
+    Ok(Some(
+        String::from_utf8_lossy(&value.extract::<Vec<u8>>()?).into_owned(),
+    ))
 }
 
 /// Each row group's smallest `time` (its keyframe's time, in a keyframed
@@ -132,10 +144,16 @@ fn footer_entry(file: &Bound<'_, PyAny>, key: &str) -> PyResult<Option<String>> 
 fn row_group_starts(file: &Bound<'_, PyAny>) -> PyResult<Option<Vec<Time>>> {
     let meta = file.getattr("metadata")?;
     let n: usize = meta.getattr("num_row_groups")?.extract()?;
-    let column: usize = file.getattr("schema_arrow")?.call_method1("get_field_index", ("time",))?.extract()?;
+    let column: usize = file
+        .getattr("schema_arrow")?
+        .call_method1("get_field_index", ("time",))?
+        .extract()?;
     let mut starts = Vec::with_capacity(n);
     for g in 0..n {
-        let stats = meta.call_method1("row_group", (g,))?.call_method1("column", (column,))?.getattr("statistics")?;
+        let stats = meta
+            .call_method1("row_group", (g,))?
+            .call_method1("column", (column,))?
+            .getattr("statistics")?;
         if stats.is_none() || !stats.getattr("has_min_max")?.extract::<bool>()? {
             return Ok(None);
         }
@@ -155,7 +173,8 @@ impl PyReplayer {
         for batch in table.extract::<AnyRecordBatch>()?.into_reader()? {
             append(&mut cols, event_columns(&batch.map_err(arrow_error)?)?);
         }
-        core.push(frames(cols), src.group_end(g)).map_err(replay_error)?;
+        core.push(frames(cols), src.group_end(g))
+            .map_err(replay_error)?;
         if !src.loaded {
             src.first = g;
         }
@@ -168,7 +187,10 @@ impl PyReplayer {
     /// Start over from row group `g` alone: one read, however far away.
     fn reopen(&mut self, py: Python<'_>, g: usize) -> PyResult<()> {
         self.core = lefsim::Replayer::new(self.core.lattice().clone(), self.core.n_lefs());
-        self.source.as_mut().expect("a Parquet-backed replayer").loaded = false;
+        self.source
+            .as_mut()
+            .expect("a Parquet-backed replayer")
+            .loaded = false;
         self.load(py, g)
     }
 
@@ -268,7 +290,10 @@ impl RowGroups {
 impl PyReplayer {
     #[new]
     fn new(lattice: &PyLattice, n_lefs: usize) -> Self {
-        PyReplayer { core: lefsim::Replayer::new(lattice.0.clone(), n_lefs), source: None }
+        PyReplayer {
+            core: lefsim::Replayer::new(lattice.0.clone(), n_lefs),
+            source: None,
+        }
     }
 
     /// Load a whole keyframed event log: any Arrow table, batch or stream
@@ -290,7 +315,10 @@ impl PyReplayer {
     ) -> PyResult<Self> {
         let rows = collect_rows(source)?;
         let replayer = replayer_from_rows(rows, lattice.0.clone(), n_lefs, end)?;
-        Ok(PyReplayer { core: replayer, source: None })
+        Ok(PyReplayer {
+            core: replayer,
+            source: None,
+        })
     }
 
     /// Open a Parquet file written by `Stream.to_parquet` for random access:
@@ -309,14 +337,20 @@ impl PyReplayer {
         lattice: Option<&PyLattice>,
     ) -> PyResult<Self> {
         let py = path.py();
-        let file = py.import("pyarrow.parquet")?.call_method1("ParquetFile", (path,))?;
+        let file = py
+            .import("pyarrow.parquet")?
+            .call_method1("ParquetFile", (path,))?;
         let model: Option<lefsim::Model> = match footer_entry(&file, "lefsim.model")? {
-            Some(json) => Some(serde_json::from_str(&json).map_err(|e| value_error(format!("lefsim.model: {e}")))?),
+            Some(json) => Some(
+                serde_json::from_str(&json)
+                    .map_err(|e| value_error(format!("lefsim.model: {e}")))?,
+            ),
             None => None,
         };
         let record_end = match footer_entry(&file, "lefsim.run")? {
             Some(json) => {
-                let run: serde_json::Value = serde_json::from_str(&json).map_err(|e| value_error(format!("lefsim.run: {e}")))?;
+                let run: serde_json::Value = serde_json::from_str(&json)
+                    .map_err(|e| value_error(format!("lefsim.run: {e}")))?;
                 run.get("record_end").and_then(|v| v.as_f64())
             }
             None => None,
@@ -327,16 +361,35 @@ impl PyReplayer {
             (None, None) => return Err(value_error("the file has no lefsim.model: pass lattice=")),
         };
         let keyframed = footer_entry(&file, "lefsim.row_groups")?.as_deref() == Some("keyframed");
-        let starts = if keyframed { row_group_starts(&file)? } else { None };
+        let starts = if keyframed {
+            row_group_starts(&file)?
+        } else {
+            None
+        };
         let (Some(model), Some(starts)) = (model, starts) else {
             // Not our layout: read everything and re-split at keyframes.
             let rows = collect_rows(&file.call_method0("iter_batches")?)?;
-            return Ok(PyReplayer { core: replayer_from_rows(rows, lattice, None, record_end)?, source: None });
+            return Ok(PyReplayer {
+                core: replayer_from_rows(rows, lattice, None, record_end)?,
+                source: None,
+            });
         };
-        let end = record_end.unwrap_or_else(|| starts.last().copied().unwrap_or(Time::NEG_INFINITY));
+        let end =
+            record_end.unwrap_or_else(|| starts.last().copied().unwrap_or(Time::NEG_INFINITY));
         let core = lefsim::Replayer::new(lattice, model.world().n_lefs());
-        let source = RowGroups { file: file.unbind(), starts, end, first: 0, last: 0, loaded: false, reads: 0 };
-        Ok(PyReplayer { core, source: Some(source) })
+        let source = RowGroups {
+            file: file.unbind(),
+            starts,
+            end,
+            first: 0,
+            last: 0,
+            loaded: false,
+            reads: 0,
+        };
+        Ok(PyReplayer {
+            core,
+            source: Some(source),
+        })
     }
 
     /// How many Parquet row groups `from_parquet` has read so far (0 for a
@@ -352,14 +405,18 @@ impl PyReplayer {
     #[pyo3(signature = (events, end = None))]
     fn push(&mut self, events: AnyRecordBatch, end: Option<f64>) -> PyResult<()> {
         if self.source.is_some() {
-            return Err(value_error("a replayer opened with from_parquet reads its own data"));
+            return Err(value_error(
+                "a replayer opened with from_parquet reads its own data",
+            ));
         }
         let mut cols = EventColumns::default();
         for batch in events.into_reader()? {
             append(&mut cols, event_columns(&batch.map_err(arrow_error)?)?);
         }
         let last = cols.time.last().copied().unwrap_or(Time::NEG_INFINITY);
-        self.core.push(frames(cols), end.unwrap_or(last)).map_err(replay_error)
+        self.core
+            .push(frames(cols), end.unwrap_or(last))
+            .map_err(replay_error)
     }
 
     #[getter]
@@ -415,13 +472,19 @@ impl PyReplayer {
             return Ok(self.core.time());
         };
         if !self.core.ready() {
-            return if t < first { Ok(self.core.time()) } else { self.seek(py, t) };
+            return if t < first {
+                Ok(self.core.time())
+            } else {
+                self.seek(py, t)
+            };
         }
         if t < self.core.time() {
             return self.seek(py, t.max(first));
         }
         let target = t.min(src.end);
-        let g = src.group_at(target).expect("the target follows the first keyframe");
+        let g = src
+            .group_at(target)
+            .expect("the target follows the first keyframe");
         if g > src.last + 1 {
             // A far jump: start over at the row group holding the target.
             self.reopen(py, g)?;
@@ -441,9 +504,12 @@ impl PyReplayer {
             return Err(value_error("t is NaN"));
         }
         if let Some(src) = &self.source {
-            let g = src
-                .group_at(t.min(src.end))
-                .ok_or_else(|| replay_error(ReplayError::NoKeyframe { t, earliest: src.starts.first().copied() }))?;
+            let g = src.group_at(t.min(src.end)).ok_or_else(|| {
+                replay_error(ReplayError::NoKeyframe {
+                    t,
+                    earliest: src.starts.first().copied(),
+                })
+            })?;
             if !(src.loaded && src.first <= g && g <= src.last) {
                 self.reopen(py, g)?;
             }
@@ -456,7 +522,12 @@ impl PyReplayer {
     fn state(&self, layout: &str) -> PyResult<PyBatch> {
         let layout = parse_layout(layout)?;
         let lefs = self.core.lef_states().map_err(replay_error)?.clone();
-        let batch = state_batch(Some(vec![self.core.time()]), self.core.n_lefs(), lefs, layout);
+        let batch = state_batch(
+            Some(vec![self.core.time()]),
+            self.core.n_lefs(),
+            lefs,
+            layout,
+        );
         Ok(PyBatch(batch.map_err(arrow_error)?))
     }
 
@@ -520,7 +591,9 @@ impl PyReplayer {
             .map_err(|e| value_error(e.to_string()))?;
         let frames = self.grid_frames(py, mode, t_start, t_end)?;
         let distances = py
-            .detach(|| lefsim::sim::distances_over(&frames, n_sites, &sites, step_length, hop_length))
+            .detach(|| {
+                lefsim::sim::distances_over(&frames, n_sites, &sites, step_length, hop_length)
+            })
             .map_err(|e| value_error(e.to_string()))?;
         Ok((float_array(py, frames.time())?, int_array(py, &distances)?))
     }
@@ -538,7 +611,9 @@ impl PyReplayer {
     }
 
     fn __repr__(&self) -> String {
-        let start = self.start().map_or("None".to_string(), |t| format!("{t:?}"));
+        let start = self
+            .start()
+            .map_or("None".to_string(), |t| format!("{t:?}"));
         format!(
             "lefsim.Replayer(n_lefs={}, start={start}, end={:?}, time={:?})",
             self.core.n_lefs(),
@@ -546,5 +621,4 @@ impl PyReplayer {
             self.core.time()
         )
     }
-
 }

@@ -19,7 +19,7 @@ fn rates() -> Rates {
         step: 1.0,
         respawn: 0.02,
         respawn_blocked: 0.02,
-       
+
         respawn_captured: 0.005,
     }
 }
@@ -85,7 +85,11 @@ fn grid_snapshots_match_event_level_trajectory() {
     assert_eq!(frames.n_snapshots(), expected_count);
 
     let traj = event_trajectory(build(1), t_end);
-    assert!(traj.len() > 200, "want a busy run, got {} events", traj.len());
+    assert!(
+        traj.len() > 200,
+        "want a busy run, got {} events",
+        traj.len()
+    );
     for s in 0..frames.n_snapshots() {
         let g = frames.time()[s];
         assert_eq!(g, s as f64 * dt);
@@ -139,7 +143,9 @@ fn bounded_recorders_stream_without_loss() {
     whole.run_until_with(t_end, &mut (&mut whole_rec, &mut whole_ev));
 
     let mut sim = build(4);
-    let mut rec = sim.recorder(SampleMode::every_dt(0.4)).with_max_snapshots(7);
+    let mut rec = sim
+        .recorder(SampleMode::every_dt(0.4))
+        .with_max_snapshots(7);
     let mut ev = EventRecorder::new().with_max_rows(11);
     let mut frames = LefFrames::new(sim.n_lefs());
     let mut events = EventFrames::new();
@@ -182,9 +188,16 @@ fn every_eviction_unloads_its_lef_in_one_event() {
     let mut ev = EventRecorder::new();
     sim.run_until_with(500.0, &mut ev);
     let f = ev.frames();
-    let evict = Action::Evict { leg: LegKey::default() }.code();
+    let evict = Action::Evict {
+        leg: LegKey::default(),
+    }
+    .code();
     let rows: Vec<usize> = (0..f.n_rows()).filter(|&r| f.kind()[r] == evict).collect();
-    assert!(rows.len() > 10, "want evictions to exercise this, got {} rows", rows.len());
+    assert!(
+        rows.len() > 10,
+        "want evictions to exercise this, got {} rows",
+        rows.len()
+    );
     for pair in rows.chunks(2) {
         let [a, b] = [pair[0], pair[1]];
         assert_eq!(f.time()[a], f.time()[b]);
@@ -229,9 +242,18 @@ fn event_rows_match_actions() {
     assert_eq!(report.n_events, 2000);
 
     let f = ev.frames();
-    let step = Action::Step { leg: LegKey::default() }.code();
-    let respawn = Action::Respawn { lef: LefKey::default() }.code();
-    let evict = Action::Evict { leg: LegKey::default() }.code();
+    let step = Action::Step {
+        leg: LegKey::default(),
+    }
+    .code();
+    let respawn = Action::Respawn {
+        lef: LefKey::default(),
+    }
+    .code();
+    let evict = Action::Evict {
+        leg: LegKey::default(),
+    }
+    .code();
     let n_steps = f.kind().iter().filter(|&&k| k == step).count();
     let n_respawn_rows = f.kind().iter().filter(|&&k| k == respawn).count();
     let n_evict_rows = f.kind().iter().filter(|&&k| k == evict).count();
@@ -263,12 +285,18 @@ fn late_recorder_skips_unobserved_grid_points() {
     sim.run_until(10.0);
     let mut rec = sim.recorder(SampleMode::every_dt(1.0));
     sim.run_until_with(20.0, &mut rec);
-    assert_eq!(rec.frames().time(), (10..=20).map(f64::from).collect::<Vec<_>>());
+    assert_eq!(
+        rec.frames().time(),
+        (10..=20).map(f64::from).collect::<Vec<_>>()
+    );
 
     // And those snapshots agree with a recorder attached from the start.
     let (full, _) = build(12).collect_until(20.0, SampleMode::every_dt(1.0));
     for s in 0..rec.frames().n_snapshots() {
-        assert_eq!(snapshot_state(rec.frames(), s), snapshot_state(&full, s + 10));
+        assert_eq!(
+            snapshot_state(rec.frames(), s),
+            snapshot_state(&full, s + 10)
+        );
     }
 }
 

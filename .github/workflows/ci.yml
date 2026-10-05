@@ -30,8 +30,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
       # The whole workspace, so the bindings are linted too.
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo test -p lefsim --all-features

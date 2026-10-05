@@ -9,16 +9,16 @@ pub mod action;
 pub mod distance;
 pub mod entity;
 pub mod lattice;
-pub mod spawn;
-pub mod world;
 #[cfg(feature = "serde")]
 mod serial;
+pub mod spawn;
+pub mod world;
 
 pub use action::{Action, Rates};
 pub use distance::{DistanceError, LoopGraph};
-pub use entity::{Leg, Lef, LefKey, LegKey, Mobility};
+pub use entity::{Lef, LefKey, Leg, LegKey, Mobility};
 pub use lattice::{Ctcf, Direction, Lattice, LatticeError, Position, Site, SiteKind};
-pub use spawn::{populate, Spawn, SpawnError, SpawnRule};
+pub use spawn::{Spawn, SpawnError, SpawnRule, populate};
 pub use world::{LefStates, LegState, World, WorldError};
 
 use rand_pcg::Pcg64;
@@ -73,7 +73,11 @@ impl Model {
     /// can always place the world's LEFs. The world validated itself.
     pub fn new(world: World, rates: Rates, spawn: SpawnRule) -> Result<Self, ModelError> {
         check(&world, &rates, &spawn)?;
-        Ok(Model { world, rates, spawn })
+        Ok(Model {
+            world,
+            rates,
+            spawn,
+        })
     }
 
     pub fn world(&self) -> &World {
@@ -106,7 +110,9 @@ pub(crate) fn check(world: &World, rates: &Rates, spawn: &dyn Spawn) -> Result<(
             return Err(ModelError::BadRate { name, value });
         }
     }
-    spawn.check(world.lattice(), world.n_lefs()).map_err(ModelError::Spawn)
+    spawn
+        .check(world.lattice(), world.n_lefs())
+        .map_err(ModelError::Spawn)
 }
 
 /// Why a world, rates and spawn rule don't make a valid model.
@@ -122,7 +128,10 @@ impl std::fmt::Display for ModelError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ModelError::BadRate { name, value } => {
-                write!(f, "the {name} rate must be positive and finite, got {value}")
+                write!(
+                    f,
+                    "the {name} rate must be positive and finite, got {value}"
+                )
             }
             ModelError::Spawn(e) => e.fmt(f),
         }
@@ -148,7 +157,13 @@ mod tests {
     use super::*;
 
     fn world(n_sites: usize, n_lefs: usize) -> World {
-        populate(Lattice::plain(n_sites).unwrap(), n_lefs, &SpawnRule::UniformNonCtcf, 1).unwrap()
+        populate(
+            Lattice::plain(n_sites).unwrap(),
+            n_lefs,
+            &SpawnRule::UniformNonCtcf,
+            1,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -156,20 +171,39 @@ mod tests {
         let rule = SpawnRule::UniformNonCtcf;
         assert!(Model::new(world(10, 3), Rates::default(), rule).is_ok());
 
-        let bad = Rates { respawn: f64::NAN, ..Rates::default() };
+        let bad = Rates {
+            respawn: f64::NAN,
+            ..Rates::default()
+        };
         let err = Model::new(world(10, 3), bad, rule).unwrap_err();
-        assert!(matches!(err, ModelError::BadRate { name: "respawn", .. }), "{err}");
-        let bad = Rates { step: 0.0, ..Rates::default() };
+        assert!(
+            matches!(
+                err,
+                ModelError::BadRate {
+                    name: "respawn",
+                    ..
+                }
+            ),
+            "{err}"
+        );
+        let bad = Rates {
+            step: 0.0,
+            ..Rates::default()
+        };
         assert!(Model::new(world(10, 3), bad, rule).is_err());
 
         // Three LEFs on four sites: add_lef accepts them, the rule can't
         // guarantee a free site at respawn.
         let mut w = World::new(Lattice::plain(4).unwrap());
         for p in [0, 1, 2] {
-            w.add_lef((p, Mobility::Moving), (p, Mobility::Moving)).unwrap();
+            w.add_lef((p, Mobility::Moving), (p, Mobility::Moving))
+                .unwrap();
         }
         let err = Model::new(w, Rates::default(), rule).unwrap_err();
-        assert!(matches!(err, ModelError::Spawn(SpawnError::NotEnoughSites { .. })), "{err}");
+        assert!(
+            matches!(err, ModelError::Spawn(SpawnError::NotEnoughSites { .. })),
+            "{err}"
+        );
     }
 
     #[test]

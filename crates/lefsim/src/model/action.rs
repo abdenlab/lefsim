@@ -75,13 +75,7 @@ impl Action {
 
     /// Pure: compute when this action would next fire given the current world
     /// state and clock. Does not mutate.
-    pub fn schedule(
-        &self,
-        world: &World,
-        rates: &Rates,
-        now: Time,
-        rng: &mut SimRng,
-    ) -> Schedule {
+    pub fn schedule(&self, world: &World, rates: &Rates, now: Time, rng: &mut SimRng) -> Schedule {
         match *self {
             Action::Step { leg } => schedule_step(leg, world, rates, now, rng),
             Action::Respawn { lef } => schedule_respawn(lef, world, rates, now, rng),
@@ -134,9 +128,16 @@ impl Touched {
     pub(crate) fn dependent_actions(&self, world: &World, fired: Action) -> SmallVec<[Action; 32]> {
         let from_legs = self.legs.iter().flat_map(|&leg_k| {
             let lef_k = world.legs[leg_k].lef;
-            [Action::Step { leg: leg_k }, Action::Evict { leg: leg_k }, Action::Respawn { lef: lef_k }]
+            [
+                Action::Step { leg: leg_k },
+                Action::Evict { leg: leg_k },
+                Action::Respawn { lef: lef_k },
+            ]
         });
-        let from_lefs = self.lefs.iter().map(|&lef_k| Action::Respawn { lef: lef_k });
+        let from_lefs = self
+            .lefs
+            .iter()
+            .map(|&lef_k| Action::Respawn { lef: lef_k });
 
         let mut actions: SmallVec<[Action; 32]> = SmallVec::new();
         actions.push(fired);
@@ -175,17 +176,30 @@ enum Ahead {
 /// behind is exactly a held CTCF; any other leg ahead is traffic.
 fn ahead(world: &World, leg_k: LegKey) -> Ahead {
     let leg = &world.legs[leg_k];
-    let Some(target) = leg.facing.shift(leg.pos).filter(|&t| (t as usize) < world.lattice.len()) else {
+    let Some(target) = leg
+        .facing
+        .shift(leg.pos)
+        .filter(|&t| (t as usize) < world.lattice.len())
+    else {
         return Ahead::Blocked;
     };
     let back = match world.lattice.sites[target as usize].kind {
-        SiteKind::Ctcf { captures_from, strength } if captures_from == leg.facing => Some(strength),
+        SiteKind::Ctcf {
+            captures_from,
+            strength,
+        } if captures_from == leg.facing => Some(strength),
         _ => None,
     };
     let occupants = world.legs_at(target);
     match back {
         Some(strength) if occupants.is_empty() => Ahead::CtcfBack(strength),
-        Some(_) if occupants.iter().any(|&o| world.legs[o].mobility == Mobility::Captured) => Ahead::CtcfBackHeld,
+        Some(_)
+            if occupants
+                .iter()
+                .any(|&o| world.legs[o].mobility == Mobility::Captured) =>
+        {
+            Ahead::CtcfBackHeld
+        }
         _ if occupants.is_empty() => Ahead::Free,
         _ => Ahead::Blocked,
     }
@@ -194,7 +208,9 @@ fn ahead(world: &World, leg_k: LegKey) -> Ahead {
 /// Whether a leg's partner is captured, which makes it immune to eviction.
 fn protected(world: &World, leg_k: LegKey) -> bool {
     let lef = &world.lefs[world.legs[leg_k].lef];
-    lef.legs.iter().any(|&l| l != leg_k && world.legs[l].mobility == Mobility::Captured)
+    lef.legs
+        .iter()
+        .any(|&l| l != leg_k && world.legs[l].mobility == Mobility::Captured)
 }
 
 /// Whether a leg is blocked: moving, but unable to step or be evicted (a leg
@@ -273,7 +289,10 @@ fn schedule_respawn(
 /// is blocked, else `respawn`.
 fn respawn_rate(lef_k: LefKey, world: &World, rates: &Rates) -> f64 {
     let legs = world.lefs[lef_k].legs;
-    if legs.iter().any(|&l| world.legs[l].mobility == Mobility::Captured) {
+    if legs
+        .iter()
+        .any(|&l| world.legs[l].mobility == Mobility::Captured)
+    {
         rates.respawn_captured
     } else if legs.iter().any(|&l| blocked(world, l)) {
         rates.respawn_blocked
@@ -284,17 +303,14 @@ fn respawn_rate(lef_k: LefKey, world: &World, rates: &Rates) -> f64 {
 
 // ----- per-variant fire implementations -----
 
-fn fire_step(
-    leg_k: LegKey,
-    world: &mut World,
-    rng: &mut SimRng,
-    touched: &mut Touched,
-) {
+fn fire_step(leg_k: LegKey, world: &mut World, rng: &mut SimRng, touched: &mut Touched) {
     let (old_pos, lef_k, facing) = {
         let leg = &world.legs[leg_k];
         (leg.pos, leg.lef, leg.facing)
     };
-    let new_pos = facing.shift(old_pos).expect("step scheduled at lattice boundary");
+    let new_pos = facing
+        .shift(old_pos)
+        .expect("step scheduled at lattice boundary");
 
     // The legs whose way ahead this step changes: those behind the old site
     // (no longer blocked) and those beyond the new one (now blocked). Every
@@ -329,9 +345,16 @@ fn fire_step(
     touched.legs.push(leg_k);
     touched.lefs.push(lef_k);
     if captured {
-        touched.legs.extend(world.lefs[lef_k].legs.into_iter().filter(|&l| l != leg_k));
+        touched
+            .legs
+            .extend(world.lefs[lef_k].legs.into_iter().filter(|&l| l != leg_k));
     }
-    touched.legs.extend(rear_neighbors.into_iter().chain(post_neighbors).filter(|&n| n != leg_k));
+    touched.legs.extend(
+        rear_neighbors
+            .into_iter()
+            .chain(post_neighbors)
+            .filter(|&n| n != leg_k),
+    );
 }
 
 /// Eviction: the LEF unloads at once, respawning in the same event, so no
@@ -343,7 +366,10 @@ fn fire_evict(
     rng: &mut SimRng,
     touched: &mut Touched,
 ) {
-    debug_assert!(!protected(world, leg_k), "eviction scheduled for a protected leg");
+    debug_assert!(
+        !protected(world, leg_k),
+        "eviction scheduled for a protected leg"
+    );
     let lef_k = world.legs[leg_k].lef;
     fire_respawn(lef_k, world, spawn, rng, touched);
 }
@@ -472,7 +498,10 @@ pub(crate) fn resolve_mobility(
 ) -> Mobility {
     match site {
         SiteKind::Plain => Mobility::Moving,
-        SiteKind::Ctcf { captures_from, strength } => {
+        SiteKind::Ctcf {
+            captures_from,
+            strength,
+        } => {
             if arrived_from == captures_from && rng.gen_bool(strength) {
                 Mobility::Captured
             } else {
@@ -486,8 +515,8 @@ pub(crate) fn resolve_mobility(
 mod tests {
     use super::*;
     use crate::model::{Lattice, SpawnRule};
-    use rand::SeedableRng;
     use Mobility::Moving;
+    use rand::SeedableRng;
 
     #[test]
     fn dependent_actions_start_with_the_fired_action_and_have_no_duplicates() {
@@ -502,12 +531,23 @@ mod tests {
         let deps = touched.dependent_actions(&world, fired);
         assert_eq!(
             deps.as_slice(),
-            &[fired, Action::Step { leg: left }, Action::Evict { leg: left }, Action::Step { leg: right }, Action::Evict { leg: right }]
+            &[
+                fired,
+                Action::Step { leg: left },
+                Action::Evict { leg: left },
+                Action::Step { leg: right },
+                Action::Evict { leg: right }
+            ]
         );
     }
 
     /// Distinct rates, so the chosen one names the rule that chose it.
-    const RATES: Rates = Rates { step: 1.0, respawn: 1.0, respawn_blocked: 2.0, respawn_captured: 3.0 };
+    const RATES: Rates = Rates {
+        step: 1.0,
+        respawn: 1.0,
+        respawn_blocked: 2.0,
+        respawn_captured: 3.0,
+    };
 
     /// A LEF as `((left_pos, mobility), (right_pos, mobility))`.
     type LefSpec = ((u32, Mobility), (u32, Mobility));
@@ -516,13 +556,20 @@ mod tests {
     /// right-facing legs arriving from the left, and evicts left-facing legs
     /// meeting it from the right), at `strength`.
     fn lattice(strength: f64) -> Lattice {
-        let ctcf = |site| crate::model::Ctcf { site, captures_from: Direction::Left, strength };
+        let ctcf = |site| crate::model::Ctcf {
+            site,
+            captures_from: Direction::Left,
+            strength,
+        };
         Lattice::with_ctcfs(40, &[ctcf(20), ctcf(25)]).unwrap()
     }
 
     fn world_on(lattice: Lattice, lefs: &[LefSpec]) -> (World, Vec<LefKey>) {
         let mut world = World::new(lattice);
-        let keys = lefs.iter().map(|&(l, r)| world.add_lef(l, r).unwrap()).collect();
+        let keys = lefs
+            .iter()
+            .map(|&(l, r)| world.add_lef(l, r).unwrap())
+            .collect();
         (world, keys)
     }
 
@@ -533,12 +580,18 @@ mod tests {
     /// Whether `action` is scheduled to fire (rather than never).
     fn scheduled(world: &World, action: Action) -> bool {
         let mut rng = SimRng::seed_from_u64(0);
-        matches!(action.schedule(world, &RATES, 0.0, &mut rng), Schedule::At(_))
+        matches!(
+            action.schedule(world, &RATES, 0.0, &mut rng),
+            Schedule::At(_)
+        )
     }
 
     /// Whether a leg's step and eviction are scheduled, as `(step, evict)`.
     fn clocks(world: &World, leg: LegKey) -> (bool, bool) {
-        (scheduled(world, Action::Step { leg }), scheduled(world, Action::Evict { leg }))
+        (
+            scheduled(world, Action::Step { leg }),
+            scheduled(world, Action::Evict { leg }),
+        )
     }
 
     #[test]
@@ -550,18 +603,40 @@ mod tests {
         };
         // Both legs free: basal.
         assert_eq!(rate(&[((5, Moving), (8, Moving))], 0), RATES.respawn);
-        assert_eq!(rate(&[((5, Moving), (8, Moving)), ((10, Moving), (12, Moving))], 1), RATES.respawn);
+        assert_eq!(
+            rate(
+                &[((5, Moving), (8, Moving)), ((10, Moving), (12, Moving))],
+                1
+            ),
+            RATES.respawn
+        );
         // Either leg blocked, by a leg ahead or the lattice's end: blocked.
-        assert_eq!(rate(&[((5, Moving), (8, Moving)), ((9, Moving), (12, Moving))], 0), RATES.respawn_blocked);
-        assert_eq!(rate(&[((0, Moving), (8, Moving))], 0), RATES.respawn_blocked);
-        let rosette = [((2, Moving), (5, Moving)), ((6, Moving), (9, Moving)), ((10, Moving), (13, Moving))];
+        assert_eq!(
+            rate(
+                &[((5, Moving), (8, Moving)), ((9, Moving), (12, Moving))],
+                0
+            ),
+            RATES.respawn_blocked
+        );
+        assert_eq!(
+            rate(&[((0, Moving), (8, Moving))], 0),
+            RATES.respawn_blocked
+        );
+        let rosette = [
+            ((2, Moving), (5, Moving)),
+            ((6, Moving), (9, Moving)),
+            ((10, Moving), (13, Moving)),
+        ];
         for lef in 0..3 {
             assert_eq!(rate(&rosette, lef), RATES.respawn_blocked, "LEF {lef}");
         }
         // Facing a CTCF from behind isn't blocked: an eviction is pending.
         assert_eq!(rate(&[((26, Moving), (30, Moving))], 0), RATES.respawn);
         // Either leg captured: captured, over blocked.
-        assert_eq!(rate(&[((0, Moving), (20, Captured))], 0), RATES.respawn_captured);
+        assert_eq!(
+            rate(&[((0, Moving), (20, Captured))], 0),
+            RATES.respawn_captured
+        );
     }
 
     #[test]
@@ -572,15 +647,27 @@ mod tests {
         assert_eq!(clocks(&world, world.lefs[keys[0]].legs[0]), (true, false));
         // A bare CTCF from behind (the left leg at 26, facing 25): both clocks
         // at strengths in (0, 1), only eviction at 1, only the step at 0.
-        for (strength, expected) in [(0.5, (true, true)), (1.0, (false, true)), (0.0, (true, false))] {
+        for (strength, expected) in [
+            (0.5, (true, true)),
+            (1.0, (false, true)),
+            (0.0, (true, false)),
+        ] {
             let (world, keys) = world_on(lattice(strength), &[((26, Moving), (30, Moving))]);
-            assert_eq!(clocks(&world, world.lefs[keys[0]].legs[0]), expected, "strength {strength}");
+            assert_eq!(
+                clocks(&world, world.lefs[keys[0]].legs[0]),
+                expected,
+                "strength {strength}"
+            );
         }
         // A CTCF held by a captured leg: only eviction, even at strength 0.
-        let (world, keys) = world_on(lattice(0.0), &[((10, Moving), (25, Captured)), ((26, Moving), (30, Moving))]);
+        let (world, keys) = world_on(
+            lattice(0.0),
+            &[((10, Moving), (25, Captured)), ((26, Moving), (30, Moving))],
+        );
         assert_eq!(clocks(&world, world.lefs[keys[1]].legs[0]), (false, true));
         // A moving leg on the CTCF is traffic: neither, and blocked.
-        let (world, keys) = world_with(&[((25, Moving), (27, Moving)), ((26, Moving), (26, Moving))]);
+        let (world, keys) =
+            world_with(&[((25, Moving), (27, Moving)), ((26, Moving), (26, Moving))]);
         let behind = world.lefs[keys[1]].legs[0];
         assert_eq!(clocks(&world, behind), (false, false));
         assert!(blocked(&world, behind));
@@ -598,7 +685,9 @@ mod tests {
         let leg = world.lefs[keys[0]].legs[0];
         assert_eq!(clocks(&world, leg), (true, false));
         let mut rng = SimRng::seed_from_u64(0);
-        let full = |action: Action, world: &World, rng: &mut SimRng| match action.schedule(world, &RATES, 0.0, rng) {
+        let full = |action: Action, world: &World, rng: &mut SimRng| match action
+            .schedule(world, &RATES, 0.0, rng)
+        {
             Schedule::At(t) => t,
             Schedule::Never => f64::INFINITY,
         };
@@ -607,11 +696,17 @@ mod tests {
         let free_leg = free_world.lefs[free_keys[0]].legs[0];
         let t_protected = full(Action::Step { leg }, &world, &mut rng);
         let mut rng = SimRng::seed_from_u64(0);
-        assert_eq!(t_protected, full(Action::Step { leg: free_leg }, &free_world, &mut rng));
+        assert_eq!(
+            t_protected,
+            full(Action::Step { leg: free_leg }, &free_world, &mut rng)
+        );
         // A held CTCF: blocked, as traffic. (LEF 0 at 10-20 holds the CTCF at
         // 20 with its right leg; LEF 1's left leg at 21 faces it, protected by
         // its own right leg captured at 25.)
-        let (world, keys) = world_with(&[((10, Moving), (20, Captured)), ((21, Moving), (25, Captured))]);
+        let (world, keys) = world_with(&[
+            ((10, Moving), (20, Captured)),
+            ((21, Moving), (25, Captured)),
+        ]);
         let leg = world.lefs[keys[1]].legs[0];
         assert_eq!(clocks(&world, leg), (false, false));
         assert!(blocked(&world, leg));
@@ -624,7 +719,12 @@ mod tests {
         let (mut world, keys) = world_with(&[((21, Moving), (24, Moving))]);
         let [left, right] = world.lefs[keys[0]].legs;
         let mut touched = Touched::default();
-        fire_step(right, &mut world, &mut SimRng::seed_from_u64(0), &mut touched);
+        fire_step(
+            right,
+            &mut world,
+            &mut SimRng::seed_from_u64(0),
+            &mut touched,
+        );
         assert_eq!(world.legs[right].mobility, Mobility::Captured);
         assert!(touched.legs.contains(&left), "the partner's clocks changed");
     }
@@ -640,7 +740,9 @@ mod tests {
         let n = 20_000;
         let mut evicted_first = 0;
         for _ in 0..n {
-            let time = |action: Action, rng: &mut SimRng| match action.schedule(&world, &RATES, 0.0, rng) {
+            let time = |action: Action, rng: &mut SimRng| match action
+                .schedule(&world, &RATES, 0.0, rng)
+            {
                 Schedule::At(t) => t,
                 Schedule::Never => f64::INFINITY,
             };
@@ -650,13 +752,22 @@ mod tests {
         }
         let frac = evicted_first as f64 / n as f64;
         let sigma = (p * (1.0 - p) / n as f64).sqrt();
-        assert!((frac - p).abs() < 4.0 * sigma, "eviction first in {frac}, want {p} (σ {sigma:.4})");
+        assert!(
+            (frac - p).abs() < 4.0 * sigma,
+            "eviction first in {frac}, want {p} (σ {sigma:.4})"
+        );
     }
 
     /// Fire an eviction of `leg`.
     fn evict(world: &mut World, leg: LegKey) {
         let mut rng = SimRng::seed_from_u64(1);
-        fire_evict(leg, world, &SpawnRule::UniformNonCtcf, &mut rng, &mut Touched::default());
+        fire_evict(
+            leg,
+            world,
+            &SpawnRule::UniformNonCtcf,
+            &mut rng,
+            &mut Touched::default(),
+        );
     }
 
     #[test]
@@ -668,7 +779,10 @@ mod tests {
         let (l, r) = (world.legs[left], world.legs[right]);
         assert_eq!(l.pos, r.pos);
         assert_ne!(l.pos, 26);
-        assert_eq!((l.mobility, r.mobility), (Mobility::Moving, Mobility::Moving));
+        assert_eq!(
+            (l.mobility, r.mobility),
+            (Mobility::Moving, Mobility::Moving)
+        );
         assert!(!world.occupied(30));
     }
 
@@ -679,32 +793,59 @@ mod tests {
         let leg = world.lefs[keys[0]].legs[0];
         let mut rng = SimRng::seed_from_u64(1);
         fire_step(leg, &mut world, &mut rng, &mut Touched::default());
-        assert_eq!((world.legs[leg].pos, world.legs[leg].mobility), (25, Mobility::Moving));
+        assert_eq!(
+            (world.legs[leg].pos, world.legs[leg].mobility),
+            (25, Mobility::Moving)
+        );
     }
 
     #[test]
     fn plain_site_always_moving() {
         let mut rng = SimRng::seed_from_u64(0);
-        assert_eq!(resolve_mobility(SiteKind::Plain, Direction::Right, &mut rng), Mobility::Moving);
-        assert_eq!(resolve_mobility(SiteKind::Plain, Direction::Left, &mut rng), Mobility::Moving);
+        assert_eq!(
+            resolve_mobility(SiteKind::Plain, Direction::Right, &mut rng),
+            Mobility::Moving
+        );
+        assert_eq!(
+            resolve_mobility(SiteKind::Plain, Direction::Left, &mut rng),
+            Mobility::Moving
+        );
     }
 
     #[test]
     fn landing_captures_only_from_the_capture_side() {
         let mut rng = SimRng::seed_from_u64(0);
         // The CTCF's capture side is its right side.
-        let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: 1.0 };
-        assert_eq!(resolve_mobility(site, Direction::Right, &mut rng), Mobility::Captured);
-        assert_eq!(resolve_mobility(site, Direction::Left, &mut rng), Mobility::Moving);
+        let site = SiteKind::Ctcf {
+            captures_from: Direction::Right,
+            strength: 1.0,
+        };
+        assert_eq!(
+            resolve_mobility(site, Direction::Right, &mut rng),
+            Mobility::Captured
+        );
+        assert_eq!(
+            resolve_mobility(site, Direction::Left, &mut rng),
+            Mobility::Moving
+        );
     }
 
     #[test]
     fn strength_0_always_passes_through() {
         let mut rng = SimRng::seed_from_u64(0);
-        let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: 0.0 };
+        let site = SiteKind::Ctcf {
+            captures_from: Direction::Right,
+            strength: 0.0,
+        };
         for _ in 0..50 {
-            assert_eq!(resolve_mobility(site, Direction::Right, &mut rng), Mobility::Moving);
-            assert_eq!(resolve_mobility(site, Direction::Left, &mut rng), Mobility::Moving);
+            assert_eq!(
+                resolve_mobility(site, Direction::Right, &mut rng),
+                Mobility::Moving
+            );
+            assert_eq!(
+                resolve_mobility(site, Direction::Left, &mut rng),
+                Mobility::Moving
+            );
         }
     }
 
@@ -712,7 +853,10 @@ mod tests {
     fn capture_fraction_tracks_strength() {
         let mut rng = SimRng::seed_from_u64(42);
         let p = 0.3;
-        let site = SiteKind::Ctcf { captures_from: Direction::Right, strength: p };
+        let site = SiteKind::Ctcf {
+            captures_from: Direction::Right,
+            strength: p,
+        };
         // Arrive from the capture side so the outcome on success is Captured.
         let n = 50_000;
         let mut captured = 0usize;

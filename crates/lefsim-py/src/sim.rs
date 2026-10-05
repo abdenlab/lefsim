@@ -22,7 +22,9 @@ pub fn parse_layout(layout: &str) -> PyResult<Layout> {
 
 pub fn grid_mode(dt: f64, t0: f64) -> PyResult<SampleMode> {
     if !(dt.is_finite() && dt > 0.0) {
-        return Err(value_error(format!("dt must be positive and finite, got {dt}")));
+        return Err(value_error(format!(
+            "dt must be positive and finite, got {dt}"
+        )));
     }
     if !t0.is_finite() {
         return Err(value_error(format!("t0 must be finite, got {t0}")));
@@ -69,7 +71,10 @@ pub fn run_interruptibly<O: Observer + Send>(
         let fired = sim.n_events() - start_events;
         let budget_left = max_events.is_none_or(|n| fired < n);
         if report.stopped != StopReason::ReachedEventCount || !budget_left {
-            return Ok(RunReport { n_events: fired, ..report });
+            return Ok(RunReport {
+                n_events: fired,
+                ..report
+            });
         }
     }
 }
@@ -85,7 +90,11 @@ fn event_recorder(
     if let Some((max, name)) = max_rows {
         let min = if keyframes { n_legs + 2 } else { 2 };
         if max < min {
-            let why = if keyframes { format!(" with keyframes ({n_legs} legs + 2)") } else { " for events".into() };
+            let why = if keyframes {
+                format!(" with keyframes ({n_legs} legs + 2)")
+            } else {
+                " for events".into()
+            };
             return Err(value_error(format!("{name} must be at least {min}{why}")));
         }
     }
@@ -93,7 +102,11 @@ fn event_recorder(
     if let Some((max, _)) = max_rows {
         rec = rec.with_max_rows(max);
     }
-    Ok(if keyframes { rec.with_keyframes(n_legs) } else { rec })
+    Ok(if keyframes {
+        rec.with_keyframes(n_legs)
+    } else {
+        rec
+    })
 }
 
 // ===================================================================
@@ -113,7 +126,11 @@ pub struct PyRunReport {
 
 impl From<RunReport> for PyRunReport {
     fn from(r: RunReport) -> Self {
-        PyRunReport { n_events: r.n_events, time: r.time, stopped: stop_name(r.stopped) }
+        PyRunReport {
+            n_events: r.n_events,
+            time: r.time,
+            stopped: stop_name(r.stopped),
+        }
     }
 }
 
@@ -207,7 +224,12 @@ impl PySim {
         }
     }
 
-    fn run(&mut self, py: Python<'_>, t_end: Time, max_events: Option<u64>) -> PyResult<PyRunReport> {
+    fn run(
+        &mut self,
+        py: Python<'_>,
+        t_end: Time,
+        max_events: Option<u64>,
+    ) -> PyResult<PyRunReport> {
         let sim = self.sim.as_mut().ok_or_else(consumed)?;
         Ok(run_interruptibly(py, sim, t_end, max_events, &mut ())?.into())
     }
@@ -234,15 +256,16 @@ impl PySim {
         };
 
         let sim = self.sim.as_mut().ok_or_else(consumed)?;
-        let report = match run_interruptibly(py, sim, t_end, max_events, &mut (&mut grid, &mut deltas)) {
-            Ok(r) => r,
-            Err(e) => {
-                // Interrupted: drop the partial recording; a later call on
-                // the same grid resumes from the current time.
-                self.grid = None;
-                return Err(e);
-            }
-        };
+        let report =
+            match run_interruptibly(py, sim, t_end, max_events, &mut (&mut grid, &mut deltas)) {
+                Ok(r) => r,
+                Err(e) => {
+                    // Interrupted: drop the partial recording; a later call on
+                    // the same grid resumes from the current time.
+                    self.grid = None;
+                    return Err(e);
+                }
+            };
 
         let snapshots = match grid.as_mut() {
             Some(rec) => {
@@ -255,7 +278,10 @@ impl PySim {
             self.grid = grid;
         }
         let events = match deltas {
-            Some(mut ev) => Some(Py::new(py, PyBatch(events_batch(ev.take_frames()).map_err(arrow_error)?))?),
+            Some(mut ev) => Some(Py::new(
+                py,
+                PyBatch(events_batch(ev.take_frames()).map_err(arrow_error)?),
+            )?),
             None => None,
         };
         Ok(PyRecording {
@@ -269,15 +295,26 @@ impl PySim {
 }
 
 /// Validate the shared recording options of `record_until` / `record_events`.
-fn record_opts(dt: Option<f64>, t0: f64, events: bool, keyframes: bool, layout: &str) -> PyResult<Record> {
+fn record_opts(
+    dt: Option<f64>,
+    t0: f64,
+    events: bool,
+    keyframes: bool,
+    layout: &str,
+) -> PyResult<Record> {
     if keyframes && !events {
         return Err(value_error("keyframes=True requires events=True"));
     }
     if dt.is_none() && !events {
-        return Err(value_error("nothing to record: pass dt=... and/or events=True (or use run_*)"));
+        return Err(value_error(
+            "nothing to record: pass dt=... and/or events=True (or use run_*)",
+        ));
     }
     Ok(Record {
-        grid: dt.map(|dt| grid_mode(dt, t0)).transpose()?.map(|m| (m, None)),
+        grid: dt
+            .map(|dt| grid_mode(dt, t0))
+            .transpose()?
+            .map(|m| (m, None)),
         events: events.then_some((None, keyframes)),
         layout: parse_layout(layout)?,
     })
@@ -289,10 +326,15 @@ impl PySim {
     #[pyo3(signature = (model, *, seed = 0, start_time = 0.0))]
     fn new(model: &PyModel, seed: u64, start_time: f64) -> PyResult<Self> {
         if !start_time.is_finite() {
-            return Err(value_error(format!("start_time must be finite, got {start_time}")));
+            return Err(value_error(format!(
+                "start_time must be finite, got {start_time}"
+            )));
         }
         let sim = lefsim::Sim::with_start_time(model.0.clone(), seed, start_time);
-        Ok(PySim { sim: Some(sim), grid: None })
+        Ok(PySim {
+            sim: Some(sim),
+            grid: None,
+        })
     }
 
     // ----- state -----
@@ -339,7 +381,11 @@ impl PySim {
     /// and spawn rule. `Sim(sim.model(), seed=..., start_time=sim.time)`
     /// continues from here with fresh randomness.
     fn model(&self) -> PyResult<PyModel> {
-        Ok(PyModel(self.sim()?.model().expect("Python sims use built-in spawn rules")))
+        Ok(PyModel(
+            self.sim()?
+                .model()
+                .expect("Python sims use built-in spawn rules"),
+        ))
     }
 
     /// The model this run started from. With `seed` and `start_time`, it
@@ -347,7 +393,11 @@ impl PySim {
     /// seed=sim.seed, start_time=sim.start_time)` replays the run from its
     /// start, event for event.
     fn initial_model(&self) -> PyResult<PyModel> {
-        Ok(PyModel(self.sim()?.initial_model().expect("Python sims use built-in spawn rules")))
+        Ok(PyModel(
+            self.sim()?
+                .initial_model()
+                .expect("Python sims use built-in spawn rules"),
+        ))
     }
 
     /// The seed this run was started with.
@@ -372,7 +422,12 @@ impl PySim {
     fn state(&self, layout: &str) -> PyResult<PyBatch> {
         let layout = parse_layout(layout)?;
         let sim = self.sim()?;
-        let batch = state_batch(Some(vec![sim.time()]), sim.n_lefs(), sim.world().lef_states(), layout);
+        let batch = state_batch(
+            Some(vec![sim.time()]),
+            sim.n_lefs(),
+            sim.world().lef_states(),
+            layout,
+        );
         Ok(PyBatch(batch.map_err(arrow_error)?))
     }
 
@@ -392,7 +447,10 @@ impl PySim {
     /// A fork of this run at its current time, which continues exactly as
     /// the original would.
     fn __copy__(&self) -> PyResult<Self> {
-        Ok(PySim { sim: Some(self.sim()?.clone()), grid: self.grid.clone() })
+        Ok(PySim {
+            sim: Some(self.sim()?.clone()),
+            grid: self.grid.clone(),
+        })
     }
 
     fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> PyResult<Self> {
@@ -509,7 +567,11 @@ impl PySim {
         keyframes: bool,
     ) -> PyResult<PyRecording> {
         check_time("t_end", t_end)?;
-        let what = Record { grid: None, events: Some((Some((max_rows, "max_rows")), keyframes)), layout: Layout::Lef };
+        let what = Record {
+            grid: None,
+            events: Some((Some((max_rows, "max_rows")), keyframes)),
+            layout: Layout::Lef,
+        };
         self.record(py, t_end, None, what)
     }
 
@@ -558,7 +620,9 @@ impl PySim {
         let reader = match (dt, events) {
             (Some(dt), false) => {
                 if max_rows.is_some() {
-                    return Err(value_error("max_rows applies to events=True; use max_snapshots with dt"));
+                    return Err(value_error(
+                        "max_rows applies to events=True; use max_snapshots with dt",
+                    ));
                 }
                 let max = max_snapshots.unwrap_or(DEFAULT_CHUNK);
                 if max == 0 {
@@ -570,7 +634,9 @@ impl PySim {
             }
             (None, true) => {
                 if max_snapshots.is_some() {
-                    return Err(value_error("max_snapshots applies to dt=...; use max_rows with events=True"));
+                    return Err(value_error(
+                        "max_snapshots applies to dt=...; use max_rows with events=True",
+                    ));
                 }
                 let max = max_rows.unwrap_or(DEFAULT_CHUNK);
                 let rec = event_recorder(self.sim()?.n_legs(), Some((max, "max_rows")), keyframes)?;

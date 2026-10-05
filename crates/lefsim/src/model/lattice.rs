@@ -66,7 +66,10 @@ pub enum SiteKind {
     /// not its facing. A right-facing leg (moving right) arrives from the
     /// **left** side. So `captures_from: Left` captures right-facing legs;
     /// `captures_from: Right` captures left-facing legs.
-    Ctcf { captures_from: Direction, strength: f64 },
+    Ctcf {
+        captures_from: Direction,
+        strength: f64,
+    },
 }
 
 impl SiteKind {
@@ -89,7 +92,9 @@ pub struct Site {
 
 impl Site {
     pub const fn plain() -> Self {
-        Site { kind: SiteKind::Plain }
+        Site {
+            kind: SiteKind::Plain,
+        }
     }
     /// Construct a CTCF site. `captures_from` is the CTCF's capture side
     /// (the opposite side evicts). `strength` is the per-landing
@@ -97,7 +102,12 @@ impl Site {
     /// pass-through probability. It must lie in `[0, 1]`, which
     /// [`Lattice::new`] checks.
     pub fn ctcf(captures_from: Direction, strength: f64) -> Self {
-        Site { kind: SiteKind::Ctcf { captures_from, strength } }
+        Site {
+            kind: SiteKind::Ctcf {
+                captures_from,
+                strength,
+            },
+        }
     }
     pub fn is_ctcf(&self) -> bool {
         matches!(self.kind, SiteKind::Ctcf { .. })
@@ -121,11 +131,21 @@ pub enum LatticeError {
     /// A lattice needs at least one site.
     Empty,
     /// Sites are indexed by [`Position`] (`u32`).
-    TooLarge { n_sites: usize },
-    CtcfOutOfRange { site: Position, n_sites: usize },
-    DuplicateCtcf { site: Position },
+    TooLarge {
+        n_sites: usize,
+    },
+    CtcfOutOfRange {
+        site: Position,
+        n_sites: usize,
+    },
+    DuplicateCtcf {
+        site: Position,
+    },
     /// Strength must lie in `[0, 1]`.
-    BadStrength { site: Position, strength: f64 },
+    BadStrength {
+        site: Position,
+        strength: f64,
+    },
 }
 
 impl std::fmt::Display for LatticeError {
@@ -133,14 +153,24 @@ impl std::fmt::Display for LatticeError {
         match self {
             LatticeError::Empty => write!(f, "a lattice needs at least one site"),
             LatticeError::TooLarge { n_sites } => {
-                write!(f, "a lattice has at most {} sites, got {n_sites}", Position::MAX)
+                write!(
+                    f,
+                    "a lattice has at most {} sites, got {n_sites}",
+                    Position::MAX
+                )
             }
             LatticeError::CtcfOutOfRange { site, n_sites } => {
-                write!(f, "CTCF site {site} is outside a lattice of {n_sites} sites")
+                write!(
+                    f,
+                    "CTCF site {site} is outside a lattice of {n_sites} sites"
+                )
             }
             LatticeError::DuplicateCtcf { site } => write!(f, "CTCF site {site} is listed twice"),
             LatticeError::BadStrength { site, strength } => {
-                write!(f, "CTCF strength must be in [0, 1], got {strength} at site {site}")
+                write!(
+                    f,
+                    "CTCF strength must be in [0, 1], got {strength} at site {site}"
+                )
             }
         }
     }
@@ -157,7 +187,10 @@ impl std::error::Error for LatticeError {}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "serde",
-    serde(try_from = "super::serial::LatticeData", into = "super::serial::LatticeData")
+    serde(
+        try_from = "super::serial::LatticeData",
+        into = "super::serial::LatticeData"
+    )
 )]
 pub struct Lattice {
     pub(crate) sites: Vec<Site>,
@@ -170,13 +203,18 @@ impl Lattice {
             return Err(LatticeError::Empty);
         }
         if sites.len() > Position::MAX as usize {
-            return Err(LatticeError::TooLarge { n_sites: sites.len() });
+            return Err(LatticeError::TooLarge {
+                n_sites: sites.len(),
+            });
         }
         for (i, site) in sites.iter().enumerate() {
             if let SiteKind::Ctcf { strength, .. } = site.kind
                 && !(0.0..=1.0).contains(&strength)
             {
-                return Err(LatticeError::BadStrength { site: i as Position, strength });
+                return Err(LatticeError::BadStrength {
+                    site: i as Position,
+                    strength,
+                });
             }
         }
         Ok(Lattice { sites })
@@ -199,7 +237,10 @@ impl Lattice {
         for c in ctcfs {
             let slot = sites
                 .get_mut(c.site as usize)
-                .ok_or(LatticeError::CtcfOutOfRange { site: c.site, n_sites })?;
+                .ok_or(LatticeError::CtcfOutOfRange {
+                    site: c.site,
+                    n_sites,
+                })?;
             if slot.is_ctcf() {
                 return Err(LatticeError::DuplicateCtcf { site: c.site });
             }
@@ -227,9 +268,14 @@ impl Lattice {
             .iter()
             .enumerate()
             .filter_map(|(i, s)| match s.kind {
-                SiteKind::Ctcf { captures_from, strength } => {
-                    Some(Ctcf { site: i as Position, captures_from, strength })
-                }
+                SiteKind::Ctcf {
+                    captures_from,
+                    strength,
+                } => Some(Ctcf {
+                    site: i as Position,
+                    captures_from,
+                    strength,
+                }),
                 SiteKind::Plain => None,
             })
             .collect()
@@ -246,12 +292,19 @@ mod tests {
     use super::*;
 
     fn ctcf(site: Position, captures_from: Direction, strength: f64) -> Ctcf {
-        Ctcf { site, captures_from, strength }
+        Ctcf {
+            site,
+            captures_from,
+            strength,
+        }
     }
 
     #[test]
     fn with_ctcfs_places_ctcfs_and_reads_them_back() {
-        let specs = [ctcf(3, Direction::Left, 0.5), ctcf(7, Direction::Right, 1.0)];
+        let specs = [
+            ctcf(3, Direction::Left, 0.5),
+            ctcf(7, Direction::Right, 1.0),
+        ];
         let lattice = Lattice::with_ctcfs(10, &specs).unwrap();
         assert_eq!(lattice.len(), 10);
         assert_eq!(lattice.ctcfs(), specs);
@@ -273,7 +326,10 @@ mod tests {
         assert_eq!(Lattice::new(vec![]), Err(LatticeError::Empty));
         assert_eq!(
             Lattice::with_ctcfs(10, &[ctcf(10, left, 1.0)]),
-            Err(LatticeError::CtcfOutOfRange { site: 10, n_sites: 10 })
+            Err(LatticeError::CtcfOutOfRange {
+                site: 10,
+                n_sites: 10
+            })
         );
         assert_eq!(
             Lattice::with_ctcfs(10, &[ctcf(3, left, 1.0), ctcf(3, left, 0.5)]),
@@ -281,7 +337,10 @@ mod tests {
         );
         assert_eq!(
             Lattice::with_ctcfs(10, &[ctcf(3, left, 1.5)]),
-            Err(LatticeError::BadStrength { site: 3, strength: 1.5 })
+            Err(LatticeError::BadStrength {
+                site: 3,
+                strength: 1.5
+            })
         );
         assert!(matches!(
             Lattice::new(vec![Site::ctcf(left, f64::NAN)]),

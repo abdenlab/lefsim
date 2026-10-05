@@ -8,10 +8,10 @@
 use slotmap::SlotMap;
 use smallvec::SmallVec;
 
-use super::action::land_lef;
-use super::entity::{Leg, Lef, LefKey, LegKey, Mobility};
-use super::lattice::{Direction, Lattice, Position, SiteKind};
 use super::SimRng;
+use super::action::land_lef;
+use super::entity::{Lef, LefKey, Leg, LegKey, Mobility};
+use super::lattice::{Direction, Lattice, Position, SiteKind};
 
 /// The state of one leg: where it is and whether it can move.
 pub type LegState = (Position, Mobility);
@@ -27,7 +27,10 @@ pub type LegState = (Position, Mobility);
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "serde",
-    serde(into = "Vec<super::serial::LefRow>", from = "Vec<super::serial::LefRow>")
+    serde(
+        into = "Vec<super::serial::LefRow>",
+        from = "Vec<super::serial::LefRow>"
+    )
 )]
 pub struct LefStates {
     pub left_pos: Vec<Position>,
@@ -110,9 +113,17 @@ impl LefStates {
 pub enum WorldError {
     /// The columns of a [`LefStates`] have different lengths.
     ColumnLengths,
-    PositionOutOfRange { lef: usize, pos: Position, n_sites: usize },
+    PositionOutOfRange {
+        lef: usize,
+        pos: Position,
+        n_sites: usize,
+    },
     /// The left leg must not be to the right of the right leg.
-    LegsCrossed { lef: usize, left: Position, right: Position },
+    LegsCrossed {
+        lef: usize,
+        left: Position,
+        right: Position,
+    },
     /// Another leg already sits there. A LEF's own two legs may share a site
     /// (as right after it's placed); two LEFs may not.
     SiteOccupied { lef: usize, pos: Position },
@@ -122,7 +133,11 @@ pub enum WorldError {
     /// forward, so they arrive from the side opposite their facing: a
     /// left-facing leg can only be captured by a CTCF that captures from the
     /// right, and a right-facing leg by one that captures from the left.
-    CapturedWrongSide { lef: usize, pos: Position, facing: Direction },
+    CapturedWrongSide {
+        lef: usize,
+        pos: Position,
+        facing: Direction,
+    },
 }
 
 impl std::fmt::Display for WorldError {
@@ -130,16 +145,28 @@ impl std::fmt::Display for WorldError {
         match self {
             WorldError::ColumnLengths => write!(f, "LEF state columns have different lengths"),
             WorldError::PositionOutOfRange { lef, pos, n_sites } => {
-                write!(f, "LEF {lef}: position {pos} is outside a lattice of {n_sites} sites")
+                write!(
+                    f,
+                    "LEF {lef}: position {pos} is outside a lattice of {n_sites} sites"
+                )
             }
             WorldError::LegsCrossed { lef, left, right } => {
-                write!(f, "LEF {lef}: left leg at {left} is to the right of the right leg at {right}")
+                write!(
+                    f,
+                    "LEF {lef}: left leg at {left} is to the right of the right leg at {right}"
+                )
             }
             WorldError::SiteOccupied { lef, pos } => {
-                write!(f, "LEF {lef}: site {pos} is already occupied by another LEF")
+                write!(
+                    f,
+                    "LEF {lef}: site {pos} is already occupied by another LEF"
+                )
             }
             WorldError::CapturedOffCtcf { lef, pos } => {
-                write!(f, "LEF {lef}: leg at {pos} is Captured but the site is not a CTCF")
+                write!(
+                    f,
+                    "LEF {lef}: leg at {pos} is Captured but the site is not a CTCF"
+                )
             }
             WorldError::CapturedWrongSide { lef, pos, facing } => write!(
                 f,
@@ -173,7 +200,10 @@ pub type OccupancyBucket = SmallVec<[LegKey; 2]>;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
     feature = "serde",
-    serde(try_from = "super::serial::WorldData", into = "super::serial::WorldData")
+    serde(
+        try_from = "super::serial::WorldData",
+        into = "super::serial::WorldData"
+    )
 )]
 pub struct World {
     pub(crate) lattice: Lattice,
@@ -266,7 +296,11 @@ impl World {
             }
         }
         if left.0 > right.0 {
-            return Err(WorldError::LegsCrossed { lef, left: left.0, right: right.0 });
+            return Err(WorldError::LegsCrossed {
+                lef,
+                left: left.0,
+                right: right.0,
+            });
         }
         // Its own two legs may share a site; any other leg may not.
         for pos in [left.0, right.0] {
@@ -358,11 +392,7 @@ impl World {
     ///
     /// Crate-private: a LEF added after the engine is initialized would have
     /// no actions in the heap. [`crate::SimBuilder`] is the public way in.
-    pub(crate) fn spawn_lef(
-        &mut self,
-        pos: Position,
-        rng: &mut SimRng,
-    ) -> (LefKey, [LegKey; 2]) {
+    pub(crate) fn spawn_lef(&mut self, pos: Position, rng: &mut SimRng) -> (LefKey, [LegKey; 2]) {
         let [left, right] = land_lef(self.lattice.sites[pos as usize].kind, rng);
         self.insert_lef((pos, left), (pos, right))
     }
@@ -380,8 +410,16 @@ mod tests {
         Lattice::with_ctcfs(
             20,
             &[
-                Ctcf { site: 5, captures_from: Direction::Left, strength: 1.0 },
-                Ctcf { site: 15, captures_from: Direction::Right, strength: 1.0 },
+                Ctcf {
+                    site: 5,
+                    captures_from: Direction::Left,
+                    strength: 1.0,
+                },
+                Ctcf {
+                    site: 15,
+                    captures_from: Direction::Right,
+                    strength: 1.0,
+                },
             ],
         )
         .unwrap()
@@ -406,7 +444,6 @@ mod tests {
         assert_eq!(rebuilt, world);
     }
 
-
     #[test]
     fn equality_compares_state_not_identity() {
         let mut a = World::new(lattice());
@@ -416,7 +453,10 @@ mod tests {
         b.add_lef((10, Moving), (11, Moving)).unwrap();
         assert_ne!(a, b);
         assert_eq!(a.n_lefs(), 1); // the clone is independent
-        assert_ne!(World::new(lattice()), World::new(Lattice::plain(20).unwrap()));
+        assert_ne!(
+            World::new(lattice()),
+            World::new(Lattice::plain(20).unwrap())
+        );
     }
 
     #[test]
@@ -424,17 +464,61 @@ mod tests {
         let mut world = World::new(lattice());
         world.add_lef((8, Moving), (9, Moving)).unwrap();
         let cases = [
-            ((20, Moving), (20, Moving), WorldError::PositionOutOfRange { lef: 1, pos: 20, n_sites: 20 }),
-            ((4, Moving), (3, Moving), WorldError::LegsCrossed { lef: 1, left: 4, right: 3 }),
-            ((9, Moving), (12, Moving), WorldError::SiteOccupied { lef: 1, pos: 9 }),
-            ((1, Captured), (2, Moving), WorldError::CapturedOffCtcf { lef: 1, pos: 1 }),
+            (
+                (20, Moving),
+                (20, Moving),
+                WorldError::PositionOutOfRange {
+                    lef: 1,
+                    pos: 20,
+                    n_sites: 20,
+                },
+            ),
+            (
+                (4, Moving),
+                (3, Moving),
+                WorldError::LegsCrossed {
+                    lef: 1,
+                    left: 4,
+                    right: 3,
+                },
+            ),
+            (
+                (9, Moving),
+                (12, Moving),
+                WorldError::SiteOccupied { lef: 1, pos: 9 },
+            ),
+            (
+                (1, Captured),
+                (2, Moving),
+                WorldError::CapturedOffCtcf { lef: 1, pos: 1 },
+            ),
             // A left-facing leg can't be captured by a CTCF capturing from the left.
-            ((5, Captured), (6, Moving), WorldError::CapturedWrongSide { lef: 1, pos: 5, facing: Direction::Left }),
+            (
+                (5, Captured),
+                (6, Moving),
+                WorldError::CapturedWrongSide {
+                    lef: 1,
+                    pos: 5,
+                    facing: Direction::Left,
+                },
+            ),
             // A right-facing leg can't be captured by one capturing from the right.
-            ((12, Moving), (15, Captured), WorldError::CapturedWrongSide { lef: 1, pos: 15, facing: Direction::Right }),
+            (
+                (12, Moving),
+                (15, Captured),
+                WorldError::CapturedWrongSide {
+                    lef: 1,
+                    pos: 15,
+                    facing: Direction::Right,
+                },
+            ),
         ];
         for (left, right, expected) in cases {
-            assert_eq!(world.add_lef(left, right), Err(expected.clone()), "{expected}");
+            assert_eq!(
+                world.add_lef(left, right),
+                Err(expected.clone()),
+                "{expected}"
+            );
         }
         assert_eq!(world.n_lefs(), 1, "rejected LEFs leave the world unchanged");
     }
@@ -444,7 +528,10 @@ mod tests {
         let mut states = LefStates::new();
         states.push((1, Moving), (2, Moving));
         states.right_pos.push(3);
-        assert_eq!(World::from_lef_states(lattice(), &states), Err(WorldError::ColumnLengths));
+        assert_eq!(
+            World::from_lef_states(lattice(), &states),
+            Err(WorldError::ColumnLengths)
+        );
 
         let mut clash = LefStates::new();
         clash.push((1, Moving), (4, Moving));

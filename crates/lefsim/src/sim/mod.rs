@@ -21,7 +21,7 @@ mod heap;
 pub mod record;
 mod replay;
 
-pub use replay::{distances_over, ReplayError, Replayer};
+pub use replay::{ReplayError, Replayer, distances_over};
 
 use std::sync::Arc;
 
@@ -30,8 +30,7 @@ use slotmap::SecondaryMap;
 
 use crate::model::action::Touched;
 use crate::model::{
-    self, Action, LefKey, LegKey, Model, ModelError, Rates, SimRng, Spawn,
-    SpawnRule, Time, World,
+    self, Action, LefKey, LegKey, Model, ModelError, Rates, SimRng, Spawn, SpawnRule, Time, World,
 };
 use engine::Engine;
 use record::sealed::Observe;
@@ -128,11 +127,20 @@ impl Sim {
         seed: u64,
     ) -> Result<Self, ModelError> {
         model::check(&world, &rates, &spawn)?;
-        Ok(Self::start(world, rates, SpawnSource::Custom(Arc::new(spawn)), seed, 0.0))
+        Ok(Self::start(
+            world,
+            rates,
+            SpawnSource::Custom(Arc::new(spawn)),
+            seed,
+            0.0,
+        ))
     }
 
     fn start(world: World, rates: Rates, spawn: SpawnSource, seed: u64, start_time: Time) -> Self {
-        assert!(start_time.is_finite(), "start time must be finite, got {start_time}");
+        assert!(
+            start_time.is_finite(),
+            "start time must be finite, got {start_time}"
+        );
         let n_lefs = world.n_lefs();
         let mut lef_ids = SecondaryMap::with_capacity(n_lefs);
         let mut leg_ids = SecondaryMap::with_capacity(2 * n_lefs);
@@ -207,9 +215,11 @@ impl Sim {
     /// replays this run from its start, event for event.
     pub fn initial_model(&self) -> Option<Model> {
         match self.spawn {
-            SpawnSource::BuiltIn(spawn) => {
-                Some(Model { world: self.initial_world.clone(), rates: self.rates(), spawn })
-            }
+            SpawnSource::BuiltIn(spawn) => Some(Model {
+                world: self.initial_world.clone(),
+                rates: self.rates(),
+                spawn,
+            }),
             SpawnSource::Custom(_) => None,
         }
     }
@@ -233,9 +243,11 @@ impl Sim {
     /// clone the sim instead.
     pub fn model(&self) -> Option<Model> {
         match self.spawn {
-            SpawnSource::BuiltIn(spawn) => {
-                Some(Model { world: self.world.clone(), rates: self.rates(), spawn })
-            }
+            SpawnSource::BuiltIn(spawn) => Some(Model {
+                world: self.world.clone(),
+                rates: self.rates(),
+                spawn,
+            }),
             SpawnSource::Custom(_) => None,
         }
     }
@@ -405,7 +417,9 @@ mod tests {
     fn model_at(sites: &[Position]) -> Model {
         let mut world = World::new(two_ctcf_lattice());
         for &p in sites {
-            world.add_lef((p, Mobility::Moving), (p, Mobility::Moving)).unwrap();
+            world
+                .add_lef((p, Mobility::Moving), (p, Mobility::Moving))
+                .unwrap();
         }
         Model::new(world, Rates::default(), SpawnRule::UniformNonCtcf).unwrap()
     }
@@ -450,7 +464,12 @@ mod tests {
 
         for _ in 0..5000 {
             let a = sim.step();
-            let b = engine.step(&mut world, &SpawnRule::UniformNonCtcf, &mut rng, &mut touched);
+            let b = engine.step(
+                &mut world,
+                &SpawnRule::UniformNonCtcf,
+                &mut rng,
+                &mut touched,
+            );
             assert_eq!(a.map(|(t, _)| t), b.map(|(t, _)| t));
         }
         assert_eq!(sim.world(), &world);
@@ -495,7 +514,8 @@ mod tests {
         assert_eq!((sim.seed(), sim.start_time()), (7, 12.5));
 
         // They replay the run from its start, event for event.
-        let mut again = Sim::with_start_time(sim.initial_model().unwrap(), sim.seed(), sim.start_time());
+        let mut again =
+            Sim::with_start_time(sim.initial_model().unwrap(), sim.seed(), sim.start_time());
         again.run_until(300.0);
         assert_eq!(again.world(), sim.world());
         assert_eq!(sim.clone().initial_model(), Some(model)); // a fork keeps it
@@ -513,7 +533,11 @@ mod tests {
                 if n_lefs <= 1 {
                     Ok(())
                 } else {
-                    Err(crate::SpawnError::NotEnoughSites { n_lefs, needed: n_lefs, n_plain: 1 })
+                    Err(crate::SpawnError::NotEnoughSites {
+                        n_lefs,
+                        needed: n_lefs,
+                        n_plain: 1,
+                    })
                 }
             }
         }

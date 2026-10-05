@@ -63,12 +63,12 @@ pub mod model;
 pub mod sim;
 
 pub use model::{
-    Action, Ctcf, Direction, DistanceError, Lattice, LatticeError, Leg, Lef, LefKey, LefStates, LegKey, LegState,
-    LoopGraph, Mobility, Model, ModelError, Position, Rates, Schedule, SimRng, Site, SiteKind, Spawn,
-    SpawnError, SpawnRule, Time, World, WorldError, populate,
+    Action, Ctcf, Direction, DistanceError, Lattice, LatticeError, Lef, LefKey, LefStates, Leg,
+    LegKey, LegState, LoopGraph, Mobility, Model, ModelError, Position, Rates, Schedule, SimRng,
+    Site, SiteKind, Spawn, SpawnError, SpawnRule, Time, World, WorldError, populate,
 };
 pub use sim::record::{
-    ColumnLengthError, EventColumns, EventFrames, EventRecorder, LefFrames, LefSnapshot,
-    Observer, Recorder, SampleMode,
+    ColumnLengthError, EventColumns, EventFrames, EventRecorder, LefFrames, LefSnapshot, Observer,
+    Recorder, SampleMode,
 };
 pub use sim::{ReplayError, Replayer, RunReport, Sim, StopReason};

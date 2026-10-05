@@ -658,7 +658,9 @@ impl WasmSim {
             None => JsValue::NULL,
             Some((t, action)) => {
                 let id = match action {
-                    lefsim::Action::Step { leg } | lefsim::Action::Evict { leg } => self.sim.leg_id(leg),
+                    lefsim::Action::Step { leg } | lefsim::Action::Evict { leg } => {
+                        self.sim.leg_id(leg)
+                    }
                     lefsim::Action::Respawn { lef } => self.sim.lef_id(lef),
                 }
                 .expect("the sim's own entity");

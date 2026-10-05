@@ -4,7 +4,9 @@
 //! The Rust twin of the TS `Replayer` in `packages/lefsim`, with the same
 //! semantics.
 
-use crate::model::{DistanceError, Lattice, LefStates, LoopGraph, Mobility, Position, Time, World, WorldError};
+use crate::model::{
+    DistanceError, Lattice, LefStates, LoopGraph, Mobility, Position, Time, World, WorldError,
+};
 
 use super::record::{EventFrames, LefFrames, SampleMode};
 
@@ -55,15 +57,33 @@ pub struct Replayer {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ReplayError {
     /// Rows must be in time order, within and across chunks.
-    OutOfOrder { time: Time, previous: Time },
+    OutOfOrder {
+        time: Time,
+        previous: Time,
+    },
     /// A chunk's `end` must be a number no earlier than its last row.
-    BadEnd { end: Time, last_row: Time },
-    LegOutOfRange { leg_id: u32, n_legs: usize },
-    BadKind { code: u8 },
+    BadEnd {
+        end: Time,
+        last_row: Time,
+    },
+    LegOutOfRange {
+        leg_id: u32,
+        n_legs: usize,
+    },
+    BadKind {
+        code: u8,
+    },
     /// A keyframe has one row per leg, in `leg_id` order, at one time.
-    BadKeyframe { time: Time, rows: usize, n_legs: usize },
+    BadKeyframe {
+        time: Time,
+        rows: usize,
+        n_legs: usize,
+    },
     /// No keyframe at or before the requested time.
-    NoKeyframe { t: Time, earliest: Option<Time> },
+    NoKeyframe {
+        t: Time,
+        earliest: Option<Time>,
+    },
     /// Nothing to read yet: no keyframe has been applied.
     NotReady,
     /// The replayed state isn't a valid world (the log doesn't match the
@@ -88,14 +108,23 @@ impl std::fmt::Display for ReplayError {
                 f,
                 "keyframe at t={time} has {rows} rows; expected {n_legs}, one per leg in order"
             ),
-            ReplayError::NoKeyframe { t, earliest: Some(e) } => {
-                write!(f, "no keyframe at or before t={t} (the earliest is at t={e})")
+            ReplayError::NoKeyframe {
+                t,
+                earliest: Some(e),
+            } => {
+                write!(
+                    f,
+                    "no keyframe at or before t={t} (the earliest is at t={e})"
+                )
             }
             ReplayError::NoKeyframe { t, earliest: None } => {
                 write!(f, "no keyframe at or before t={t} (none pushed yet)")
             }
             ReplayError::NotReady => {
-                write!(f, "no keyframe applied yet: push a keyframed chunk and advance")
+                write!(
+                    f,
+                    "no keyframe applied yet: push a keyframed chunk and advance"
+                )
             }
             ReplayError::World(e) => write!(f, "replayed state is invalid: {e}"),
         }
@@ -164,18 +193,27 @@ impl Replayer {
         let mut previous = self.last_row_time();
         for row in 0..chunk.n_rows() {
             if time[row].is_nan() || time[row] < previous {
-                return Err(ReplayError::OutOfOrder { time: time[row], previous });
+                return Err(ReplayError::OutOfOrder {
+                    time: time[row],
+                    previous,
+                });
             }
             previous = time[row];
             if leg_id[row] as usize >= n_legs {
-                return Err(ReplayError::LegOutOfRange { leg_id: leg_id[row], n_legs });
+                return Err(ReplayError::LegOutOfRange {
+                    leg_id: leg_id[row],
+                    n_legs,
+                });
             }
             if kind[row] as usize >= EventFrames::KIND_NAMES.len() {
                 return Err(ReplayError::BadKind { code: kind[row] });
             }
         }
         if end.is_nan() || end < previous {
-            return Err(ReplayError::BadEnd { end, last_row: previous });
+            return Err(ReplayError::BadEnd {
+                end,
+                last_row: previous,
+            });
         }
 
         let index = self.chunks.len();
@@ -196,9 +234,17 @@ impl Replayer {
             }
             if row - start != n_legs {
                 let rows = row - start;
-                return Err(ReplayError::BadKeyframe { time: time[start], rows, n_legs });
+                return Err(ReplayError::BadKeyframe {
+                    time: time[start],
+                    rows,
+                    n_legs,
+                });
             }
-            found.push(KeyframeRef { chunk: index, row: start, time: time[start] });
+            found.push(KeyframeRef {
+                chunk: index,
+                row: start,
+                time: time[start],
+            });
         }
         self.keyframes.extend(found);
         self.chunks.push(chunk);
@@ -227,7 +273,9 @@ impl Replayer {
         if t < self.time {
             // Back no further than the first keyframe, as forward stops at `end`.
             let first = self.start().expect("ready means a keyframe was applied");
-            return self.seek(t.max(first)).expect("a keyframe is at or before the target");
+            return self
+                .seek(t.max(first))
+                .expect("a keyframe is at or before the target");
         }
         let target = t.min(self.end);
         // A keyframe between here and the target holds the full state, so
@@ -252,7 +300,10 @@ impl Replayer {
         let target = t.min(self.end);
         let k = self
             .keyframe_at_or_before(target)
-            .ok_or(ReplayError::NoKeyframe { t, earliest: self.start() })?;
+            .ok_or(ReplayError::NoKeyframe {
+                t,
+                earliest: self.start(),
+            })?;
         self.cursor = (k.chunk, k.row);
         self.apply_through(target);
         self.ready = true;
@@ -272,8 +323,7 @@ impl Replayer {
     /// The state at [`Replayer::time`] as a [`World`]: start a new run from
     /// it with [`Sim::with_start_time`](crate::Sim::with_start_time).
     pub fn world(&self) -> Result<World, ReplayError> {
-        World::from_lef_states(self.lattice.clone(), self.lef_states()?)
-            .map_err(ReplayError::World)
+        World::from_lef_states(self.lattice.clone(), self.lef_states()?).map_err(ReplayError::World)
     }
 
     /// Snapshots on the grid `t0 + k * dt` from the current time (or the
@@ -289,12 +339,19 @@ impl Replayer {
         let SampleMode::EveryDt { dt, t0 } = mode else {
             panic!("snapshots need a grid (SampleMode::EveryDt)");
         };
-        assert!(dt.is_finite() && dt > 0.0, "dt must be positive and finite, got {dt}");
+        assert!(
+            dt.is_finite() && dt > 0.0,
+            "dt must be positive and finite, got {dt}"
+        );
         assert!(t0.is_finite(), "t0 must be finite, got {t0}");
         assert!(!t_end.is_nan(), "snapshots: t_end is NaN");
 
         let mut frames = LefFrames::new(self.n_lefs);
-        let from = if self.ready { Some(self.time) } else { self.start() };
+        let from = if self.ready {
+            Some(self.time)
+        } else {
+            self.start()
+        };
         let Some(from) = from else { return frames };
         let point = |k: u64| t0 + k as f64 * dt; // exactly as the Recorder computes it
         // The first index at or after `from`, but never one already recorded.
@@ -334,9 +391,11 @@ impl Replayer {
         hop_length: u64,
     ) -> Result<(Vec<Time>, Vec<u64>), DistanceError> {
         // Check the arguments before moving.
-        LoopGraph::from_legs(self.lattice.len(), &[], &[], step_length, hop_length)?.pairwise(sites)?;
+        LoopGraph::from_legs(self.lattice.len(), &[], &[], step_length, hop_length)?
+            .pairwise(sites)?;
         let frames = self.snapshots(mode, t_end);
-        let distances = distances_over(&frames, self.lattice.len(), sites, step_length, hop_length)?;
+        let distances =
+            distances_over(&frames, self.lattice.len(), sites, step_length, hop_length)?;
         Ok((frames.time().to_vec(), distances))
     }
 
@@ -344,7 +403,9 @@ impl Replayer {
     /// in a long stream. Keeps everything from the last keyframe at or
     /// before `t`, and the current position.
     pub fn trim_before(&mut self, t: Time) {
-        let Some(k) = self.keyframe_at_or_before(t) else { return };
+        let Some(k) = self.keyframe_at_or_before(t) else {
+            return;
+        };
         let drop = k.chunk.min(self.cursor.0);
         if drop == 0 {
             return;
@@ -378,7 +439,11 @@ impl Replayer {
         while let Some(chunk) = self.chunks.get(c) {
             let n = chunk.n_rows();
             while row < n && chunk.time()[row] <= t {
-                let (lef, pos, mob) = (chunk.leg_id()[row] as usize / 2, chunk.pos()[row], chunk.mob()[row]);
+                let (lef, pos, mob) = (
+                    chunk.leg_id()[row] as usize / 2,
+                    chunk.pos()[row],
+                    chunk.mob()[row],
+                );
                 if chunk.leg_id()[row] % 2 == 0 {
                     (self.lefs.left_pos[lef], self.lefs.left_mobility[lef]) = (pos, mob);
                 } else {
@@ -410,9 +475,14 @@ pub fn distances_over(
     let mut out = Vec::with_capacity(frames.n_snapshots() * k * k.saturating_sub(1) / 2);
     for s in 0..frames.n_snapshots() {
         let snap = frames.snapshot(s);
-        let graph = LoopGraph::from_legs(n_sites, snap.left_pos, snap.right_pos, step_length, hop_length)?;
+        let graph = LoopGraph::from_legs(
+            n_sites,
+            snap.left_pos,
+            snap.right_pos,
+            step_length,
+            hop_length,
+        )?;
         out.extend(graph.pairwise(sites)?);
     }
     Ok(out)
 }
-

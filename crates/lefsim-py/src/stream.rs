@@ -46,7 +46,9 @@ pub struct SimReader {
 /// recording starts and the time it's asked to end at, and the version).
 /// Carried once, by the stream's schema; every batch shares it.
 fn with_provenance(schema: SchemaRef, sim: &lefsim::Sim, record_end: Time) -> SchemaRef {
-    let model = sim.initial_model().expect("Python sims use built-in spawn rules");
+    let model = sim
+        .initial_model()
+        .expect("Python sims use built-in spawn rules");
     let run = serde_json::json!({
         "format": "lefsim.run",
         "version": 1,
@@ -59,7 +61,10 @@ fn with_provenance(schema: SchemaRef, sim: &lefsim::Sim, record_end: Time) -> Sc
         "lefsim_version": env!("CARGO_PKG_VERSION"),
     });
     let mut metadata = schema.metadata().clone();
-    metadata.insert("lefsim.model".into(), serde_json::to_string(&model).expect("a model serializes"));
+    metadata.insert(
+        "lefsim.model".into(),
+        serde_json::to_string(&model).expect("a model serializes"),
+    );
     metadata.insert("lefsim.run".into(), run.to_string());
     Arc::new(schema.as_ref().clone().with_metadata(metadata))
 }
@@ -67,12 +72,30 @@ fn with_provenance(schema: SchemaRef, sim: &lefsim::Sim, record_end: Time) -> Sc
 impl SimReader {
     pub fn snapshots(sim: lefsim::Sim, t_end: Time, rec: Recorder, layout: Layout) -> Self {
         let schema = with_provenance(state_schema(layout, true, sim.n_lefs()), &sim, t_end);
-        SimReader { sim, t_end, grid: Some(rec), events: None, layout, schema, keyframed: false, done: false }
+        SimReader {
+            sim,
+            t_end,
+            grid: Some(rec),
+            events: None,
+            layout,
+            schema,
+            keyframed: false,
+            done: false,
+        }
     }
 
     pub fn events(sim: lefsim::Sim, t_end: Time, rec: EventRecorder, keyframed: bool) -> Self {
         let schema = with_provenance(events_schema(), &sim, t_end);
-        SimReader { sim, t_end, grid: None, events: Some(rec), layout: Layout::Lef, schema, keyframed, done: false }
+        SimReader {
+            sim,
+            t_end,
+            grid: None,
+            events: Some(rec),
+            layout: Layout::Lef,
+            schema,
+            keyframed,
+            done: false,
+        }
     }
 
     /// The sim's clock.
@@ -111,7 +134,11 @@ impl SimReader {
             StopReason::ReachedTime | StopReason::Exhausted => {
                 self.done = true;
                 let batch = self.take_batch()?;
-                Ok(if batch.num_rows() == 0 { Advance::Done } else { Advance::Batch(batch) })
+                Ok(if batch.num_rows() == 0 {
+                    Advance::Done
+                } else {
+                    Advance::Batch(batch)
+                })
             }
         }
     }
@@ -155,7 +182,12 @@ impl PyStream {
     pub fn new(reader: SimReader) -> Self {
         let schema = reader.schema();
         let (keyframed, time) = (reader.keyframed, reader.time());
-        PyStream { reader: Some(reader), schema, keyframed, time }
+        PyStream {
+            reader: Some(reader),
+            schema,
+            keyframed,
+            time,
+        }
     }
 }
 
@@ -163,7 +195,11 @@ impl PyStream {
 impl PyStream {
     #[getter]
     fn column_names(&self) -> Vec<String> {
-        self.schema.fields().iter().map(|f| f.name().clone()).collect()
+        self.schema
+            .fields()
+            .iter()
+            .map(|f| f.name().clone())
+            .collect()
     }
 
     /// Whether the stream has been fully read or handed off.
@@ -191,7 +227,11 @@ impl PyStream {
     /// snappy are also readable by the TS package's `lefsim/parquet`.
     /// Requires pyarrow. Consumes the stream.
     #[pyo3(signature = (path, *, compression = "zstd"))]
-    fn to_parquet(slf: &Bound<'_, Self>, path: &Bound<'_, PyAny>, compression: &str) -> PyResult<()> {
+    fn to_parquet(
+        slf: &Bound<'_, Self>,
+        path: &Bound<'_, PyAny>,
+        compression: &str,
+    ) -> PyResult<()> {
         {
             let me = slf.borrow();
             if !me.keyframed {
@@ -204,13 +244,24 @@ impl PyStream {
                 return Err(PyIOError::new_err("stream was already read"));
             }
         }
-        slf.py().import("lefsim._parquet")?.call_method1("write_stream", (slf, path, compression))?;
+        slf.py()
+            .import("lefsim._parquet")?
+            .call_method1("write_stream", (slf, path, compression))?;
         Ok(())
     }
 
     fn __repr__(&self) -> String {
-        let kind = self.schema.metadata().get("lefsim.kind").cloned().unwrap_or_default();
-        let state = if self.reader.is_some() { "open" } else { "closed" };
+        let kind = self
+            .schema
+            .metadata()
+            .get("lefsim.kind")
+            .cloned()
+            .unwrap_or_default();
+        let state = if self.reader.is_some() {
+            "open"
+        } else {
+            "closed"
+        };
         format!("lefsim.Stream({kind}, {state})")
     }
 

@@ -19,7 +19,8 @@ fn build() -> Sim {
     world
         .add_lef((50, Mobility::Moving), (50, Mobility::Moving))
         .expect("valid LEF");
-    let model = Model::new(world, Rates::default(), SpawnRule::UniformNonCtcf).expect("valid model");
+    let model =
+        Model::new(world, Rates::default(), SpawnRule::UniformNonCtcf).expect("valid model");
     Sim::new(model, 42)
 }
 

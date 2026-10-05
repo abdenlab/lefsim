@@ -5,9 +5,9 @@
 
 use rand::{Rng, SeedableRng};
 
+use super::SimRng;
 use super::lattice::{Lattice, Position, SiteKind};
 use super::world::World;
-use super::SimRng;
 
 /// A spawn rule: pick sites, and say whether it always can.
 ///
@@ -61,7 +61,11 @@ impl Spawn for SpawnRule {
                 let needed = (2 * n_lefs).saturating_sub(1);
                 let n_plain = lattice.n_plain();
                 if n_plain < needed {
-                    return Err(SpawnError::NotEnoughSites { n_lefs, needed, n_plain });
+                    return Err(SpawnError::NotEnoughSites {
+                        n_lefs,
+                        needed,
+                        n_plain,
+                    });
                 }
                 Ok(())
             }
@@ -73,13 +77,21 @@ impl Spawn for SpawnRule {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SpawnError {
     /// Not enough plain sites for `n_lefs` LEFs: the rule needs `needed`.
-    NotEnoughSites { n_lefs: usize, needed: usize, n_plain: usize },
+    NotEnoughSites {
+        n_lefs: usize,
+        needed: usize,
+        n_plain: usize,
+    },
 }
 
 impl std::fmt::Display for SpawnError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SpawnError::NotEnoughSites { n_lefs, needed, n_plain } => write!(
+            SpawnError::NotEnoughSites {
+                n_lefs,
+                needed,
+                n_plain,
+            } => write!(
                 f,
                 "too many LEFs: {n_lefs} LEFs need at least {needed} non-CTCF sites, \
                  the lattice has {n_plain}"
@@ -122,20 +134,32 @@ mod tests {
     #[test]
     fn uniform_check_needs_2n_minus_1_plain_sites() {
         let rule = SpawnRule::UniformNonCtcf;
-        let ctcf = Ctcf { site: 0, captures_from: Direction::Left, strength: 1.0 };
+        let ctcf = Ctcf {
+            site: 0,
+            captures_from: Direction::Left,
+            strength: 1.0,
+        };
         let lattice = Lattice::with_ctcfs(6, &[ctcf]).unwrap(); // 5 plain sites
         assert_eq!(rule.check(&lattice, 0), Ok(()));
         assert_eq!(rule.check(&lattice, 3), Ok(()));
         assert_eq!(
             rule.check(&lattice, 4),
-            Err(SpawnError::NotEnoughSites { n_lefs: 4, needed: 7, n_plain: 5 })
+            Err(SpawnError::NotEnoughSites {
+                n_lefs: 4,
+                needed: 7,
+                n_plain: 5
+            })
         );
     }
 
     #[test]
     fn populate_places_valid_lefs_reproducibly() {
         let ctcfs: Vec<_> = (0..10)
-            .map(|i| Ctcf { site: 10 * i + 5, captures_from: Direction::Left, strength: 1.0 })
+            .map(|i| Ctcf {
+                site: 10 * i + 5,
+                captures_from: Direction::Left,
+                strength: 1.0,
+            })
             .collect();
         let lattice = Lattice::with_ctcfs(100, &ctcfs).unwrap();
         let world = populate(lattice.clone(), 20, &SpawnRule::UniformNonCtcf, 3).unwrap();
@@ -149,7 +173,10 @@ mod tests {
             assert_eq!((lm, rm), (Mobility::Moving, Mobility::Moving));
         }
         // A rebuild from the table passes validation, so no site is shared.
-        assert_eq!(World::from_lef_states(lattice.clone(), &states).as_ref(), Ok(&world));
+        assert_eq!(
+            World::from_lef_states(lattice.clone(), &states).as_ref(),
+            Ok(&world)
+        );
 
         let again = populate(lattice.clone(), 20, &SpawnRule::UniformNonCtcf, 3).unwrap();
         assert_eq!(again, world);
@@ -160,7 +187,14 @@ mod tests {
     #[test]
     fn populate_checks_the_rule_first() {
         let err = populate(Lattice::plain(3).unwrap(), 3, &SpawnRule::UniformNonCtcf, 0);
-        assert_eq!(err, Err(SpawnError::NotEnoughSites { n_lefs: 3, needed: 5, n_plain: 3 }));
+        assert_eq!(
+            err,
+            Err(SpawnError::NotEnoughSites {
+                n_lefs: 3,
+                needed: 5,
+                n_plain: 3
+            })
+        );
     }
 
     #[test]

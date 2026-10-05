@@ -10,7 +10,9 @@ use arrow_schema::Field;
 use pyo3::prelude::*;
 use pyo3::types::{PyCapsule, PyTuple};
 use pyo3_arrow::error::PyArrowResult;
-use pyo3_arrow::ffi::{ArrayIterator, to_array_pycapsules, to_schema_pycapsule, to_stream_pycapsule};
+use pyo3_arrow::ffi::{
+    ArrayIterator, to_array_pycapsules, to_schema_pycapsule, to_stream_pycapsule,
+};
 
 /// The struct field that represents a record batch on the C interfaces.
 pub fn batch_field(batch_schema: &arrow_schema::Schema) -> Field {
@@ -41,7 +43,12 @@ impl PyBatch {
 
     #[getter]
     fn column_names(&self) -> Vec<String> {
-        self.0.schema().fields().iter().map(|f| f.name().clone()).collect()
+        self.0
+            .schema()
+            .fields()
+            .iter()
+            .map(|f| f.name().clone())
+            .collect()
     }
 
     /// Schema metadata, e.g. `{"lefsim.kind": "snapshots", ...}`.

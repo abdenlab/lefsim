@@ -17,12 +17,21 @@ const GOLDEN: u64 = 0xd5d3254ed77ff3e9;
 fn fingerprint() -> u64 {
     let mut sites = vec![Site::plain(); 500];
     for (i, site) in sites.iter_mut().enumerate().skip(25).step_by(50) {
-        let side = if i % 100 == 25 { Direction::Right } else { Direction::Left };
+        let side = if i % 100 == 25 {
+            Direction::Right
+        } else {
+            Direction::Left
+        };
         *site = Site::ctcf(side, 0.7);
     }
     let rule = SpawnRule::UniformNonCtcf;
     let world = populate(Lattice::new(sites).unwrap(), 20, &rule, 0x5EED).unwrap();
-    let rates = Rates { step: 1.0, respawn: 0.01, respawn_blocked: 0.05, respawn_captured: 0.002 };
+    let rates = Rates {
+        step: 1.0,
+        respawn: 0.01,
+        respawn_blocked: 0.05,
+        respawn_captured: 0.002,
+    };
     let mut sim = Sim::new(Model::new(world, rates, rule).unwrap(), 0x5EED);
     let mut rec = sim.recorder(SampleMode::every_dt(5.0));
     let mut ev = EventRecorder::new();
@@ -59,5 +68,10 @@ fn fingerprint() -> u64 {
 
 #[test]
 fn fixed_seed_reproduces_golden_stream() {
-    assert_eq!(fingerprint(), GOLDEN, "event stream changed: got {:#018x}", fingerprint());
+    assert_eq!(
+        fingerprint(),
+        GOLDEN,
+        "event stream changed: got {:#018x}",
+        fingerprint()
+    );
 }

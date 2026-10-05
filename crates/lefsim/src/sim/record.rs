@@ -74,7 +74,10 @@ pub struct LefSnapshot<'a> {
 
 impl LefFrames {
     pub fn new(n_lefs: usize) -> Self {
-        LefFrames { n_lefs, ..Default::default() }
+        LefFrames {
+            n_lefs,
+            ..Default::default()
+        }
     }
 
     /// Empty frames with room for `n_snapshots` snapshots.
@@ -155,7 +158,11 @@ impl LefFrames {
 
     /// Append the sim's current LEF table at `time`.
     fn push_world(&mut self, time: Time, sim: &Sim) {
-        assert_eq!(self.n_lefs, sim.n_lefs(), "recorder built for a different sim");
+        assert_eq!(
+            self.n_lefs,
+            sim.n_lefs(),
+            "recorder built for a different sim"
+        );
         self.time.push(time);
         sim.world().push_lef_states(&mut self.lefs);
     }
@@ -185,7 +192,10 @@ impl Recorder {
     /// or a non-finite `t0`.
     pub fn new(mode: SampleMode, n_lefs: usize) -> Self {
         if let SampleMode::EveryDt { dt, t0 } = mode {
-            assert!(dt.is_finite() && dt > 0.0, "dt must be positive and finite, got {dt}");
+            assert!(
+                dt.is_finite() && dt > 0.0,
+                "dt must be positive and finite, got {dt}"
+            );
             assert!(t0.is_finite(), "t0 must be finite, got {t0}");
         }
         Recorder {
@@ -214,7 +224,8 @@ impl Recorder {
     pub fn set_max_snapshots(&mut self, max: Option<usize>) {
         if let Some(n) = max {
             assert!(n > 0, "max_snapshots must be positive");
-            self.frames.reserve(n.saturating_sub(self.frames.n_snapshots()));
+            self.frames
+                .reserve(n.saturating_sub(self.frames.n_snapshots()));
         }
         self.max_snapshots = max;
     }
@@ -322,10 +333,19 @@ impl TryFrom<EventColumns> for EventFrames {
     type Error = ColumnLengthError;
     fn try_from(c: EventColumns) -> Result<Self, Self::Error> {
         let n = c.time.len();
-        if [c.leg_id.len(), c.pos.len(), c.mob.len(), c.kind.len()].iter().any(|&m| m != n) {
+        if [c.leg_id.len(), c.pos.len(), c.mob.len(), c.kind.len()]
+            .iter()
+            .any(|&m| m != n)
+        {
             return Err(ColumnLengthError);
         }
-        Ok(EventFrames { time: c.time, leg_id: c.leg_id, pos: c.pos, mob: c.mob, kind: c.kind })
+        Ok(EventFrames {
+            time: c.time,
+            leg_id: c.leg_id,
+            pos: c.pos,
+            mob: c.mob,
+            kind: c.kind,
+        })
     }
 }
 
@@ -432,7 +452,8 @@ impl EventFrames {
         for leg in legs.into_iter().flatten() {
             let state = &sim.world().legs[leg];
             self.time.push(time);
-            self.leg_id.push(sim.leg_id(leg).expect("leg belongs to this sim"));
+            self.leg_id
+                .push(sim.leg_id(leg).expect("leg belongs to this sim"));
             self.pos.push(state.pos);
             self.mob.push(state.mobility);
             self.kind.push(action.code());
@@ -441,9 +462,17 @@ impl EventFrames {
 
     /// One `Keyframe` row per leg, in `leg_id` order, with its current state.
     fn push_keyframe(&mut self, time: Time, sim: &Sim, n_legs: usize) {
-        assert_eq!(n_legs, sim.n_legs(), "event recorder built for a different sim");
+        assert_eq!(
+            n_legs,
+            sim.n_legs(),
+            "event recorder built for a different sim"
+        );
         let lefs = sim.world().lef_states();
-        let legs = lefs.left_pos.iter().zip(&lefs.left_mobility).zip(lefs.right_pos.iter().zip(&lefs.right_mobility));
+        let legs = lefs
+            .left_pos
+            .iter()
+            .zip(&lefs.left_mobility)
+            .zip(lefs.right_pos.iter().zip(&lefs.right_mobility));
         for (lef_id, (left, right)) in legs.enumerate() {
             for (side, (&pos, &mob)) in [left, right].into_iter().enumerate() {
                 self.time.push(time);
@@ -478,7 +507,12 @@ pub struct EventRecorder {
 
 impl Default for EventRecorder {
     fn default() -> Self {
-        EventRecorder { frames: EventFrames::new(), max_rows: None, keyframe_legs: None, settled: true }
+        EventRecorder {
+            frames: EventFrames::new(),
+            max_rows: None,
+            keyframe_legs: None,
+            settled: true,
+        }
     }
 }
 
@@ -495,7 +529,10 @@ impl EventRecorder {
     pub fn with_max_rows(mut self, n: usize) -> Self {
         assert!(n >= 2, "max_rows must be at least 2");
         if let Some(n_legs) = self.keyframe_legs {
-            assert!(n >= n_legs + 2, "max_rows must be at least n_legs + 2 with keyframes");
+            assert!(
+                n >= n_legs + 2,
+                "max_rows must be at least n_legs + 2 with keyframes"
+            );
         }
         self.max_rows = Some(n);
         self.frames.reserve(n.saturating_sub(self.frames.n_rows()));
@@ -520,7 +557,10 @@ impl EventRecorder {
     /// a keyframe plus one event (`max_rows >= n_legs + 2`).
     pub fn with_keyframes(mut self, n_legs: usize) -> Self {
         if let Some(max) = self.max_rows {
-            assert!(max >= n_legs + 2, "max_rows must be at least n_legs + 2 with keyframes");
+            assert!(
+                max >= n_legs + 2,
+                "max_rows must be at least n_legs + 2 with keyframes"
+            );
         }
         self.keyframe_legs = Some(n_legs);
         self
@@ -677,7 +717,8 @@ pub(crate) mod sealed {
 
     impl<T: Observe> Observe for Option<T> {
         fn sample(&mut self, bound: Time, inclusive: bool, sim: &Sim) -> bool {
-            self.as_mut().is_none_or(|o| o.sample(bound, inclusive, sim))
+            self.as_mut()
+                .is_none_or(|o| o.sample(bound, inclusive, sim))
         }
         fn has_room_for_event(&self) -> bool {
             self.as_ref().is_none_or(|o| o.has_room_for_event())

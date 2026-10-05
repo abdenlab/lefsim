@@ -3,15 +3,28 @@
 use lefsim::*;
 
 fn lattice() -> Lattice {
-    let ctcf = |site, captures_from| Ctcf { site, captures_from, strength: 0.9 };
+    let ctcf = |site, captures_from| Ctcf {
+        site,
+        captures_from,
+        strength: 0.9,
+    };
     Lattice::with_ctcfs(
         200,
-        &[ctcf(60, Direction::Right), ctcf(100, Direction::Right), ctcf(140, Direction::Left)],
+        &[
+            ctcf(60, Direction::Right),
+            ctcf(100, Direction::Right),
+            ctcf(140, Direction::Left),
+        ],
     )
     .unwrap()
 }
 
-const RATES: Rates = Rates { step: 1.0, respawn: 0.02, respawn_blocked: 0.02, respawn_captured: 0.005 };
+const RATES: Rates = Rates {
+    step: 1.0,
+    respawn: 0.02,
+    respawn_blocked: 0.02,
+    respawn_captured: 0.005,
+};
 const N_LEFS: usize = 8;
 
 fn model(seed: u64) -> Model {
@@ -28,7 +41,9 @@ fn sim(seed: u64) -> Sim {
 /// the time it describes the run through.
 fn record(seed: u64, t_end: Time, max_rows: usize) -> Vec<(EventFrames, Time)> {
     let mut sim = sim(seed);
-    let mut rec = EventRecorder::new().with_max_rows(max_rows).with_keyframes(sim.n_legs());
+    let mut rec = EventRecorder::new()
+        .with_max_rows(max_rows)
+        .with_keyframes(sim.n_legs());
     let mut chunks = Vec::new();
     loop {
         let report = sim.run_until_with(t_end, &mut rec);
@@ -60,7 +75,10 @@ fn reference(seed: u64, times: &[Time]) -> Vec<LefStates> {
 }
 
 fn grid(from: Time, to: Time, step: Time) -> Vec<Time> {
-    (0..).map(|i| from + i as f64 * step).take_while(|&t| t <= to).collect()
+    (0..)
+        .map(|i| from + i as f64 * step)
+        .take_while(|&t| t <= to)
+        .collect()
 }
 
 #[test]
@@ -81,7 +99,16 @@ fn forward_jumps_of_any_size_match_the_live_run() {
     // last rows of the chunk before it).
     let chunks = record(10, 400.0, 60);
     let starts: Vec<Time> = chunks.iter().map(|(c, _)| c.time()[0]).collect();
-    let mut times = vec![0.5, 0.9, starts[3], starts[3] + 0.1, starts[9], 250.0, starts[starts.len() - 2], 400.0];
+    let mut times = vec![
+        0.5,
+        0.9,
+        starts[3],
+        starts[3] + 0.1,
+        starts[9],
+        250.0,
+        starts[starts.len() - 2],
+        400.0,
+    ];
     times.sort_by(f64::total_cmp);
     let expected = reference(10, &times);
     let mut r = replayer(&chunks);
@@ -115,7 +142,10 @@ fn a_late_joiner_starts_at_its_first_keyframe() {
     assert!(!r.ready());
     assert_eq!(r.advance_to(first - 1.0), Time::NEG_INFINITY);
     assert_eq!(r.lef_states(), Err(ReplayError::NotReady));
-    assert!(matches!(r.seek(first - 1.0), Err(ReplayError::NoKeyframe { .. })));
+    assert!(matches!(
+        r.seek(first - 1.0),
+        Err(ReplayError::NoKeyframe { .. })
+    ));
 
     let times = grid(first, 400.0, 1.3);
     for (t, expected) in times.iter().zip(reference(3, &times)) {
@@ -219,23 +249,41 @@ fn bad_chunks_are_rejected_whole() {
 
     let mut c = cols(first);
     c.leg_id[20] = 16;
-    assert_eq!(push(&mut r, c, end), Err(ReplayError::LegOutOfRange { leg_id: 16, n_legs: 16 }));
+    assert_eq!(
+        push(&mut r, c, end),
+        Err(ReplayError::LegOutOfRange {
+            leg_id: 16,
+            n_legs: 16
+        })
+    );
     let mut c = cols(first);
     c.kind[20] = 9;
     assert_eq!(push(&mut r, c, end), Err(ReplayError::BadKind { code: 9 }));
     let mut c = cols(first);
     c.leg_id.swap(0, 1); // keyframe out of leg order
-    assert!(matches!(push(&mut r, c, end), Err(ReplayError::BadKeyframe { rows: 0, .. })));
+    assert!(matches!(
+        push(&mut r, c, end),
+        Err(ReplayError::BadKeyframe { rows: 0, .. })
+    ));
     let mut c = cols(first);
     let last = *c.time.last().unwrap();
-    assert!(matches!(push(&mut r, c.clone(), last - 1.0), Err(ReplayError::BadEnd { .. })));
+    assert!(matches!(
+        push(&mut r, c.clone(), last - 1.0),
+        Err(ReplayError::BadEnd { .. })
+    ));
     c.time[17] = c.time[16] - 1.0;
-    assert!(matches!(push(&mut r, c, end), Err(ReplayError::OutOfOrder { .. })));
+    assert!(matches!(
+        push(&mut r, c, end),
+        Err(ReplayError::OutOfOrder { .. })
+    ));
     assert_eq!(r.start(), None, "nothing was pushed");
 
     // Chunks must come in order.
     r.push(chunks[1].0.clone(), chunks[1].1).unwrap();
-    assert!(matches!(r.push(first.clone(), end), Err(ReplayError::OutOfOrder { .. })));
+    assert!(matches!(
+        r.push(first.clone(), end),
+        Err(ReplayError::OutOfOrder { .. })
+    ));
 
     let mut c = cols(first);
     c.pos.pop();
@@ -258,19 +306,36 @@ fn effective_distances_over_a_grid_match_each_world() {
     let mut r = replayer(&record(12, 300.0, 80));
     let sites = [5, 61, 99, 140, 199];
     let mode = SampleMode::EveryDt { dt: 7.5, t0: 0.0 };
-    let (times, d) = r.effective_distances(mode, 300.0, &sites, 1000, 100).unwrap();
+    let (times, d) = r
+        .effective_distances(mode, 300.0, &sites, 1000, 100)
+        .unwrap();
     assert_eq!(times.len(), 41);
     assert_eq!(d.len(), times.len() * 10);
     let mut check = replayer(&record(12, 300.0, 80));
     for (i, &t) in times.iter().enumerate() {
         check.seek(t).unwrap();
-        let expected = LoopGraph::new(&check.world().unwrap(), 1000, 100).unwrap().pairwise(&sites).unwrap();
+        let expected = LoopGraph::new(&check.world().unwrap(), 1000, 100)
+            .unwrap()
+            .pairwise(&sites)
+            .unwrap();
         assert_eq!(&d[i * 10..(i + 1) * 10], &expected[..], "t = {t}");
     }
     // Bad arguments are reported before anything moves.
     let mut fresh = replayer(&record(12, 300.0, 80));
-    assert_eq!(fresh.effective_distances(mode, 300.0, &[500], 1, 1).unwrap_err(), DistanceError::SiteOutOfRange { site: 500, n_sites: 200 });
-    assert_eq!(fresh.effective_distances(mode, 300.0, &sites, 0, 1).unwrap_err(), DistanceError::ZeroStepLength);
+    assert_eq!(
+        fresh
+            .effective_distances(mode, 300.0, &[500], 1, 1)
+            .unwrap_err(),
+        DistanceError::SiteOutOfRange {
+            site: 500,
+            n_sites: 200
+        }
+    );
+    assert_eq!(
+        fresh
+            .effective_distances(mode, 300.0, &sites, 0, 1)
+            .unwrap_err(),
+        DistanceError::ZeroStepLength
+    );
     assert!(!fresh.ready());
 }
-

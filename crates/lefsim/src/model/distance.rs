@@ -31,7 +31,10 @@ use super::world::World;
 pub enum DistanceError {
     /// The step length must be positive.
     ZeroStepLength,
-    SiteOutOfRange { site: Position, n_sites: usize },
+    SiteOutOfRange {
+        site: Position,
+        n_sites: usize,
+    },
 }
 
 impl std::fmt::Display for DistanceError {
@@ -70,7 +73,13 @@ impl LoopGraph {
     /// The loop network of `world`'s current state.
     pub fn new(world: &World, step_length: u64, hop_length: u64) -> Result<Self, DistanceError> {
         let lefs = world.lef_states();
-        Self::from_legs(world.lattice().len(), &lefs.left_pos, &lefs.right_pos, step_length, hop_length)
+        Self::from_legs(
+            world.lattice().len(),
+            &lefs.left_pos,
+            &lefs.right_pos,
+            step_length,
+            hop_length,
+        )
     }
 
     /// The loop network of LEFs with legs at `left_pos[i]` and
@@ -93,7 +102,13 @@ impl LoopGraph {
         // Legs in position order; at one site (a freshly placed LEF), the left
         // leg first. `leg = 2 * lef + side`, side 0 left, 1 right.
         let mut order: Vec<u32> = (0..n_legs as u32).collect();
-        let leg_pos = |leg: u32| if leg.is_multiple_of(2) { left_pos[leg as usize / 2] } else { right_pos[leg as usize / 2] };
+        let leg_pos = |leg: u32| {
+            if leg.is_multiple_of(2) {
+                left_pos[leg as usize / 2]
+            } else {
+                right_pos[leg as usize / 2]
+            }
+        };
         order.sort_by_key(|&leg| (leg_pos(leg), leg % 2));
         let pos: Vec<Position> = order.iter().map(|&leg| leg_pos(leg)).collect();
         let mut node_of = vec![0u32; n_legs];
@@ -158,12 +173,22 @@ impl LoopGraph {
             lengths[*at] = length;
             *at += 1;
         }
-        Ok(LoopGraph { n_sites, step: step_length, pos, offsets, targets, lengths })
+        Ok(LoopGraph {
+            n_sites,
+            step: step_length,
+            pos,
+            offsets,
+            targets,
+            lengths,
+        })
     }
 
     fn check(&self, site: Position) -> Result<(), DistanceError> {
         if site as usize >= self.n_sites {
-            return Err(DistanceError::SiteOutOfRange { site, n_sites: self.n_sites });
+            return Err(DistanceError::SiteOutOfRange {
+                site,
+                n_sites: self.n_sites,
+            });
         }
         Ok(())
     }
@@ -240,7 +265,10 @@ impl LoopGraph {
 
     fn seeds(&self, site: Position) -> Vec<(usize, u64)> {
         let (entries, n) = self.entries(site);
-        entries[..n].iter().map(|&e| (e, self.walk(site, self.pos[e]))).collect()
+        entries[..n]
+            .iter()
+            .map(|&e| (e, self.walk(site, self.pos[e])))
+            .collect()
     }
 
     /// The effective distance between sites `a` and `b`.
@@ -256,21 +284,35 @@ impl LoopGraph {
     }
 
     /// The effective distance from `a` to each of `targets`: one Dijkstra.
-    pub fn distances_from(&self, a: Position, targets: &[Position]) -> Result<Vec<u64>, DistanceError> {
+    pub fn distances_from(
+        &self,
+        a: Position,
+        targets: &[Position],
+    ) -> Result<Vec<u64>, DistanceError> {
         self.check(a)?;
         targets.iter().try_for_each(|&t| self.check(t))?;
         if self.pos.is_empty() {
             return Ok(targets.iter().map(|&t| self.walk(a, t)).collect());
         }
         let dist = self.dijkstra(&self.seeds(a), &[]);
-        Ok(targets.iter().map(|&t| self.walk(a, t).min(self.via_entries(&dist, t))).collect())
+        Ok(targets
+            .iter()
+            .map(|&t| self.walk(a, t).min(self.via_entries(&dist, t)))
+            .collect())
     }
 
     /// The effective distance from each of `sites` to each of `targets`,
     /// row-major (`sites.len()` rows). Sites sharing an entry leg share its
     /// Dijkstra, so it takes one run per distinct entry leg of `sites`.
-    pub fn distances(&self, sites: &[Position], targets: &[Position]) -> Result<Vec<u64>, DistanceError> {
-        sites.iter().chain(targets).try_for_each(|&s| self.check(s))?;
+    pub fn distances(
+        &self,
+        sites: &[Position],
+        targets: &[Position],
+    ) -> Result<Vec<u64>, DistanceError> {
+        sites
+            .iter()
+            .chain(targets)
+            .try_for_each(|&s| self.check(s))?;
         let m = targets.len();
         let mut out = Vec::with_capacity(sites.len() * m);
         for &a in sites {
@@ -421,14 +463,20 @@ mod tests {
                 for a in 0..n_sites as usize {
                     for b in 0..n_sites as usize {
                         let got = all[a * n_sites as usize + b];
-                        assert_eq!(got, expected[a][b], "trial {trial}, s={s}, h={h}, {a}->{b}, lefs {lefs:?}");
+                        assert_eq!(
+                            got, expected[a][b],
+                            "trial {trial}, s={s}, h={h}, {a}->{b}, lefs {lefs:?}"
+                        );
                     }
                 }
                 // The single-query paths agree with the batched one.
                 let (a, b) = (rng.gen_range(0..n_sites), rng.gen_range(0..n_sites));
                 assert_eq!(g.distance(a, b).unwrap(), expected[a as usize][b as usize]);
                 let from = g.distances_from(a, &sites).unwrap();
-                assert_eq!(from, all[a as usize * n_sites as usize..(a as usize + 1) * n_sites as usize]);
+                assert_eq!(
+                    from,
+                    all[a as usize * n_sites as usize..(a as usize + 1) * n_sites as usize]
+                );
             }
         }
     }
@@ -470,9 +518,17 @@ mod tests {
         for &(s, h) in &[(1, 1), (1, 5), (3, 7), (1, 0), (1000, 100)] {
             let g = graph(40, &[(10, 20), (21, 30)], s, h);
             assert_eq!(g.distance(20, 21).unwrap(), s.min(4 * h), "r1 to l2");
-            assert_eq!(g.distance(20, 30).unwrap(), (s + h).min(3 * h).min(10 * s), "r1 to r2");
+            assert_eq!(
+                g.distance(20, 30).unwrap(),
+                (s + h).min(3 * h).min(10 * s),
+                "r1 to r2"
+            );
             assert_eq!(g.distance(10, 30).unwrap(), (2 * h).min(20 * s), "l1 to r2");
-            assert_eq!(g.distance(10, 21).unwrap(), (h + s).min(3 * h).min(11 * s), "l1 to l2");
+            assert_eq!(
+                g.distance(10, 21).unwrap(),
+                (h + s).min(3 * h).min(11 * s),
+                "l1 to l2"
+            );
         }
         // Two sites apart: no link, two hops and the walk between.
         let g = graph(40, &[(10, 20), (22, 30)], 1, 1);
@@ -493,11 +549,22 @@ mod tests {
     fn built_from_a_world() {
         let lattice = Lattice::plain(100).unwrap();
         let mut world = World::new(lattice);
-        world.add_lef((10, Mobility::Moving), (60, Mobility::Moving)).unwrap();
+        world
+            .add_lef((10, Mobility::Moving), (60, Mobility::Moving))
+            .unwrap();
         let g = LoopGraph::new(&world, 2, 1).unwrap();
         assert_eq!(g.distance(5, 65).unwrap(), 2 * 5 + 1 + 2 * 5);
-        assert_eq!(LoopGraph::new(&world, 0, 1).unwrap_err(), DistanceError::ZeroStepLength);
-        assert_eq!(g.distance(5, 100), Err(DistanceError::SiteOutOfRange { site: 100, n_sites: 100 }));
+        assert_eq!(
+            LoopGraph::new(&world, 0, 1).unwrap_err(),
+            DistanceError::ZeroStepLength
+        );
+        assert_eq!(
+            g.distance(5, 100),
+            Err(DistanceError::SiteOutOfRange {
+                site: 100,
+                n_sites: 100
+            })
+        );
     }
 
     #[test]
@@ -510,7 +577,11 @@ mod tests {
         for i in 0..sites.len() {
             for j in i + 1..sites.len() {
                 assert_eq!(condensed[k], full[i * sites.len() + j]);
-                assert_eq!(full[i * sites.len() + j], full[j * sites.len() + i], "symmetric");
+                assert_eq!(
+                    full[i * sites.len() + j],
+                    full[j * sites.len() + i],
+                    "symmetric"
+                );
                 k += 1;
             }
         }

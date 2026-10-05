@@ -37,7 +37,10 @@ impl From<Vec<LefRow>> for LefStates {
     fn from(rows: Vec<LefRow>) -> Self {
         let mut lefs = LefStates::with_capacity(rows.len());
         for r in rows {
-            lefs.push((r.left_pos, r.left_mobility), (r.right_pos, r.right_mobility));
+            lefs.push(
+                (r.left_pos, r.left_mobility),
+                (r.right_pos, r.right_mobility),
+            );
         }
         lefs
     }
@@ -47,8 +50,14 @@ impl From<LefStates> for Vec<LefRow> {
     fn from(lefs: LefStates) -> Self {
         (0..lefs.len())
             .map(|i| {
-                let ((left_pos, left_mobility), (right_pos, right_mobility)) = lefs.get(i).expect("in range");
-                LefRow { left_pos, right_pos, left_mobility, right_mobility }
+                let ((left_pos, left_mobility), (right_pos, right_mobility)) =
+                    lefs.get(i).expect("in range");
+                LefRow {
+                    left_pos,
+                    right_pos,
+                    left_mobility,
+                    right_mobility,
+                }
             })
             .collect()
     }
@@ -71,7 +80,10 @@ impl TryFrom<LatticeData> for Lattice {
 
 impl From<Lattice> for LatticeData {
     fn from(l: Lattice) -> Self {
-        LatticeData { n_sites: l.len(), ctcfs: l.ctcfs() }
+        LatticeData {
+            n_sites: l.len(),
+            ctcfs: l.ctcfs(),
+        }
     }
 }
 
@@ -91,7 +103,10 @@ impl TryFrom<WorldData> for World {
 
 impl From<World> for WorldData {
     fn from(w: World) -> Self {
-        WorldData { lefs: w.lef_states(), lattice: w.lattice }
+        WorldData {
+            lefs: w.lef_states(),
+            lattice: w.lattice,
+        }
     }
 }
 
@@ -110,7 +125,10 @@ impl TryFrom<ModelData> for Model {
     type Error = String;
     fn try_from(d: ModelData) -> Result<Self, Self::Error> {
         if d.format != MODEL_FORMAT {
-            return Err(format!("expected format {MODEL_FORMAT:?}, got {:?}", d.format));
+            return Err(format!(
+                "expected format {MODEL_FORMAT:?}, got {:?}",
+                d.format
+            ));
         }
         if d.version != MODEL_VERSION {
             return Err(format!(
@@ -145,13 +163,30 @@ mod tests {
 
     fn model() -> Model {
         let ctcfs = [
-            Ctcf { site: 30, captures_from: Direction::Right, strength: 0.8 },
-            Ctcf { site: 70, captures_from: Direction::Left, strength: 1.0 },
+            Ctcf {
+                site: 30,
+                captures_from: Direction::Right,
+                strength: 0.8,
+            },
+            Ctcf {
+                site: 70,
+                captures_from: Direction::Left,
+                strength: 1.0,
+            },
         ];
         let mut world = World::new(Lattice::with_ctcfs(100, &ctcfs).unwrap());
-        world.add_lef((10, Mobility::Moving), (12, Mobility::Moving)).unwrap();
-        world.add_lef((30, Mobility::Captured), (70, Mobility::Captured)).unwrap();
-        let rates = Rates { step: 1.0, respawn: 0.002, respawn_blocked: 0.02, respawn_captured: 0.0004 };
+        world
+            .add_lef((10, Mobility::Moving), (12, Mobility::Moving))
+            .unwrap();
+        world
+            .add_lef((30, Mobility::Captured), (70, Mobility::Captured))
+            .unwrap();
+        let rates = Rates {
+            step: 1.0,
+            respawn: 0.002,
+            respawn_blocked: 0.02,
+            respawn_captured: 0.0004,
+        };
         Model::new(world, rates, SpawnRule::UniformNonCtcf).unwrap()
     }
 
@@ -212,7 +247,10 @@ mod tests {
             "lefs": [{ "left_pos": 1, "right_pos": 3 }],
         }))
         .unwrap();
-        assert_eq!(short.lef_state(0), Some(((1, Mobility::Moving), (3, Mobility::Moving))));
+        assert_eq!(
+            short.lef_state(0),
+            Some(((1, Mobility::Moving), (3, Mobility::Moving)))
+        );
     }
 
     /// Each edit breaks the document; loading must say why.
@@ -231,18 +269,24 @@ mod tests {
         for (path, value, message) in cases {
             let mut doc = document();
             *doc.pointer_mut(path).unwrap() = value;
-            let err = serde_json::from_value::<Model>(doc).unwrap_err().to_string();
+            let err = serde_json::from_value::<Model>(doc)
+                .unwrap_err()
+                .to_string();
             assert!(err.contains(message), "{path}: {err}");
         }
 
         let mut doc = document();
         doc["lefs"][0].as_object_mut().unwrap().remove("right_pos");
-        let err = serde_json::from_value::<Model>(doc).unwrap_err().to_string();
+        let err = serde_json::from_value::<Model>(doc)
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("missing field `right_pos`"), "{err}");
 
         let mut doc = document();
         doc["rates"]["setp"] = json!(1.0);
-        let err = serde_json::from_value::<Model>(doc).unwrap_err().to_string();
+        let err = serde_json::from_value::<Model>(doc)
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("unknown field"), "{err}");
     }
 }
