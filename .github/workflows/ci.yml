@@ -126,5 +126,5 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uvx --with mkdocstrings-python zensical build --strict
       - run: >-
-          uvx --with mdformat-mkdocs --with mdformat-tables mdformat --wrap 80 --exclude 'docs/reference/typescript/**' --check
+          uvx --python 3.13 --with mdformat-mkdocs --with mdformat-tables mdformat --wrap 80 --exclude 'docs/reference/typescript/**' --check
           docs/ README.md AGENTS.md CHANGELOG.md crates/lefsim/README.md python/README.md packages/lefsim/README.md

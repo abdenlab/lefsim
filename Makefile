@@ -1,7 +1,8 @@
 # Shortcuts for the commands in AGENTS.md and the README. `make` lists them.
 # Written for GNU Make 3.81 (the macOS default) and later.
 
-MDFORMAT := uvx --with mdformat-mkdocs --with mdformat-tables mdformat --wrap 80 --exclude 'docs/reference/typescript/**'
+# mdformat's --exclude needs Python 3.13 or later.
+MDFORMAT := uvx --python 3.13 --with mdformat-mkdocs --with mdformat-tables mdformat --wrap 80 --exclude 'docs/reference/typescript/**'
 MARKDOWN := docs/ README.md AGENTS.md CHANGELOG.md crates/lefsim/README.md python/README.md packages/lefsim/README.md
 # ruff from the Python dev group, with python/pyproject.toml's settings for all
 # the repo's Python (including the scripts in packages/ and docs/).
