@@ -253,6 +253,7 @@ impl PyLattice {
         self.0.len() - self.0.n_plain()
     }
 
+    /// Number of sites.
     #[getter]
     fn n_sites(&self) -> usize {
         self.0.len()
@@ -276,16 +277,20 @@ impl PyLattice {
         to_dict(py, &self.0)
     }
 
+    /// Load from plain Python data shaped as `to_dict` returns it, with the same checks as
+    /// construction.
     #[classmethod]
     fn from_dict(_cls: &Bound<'_, PyType>, d: &Bound<'_, PyAny>) -> PyResult<Self> {
         Ok(PyLattice(from_dict(d)?))
     }
 
+    /// As a JSON string; `indent` pretty-prints.
     #[pyo3(signature = (*, indent = None))]
     fn to_json(&self, indent: Option<usize>) -> PyResult<String> {
         to_json(&self.0, indent)
     }
 
+    /// Load from a JSON string as `to_json` writes it, with the same checks as construction.
     #[classmethod]
     fn from_json(_cls: &Bound<'_, PyType>, s: &str) -> PyResult<Self> {
         Ok(PyLattice(from_json(s)?))
@@ -413,11 +418,13 @@ impl PyWorld {
         Ok(PyWorld(world))
     }
 
+    /// The lattice.
     #[getter]
     fn lattice(&self) -> PyLattice {
         PyLattice(self.0.lattice().clone())
     }
 
+    /// Number of LEFs.
     #[getter]
     fn n_lefs(&self) -> usize {
         self.0.n_lefs()
@@ -426,8 +433,9 @@ impl PyWorld {
     /// The effective distance between sites `a` and `b`: the shortest path
     /// when a path walks the lattice (`step_length` per step) and may cross
     /// LEFs (`hop_length` per crossing; across a chain of LEFs side by side,
-    /// a rosette, a hop per LEF and the junctions between them free). Both lengths are integers, so distances are
-    /// exact; divide by `step_length` for lattice steps.
+    /// a rosette, a hop per LEF and the junctions between them free). Both
+    /// lengths are integers, so distances are exact; divide by `step_length`
+    /// for lattice steps.
     #[pyo3(signature = (a, b, *, step_length, hop_length))]
     fn effective_distance(
         &self,
@@ -480,16 +488,20 @@ impl PyWorld {
         to_dict(py, &self.0)
     }
 
+    /// Load from plain Python data shaped as `to_dict` returns it, with the same checks as
+    /// construction.
     #[classmethod]
     fn from_dict(_cls: &Bound<'_, PyType>, d: &Bound<'_, PyAny>) -> PyResult<Self> {
         Ok(PyWorld(from_dict(d)?))
     }
 
+    /// As a JSON string; `indent` pretty-prints.
     #[pyo3(signature = (*, indent = None))]
     fn to_json(&self, indent: Option<usize>) -> PyResult<String> {
         to_json(&self.0, indent)
     }
 
+    /// Load from a JSON string as `to_json` writes it, with the same checks as construction.
     #[classmethod]
     fn from_json(_cls: &Bound<'_, PyType>, s: &str) -> PyResult<Self> {
         Ok(PyWorld(from_json(s)?))
@@ -559,21 +571,26 @@ impl PyRates {
         })
     }
 
+    /// Step rate of a moving, unblocked leg.
     #[getter]
     fn step(&self) -> f64 {
         self.0.step
     }
 
+    /// Basal respawn rate: a LEF with both legs free to move.
     #[getter]
     fn respawn(&self) -> f64 {
         self.0.respawn
     }
 
+    /// Respawn rate of a LEF with either leg blocked (by a leg ahead or the
+    /// lattice's end), unless the other is captured.
     #[getter]
     fn respawn_blocked(&self) -> f64 {
         self.0.respawn_blocked
     }
 
+    /// Respawn rate of a LEF with a captured leg, whatever the other leg does.
     #[getter]
     fn respawn_captured(&self) -> f64 {
         self.0.respawn_captured
@@ -585,16 +602,20 @@ impl PyRates {
         to_dict(py, &self.0)
     }
 
+    /// Load from plain Python data shaped as `to_dict` returns it, with the same checks as
+    /// construction.
     #[classmethod]
     fn from_dict(_cls: &Bound<'_, PyType>, d: &Bound<'_, PyAny>) -> PyResult<Self> {
         Ok(PyRates(from_dict(d)?))
     }
 
+    /// As a JSON string; `indent` pretty-prints.
     #[pyo3(signature = (*, indent = None))]
     fn to_json(&self, indent: Option<usize>) -> PyResult<String> {
         to_json(&self.0, indent)
     }
 
+    /// Load from a JSON string as `to_json` writes it, with the same checks as construction.
     #[classmethod]
     fn from_json(_cls: &Bound<'_, PyType>, s: &str) -> PyResult<Self> {
         Ok(PyRates(from_json(s)?))
@@ -638,16 +659,19 @@ impl PyModel {
         Ok(PyModel(model))
     }
 
+    /// The world.
     #[getter]
     fn world(&self) -> PyWorld {
         PyWorld(self.0.world().clone())
     }
 
+    /// The world's lattice.
     #[getter]
     fn lattice(&self) -> PyLattice {
         PyLattice(self.0.world().lattice().clone())
     }
 
+    /// The rates.
     #[getter]
     fn rates(&self) -> PyRates {
         PyRates(self.0.rates())
@@ -665,16 +689,20 @@ impl PyModel {
         to_dict(py, &self.0)
     }
 
+    /// Load from plain Python data shaped as `to_dict` returns it, with the same checks as
+    /// construction.
     #[classmethod]
     fn from_dict(_cls: &Bound<'_, PyType>, d: &Bound<'_, PyAny>) -> PyResult<Self> {
         Ok(PyModel(from_dict(d)?))
     }
 
+    /// As the versioned JSON model document (`lefsim.model`, version 2); `indent` pretty-prints.
     #[pyo3(signature = (*, indent = None))]
     fn to_json(&self, indent: Option<usize>) -> PyResult<String> {
         to_json(&self.0, indent)
     }
 
+    /// Load a JSON model document as `to_json` writes it, with the same checks as construction.
     #[classmethod]
     fn from_json(_cls: &Bound<'_, PyType>, s: &str) -> PyResult<Self> {
         Ok(PyModel(from_json(s)?))

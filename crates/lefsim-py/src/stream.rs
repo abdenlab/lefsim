@@ -193,6 +193,7 @@ impl PyStream {
 
 #[pymethods]
 impl PyStream {
+    /// The column names of every batch, in order.
     #[getter]
     fn column_names(&self) -> Vec<String> {
         self.schema

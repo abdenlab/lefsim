@@ -7,6 +7,8 @@ MARKDOWN := docs/ README.md AGENTS.md CHANGELOG.md crates/lefsim/README.md pytho
 # the repo's Python (including the scripts in packages/ and docs/).
 RUFF := uv run --project python ruff
 RUFF_CONFIG := --config python/pyproject.toml
+# The docs build, with mkdocstrings for the Python API reference.
+ZENSICAL := uvx --with mkdocstrings-python zensical
 
 .DEFAULT_GOAL := help
 
@@ -34,6 +36,10 @@ wasm: ## Build the wasm module into packages/lefsim/wasm
 .PHONY: py
 py: ## Sync the venv, rebuilding the extension if the Rust code changed
 	cd python && uv sync
+
+.PHONY: stubs
+stubs: ## Copy the Python bindings' docstrings (Rust doc comments) into the type stubs
+	uv run --project python python scripts/sync_stub_docs.py
 
 # ---------------------------------------------------------------- test
 
@@ -77,11 +83,11 @@ fmt: ## Format everything and apply safe lint fixes (e.g. import order)
 
 .PHONY: docs
 docs: ## Build the docs site into site/ (strict, as CI does)
-	uvx zensical build --strict
+	$(ZENSICAL) build --strict
 
 .PHONY: docs-serve
 docs-serve: ## Preview the docs with live reload
-	uvx zensical serve
+	$(ZENSICAL) serve
 
 .PHONY: demo
 demo: wasm ## Run the browser demos on a Vite dev server

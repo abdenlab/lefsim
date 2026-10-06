@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
-      - run: uvx zensical build --strict
+      - run: uvx --with mkdocstrings-python zensical build --strict
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site

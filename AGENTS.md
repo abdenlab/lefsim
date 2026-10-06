@@ -36,6 +36,9 @@ Read as needed:
     the code/name tables in `types.ts`), the docs, and the demos if they use it.
 - Cross-language fixtures in `packages/lefsim/test/fixtures` are generated from
     Python (`make_fixtures.py`) and checked by both the Python and TS suites.
+- Python docstrings live in the Rust doc comments in `crates/lefsim-py`; after
+    changing one, run `make stubs` to copy it into `_lefsim.pyi` (a test fails
+    until you do). Write them in Markdown.
 
 ## Commands
 

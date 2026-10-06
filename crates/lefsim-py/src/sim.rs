@@ -120,7 +120,10 @@ fn event_recorder(
 pub struct PyRunReport {
     /// Events fired by this call.
     n_events: u64,
+    /// Simulation time after the call.
     time: f64,
+    /// Why the run stopped: "reached_time", "reached_event_count", "exhausted", or, for the chunk
+    /// methods, "recorder_full".
     stopped: &'static str,
 }
 
@@ -156,6 +159,8 @@ pub struct PyRecording {
     /// Simulation time after the call: the recording describes the run
     /// through this time.
     time: f64,
+    /// Why the run stopped: "reached_time", "reached_event_count", "exhausted", or, for the chunk
+    /// methods, "recorder_full".
     stopped: &'static str,
 }
 
@@ -357,21 +362,25 @@ impl PySim {
         Ok(self.sim()?.next_event_time())
     }
 
+    /// Number of lattice sites.
     #[getter]
     fn n_sites(&self) -> PyResult<usize> {
         Ok(self.sim()?.n_sites())
     }
 
+    /// Number of LEFs.
     #[getter]
     fn n_lefs(&self) -> PyResult<usize> {
         Ok(self.sim()?.n_lefs())
     }
 
+    /// Number of legs (two per LEF).
     #[getter]
     fn n_legs(&self) -> PyResult<usize> {
         Ok(self.sim()?.n_legs())
     }
 
+    /// The rates this run uses.
     #[getter]
     fn rates(&self) -> PyResult<PyRates> {
         Ok(PyRates(self.sim()?.rates()))

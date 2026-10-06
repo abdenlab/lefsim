@@ -19,12 +19,12 @@ Python and the browser. A seed gives the same run, bit for bit, in all three.
 ## Documentation
 
 The documentation lives in [`docs/`](docs/index.md): getting started, the model,
-recording and replay, effective distance, and a guide per language. Preview it
-as a site with [Zensical](https://zensical.org), configured in `zensical.toml`,
-without installing anything:
+recording and replay, effective distance, a guide per language and the Python
+API reference. Preview it as a site with [Zensical](https://zensical.org),
+configured in `zensical.toml`, without installing anything:
 
 ```
-uvx zensical serve
+make docs-serve    # uvx --with mkdocstrings-python zensical serve
 ```
 
 ## A quick look

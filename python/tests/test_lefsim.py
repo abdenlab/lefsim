@@ -261,6 +261,14 @@ def test_model_json_round_trip_and_shape():
 MODEL_SCHEMA = pathlib.Path(__file__).parents[2] / "docs" / "schemas" / "model.v2.json"
 
 
+def test_stub_docstrings_match_the_extension():
+    # The Rust doc comments are the source of truth; the stubs (read by editors
+    # and the API reference) must carry the same docstrings. Fix with `make stubs`.
+    script = pathlib.Path(__file__).parents[2] / "scripts" / "sync_stub_docs.py"
+    result = subprocess.run([sys.executable, str(script), "--check"], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
 def test_model_json_schema_matches_the_loader():
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads(MODEL_SCHEMA.read_text())

@@ -31,16 +31,19 @@ pub struct PyBatch(pub RecordBatch);
 
 #[pymethods]
 impl PyBatch {
+    /// Number of rows.
     #[getter]
     fn num_rows(&self) -> usize {
         self.0.num_rows()
     }
 
+    /// Number of columns.
     #[getter]
     fn num_columns(&self) -> usize {
         self.0.num_columns()
     }
 
+    /// The column names, in order.
     #[getter]
     fn column_names(&self) -> Vec<String> {
         self.0

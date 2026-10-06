@@ -419,11 +419,13 @@ impl PyReplayer {
             .map_err(replay_error)
     }
 
+    /// The lattice of the recorded run.
     #[getter]
     fn lattice(&self) -> PyLattice {
         PyLattice(self.core.lattice().clone())
     }
 
+    /// Number of LEFs in the recorded run.
     #[getter]
     fn n_lefs(&self) -> usize {
         self.core.n_lefs()

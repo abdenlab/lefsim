@@ -111,7 +111,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
-      - run: uvx zensical build --strict
+      - run: uvx --with mkdocstrings-python zensical build --strict
       - run: >-
           uvx --with mdformat-mkdocs --with mdformat-tables mdformat --wrap 80 --check
           docs/ README.md AGENTS.md CHANGELOG.md crates/lefsim/README.md python/README.md packages/lefsim/README.md

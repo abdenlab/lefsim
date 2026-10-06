@@ -23,7 +23,10 @@ nav = [
     { "Browser demos" = "guides/demos.md" },
   ] },
   { "Design notes" = "design/vision.md" },
-  { "API reference" = "reference.md" },
+  { "API reference" = [
+    "reference/index.md",
+    { "Python" = "reference/python.md" },
+  ] },
 ]
 extra_css = ["stylesheets/extra.css"]
 
@@ -66,3 +69,25 @@ pymdownx.superfences = {}
 # Include files in pages, e.g. the model schema (paths from the repo root).
 pymdownx.snippets.check_paths = true
 pymdownx.tabbed.alternate_style = true
+
+# The Python API reference, rendered from the type stubs (python/lefsim), whose
+# docstrings scripts/sync_stub_docs.py copies from the Rust bindings. Read
+# statically, so building the docs doesn't need the compiled extension.
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["python"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+allow_inspection = false
+docstring_style = "google"
+heading_level = 3
+show_root_heading = true
+show_root_full_path = false
+show_symbol_type_heading = true
+show_symbol_type_toc = true
+members_order = "source"
+merge_init_into_class = true
+filters = ["!^_"]
+separate_signature = true
+show_signature_annotations = true
+signature_crossrefs = true
+show_source = false
