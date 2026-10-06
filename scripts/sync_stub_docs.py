@@ -58,6 +58,7 @@ def plan(source: str) -> "tuple[list[tuple[int, int, list[str]]], list[str]]":
     lines = source.split("\n")
     edits: "list[tuple[int, int, list[str]]]" = []
     problems: "list[str]" = []
+    stale: "list[str]" = []
 
     def sync(node: "ast.ClassDef | ast.FunctionDef", qualname: str) -> None:
         doc = runtime_doc(qualname)
@@ -67,6 +68,7 @@ def plan(source: str) -> "tuple[list[tuple[int, int, list[str]]], list[str]]":
             return
         if current == doc:
             return
+        stale.append(qualname)
         indent = " " * (node.col_offset + 4)
         new = docstring_lines(doc, indent)
         first = node.body[0]
@@ -96,6 +98,7 @@ def plan(source: str) -> "tuple[list[tuple[int, int, list[str]]], list[str]]":
             return
         if current == doc:
             return
+        stale.append(qualname)
         new = docstring_lines(doc, " " * node.col_offset)
         if has:
             edits.append((nxt.lineno - 1, nxt.end_lineno, new))
@@ -124,6 +127,7 @@ def plan(source: str) -> "tuple[list[tuple[int, int, list[str]]], list[str]]":
 
     for name in sorted({n for n in vars(ext) if public(n)} - stub_names):
         problems.append(f"{name}: in the extension but not in the stubs")
+    problems.extend(f"{name}: docstring out of date" for name in stale)
     return edits, problems
 
 
@@ -136,20 +140,21 @@ def apply(source: str, edits: "list[tuple[int, int, list[str]]]") -> str:
 
 def main() -> int:
     check = "--check" in sys.argv[1:]
-    source = STUB.read_text()
+    # Always UTF-8: elsewhere (Windows) the default is the locale's code page.
+    source = STUB.read_text(encoding="utf-8")
     edits, problems = plan(source)
+    if not check:
+        # Updating fixes stale docstrings; report only what it can't fix.
+        problems = [p for p in problems if not p.endswith(": docstring out of date")]
     for problem in problems:
         print(problem, file=sys.stderr)
     if check:
         if edits:
-            print(
-                f"{len(edits)} docstring(s) in {STUB.name} are out of date; "
-                "run scripts/sync_stub_docs.py (or `make stubs`)",
-                file=sys.stderr,
-            )
-        return 1 if edits or problems else 0
+            print(f"run scripts/sync_stub_docs.py (or `make stubs`) to update {STUB.name}", file=sys.stderr)
+        return 1 if problems else 0
     if edits:
-        STUB.write_text(apply(source, edits))
+        with open(STUB, "w", encoding="utf-8", newline="\n") as f:
+            f.write(apply(source, edits))
         print(f"updated {len(edits)} docstring(s) in {STUB.name}")
     return 1 if problems else 0
 

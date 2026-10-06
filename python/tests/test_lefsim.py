@@ -271,13 +271,13 @@ def test_stub_docstrings_match_the_extension():
 
 def test_model_json_schema_matches_the_loader():
     jsonschema = pytest.importorskip("jsonschema")
-    schema = json.loads(MODEL_SCHEMA.read_text())
+    schema = json.loads(MODEL_SCHEMA.read_text(encoding="utf-8"))
     jsonschema.Draft202012Validator.check_schema(schema)
     validator = jsonschema.Draft202012Validator(schema)
 
     # Documents the bindings write are valid: the shared fixture, and a model
     # saved mid-run, with captured legs.
-    validator.validate(json.loads((FIXTURES / "model.json").read_text()))
+    validator.validate(json.loads((FIXTURES / "model.json").read_text(encoding="utf-8")))
     sim = lefsim.Sim(make_model(n_lefs=6), seed=1)
     sim.run_until(5_000.0)
     doc = json.loads(sim.model().to_json())
@@ -1149,7 +1149,7 @@ def test_replayer_reproduces_the_cross_language_fixture():
     wasm Sim; both matching a live Sim means the two replayers agree."""
     import pyarrow.ipc as ipc
 
-    config = json.loads((FIXTURES / "python_events.json").read_text())["config"]
+    config = json.loads((FIXTURES / "python_events.json").read_text(encoding="utf-8"))["config"]
     ctcfs = {
         "site": config["ctcfSites"],
         "captures_from": config["ctcfCapturesFrom"],
