@@ -49,5 +49,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: packages/demo
-          wranglerVersion: "4"
+          # The demo package's own wrangler (a pnpm dev dependency, so it's
+          # locked); pnpm-lock.yaml is at the root, so say which manager.
+          packageManager: pnpm
           command: deploy
