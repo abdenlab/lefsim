@@ -5,6 +5,11 @@ polymer and extrudes a loop by walking two legs outward from a shared binding
 site. CTCF sites act as extrusion barriers, depending on which side a leg meets
 them from.
 
+The concepts of backside eviction and effective distance draw heavily from
+[Foldes et al., 2026](https://www.biorxiv.org/content/10.64898/2026.05.07.723561v1)
+and the accompanying [lefs-cython](https://github.com/mirnylab/lefs-cython)
+implementation.
+
 ## The world
 
 - The **lattice** is a fixed 1D array of sites. Most are plain; some are CTCFs,
@@ -66,9 +71,9 @@ often the site is occupied by CTCF, or more generally, is functional. Eviction
 unbinds (respawns) the LEF in the same event, so no transient state is ever
 stored.
 
-**Protection.** A leg whose partner is captured ignores a CTCF's rear side: it
+**Protection.** A leg whose partner is captured ignores a CTCF's evict side: it
 steps onto an empty one at the full rate `k`, and a held one blocks it, as
-traffic. So once a LEF is held at one boundary, its free leg can extrude through
+traffic. So once a LEF is held at one barrier, its free leg can extrude through
 the next one if it slips past the CTCF that would capture it.
 
 ## Spawning

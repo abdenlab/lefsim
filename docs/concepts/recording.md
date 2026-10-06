@@ -119,7 +119,7 @@ simulator.
 
 ## Persistence
 
-### Simulations - Parquet
+### Simulations → Parquet
 
 The Python binding writes keyframed event logs to **Parquet**, one row group per
 keyframed batch, compressed with zstd. The file's metadata stores where the run
@@ -130,7 +130,7 @@ A replayer can open the model metadata from the file's footer, and then scans
 only the row groups it needs. In the browser, it does so over HTTP with range
 requests, so a recording of any size can be scrubbed without downloading it.
 
-### Models - JSON
+### Models → JSON
 
 Models (as in the `lefsim.model` serialization above) also save and load as a
 standalone versioned JSON document, described by a

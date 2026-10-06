@@ -1,10 +1,11 @@
 # The framework
 
 The engine borrows its shape from the "Next Reaction Method" variant of the
-Gillespie algorithm [Gibson and Bruck, 2000](https://doi.org/10.1021/jp993732q):
-a priority queue of upcoming events, each with a next-firing time, drives a
-global clock forward one event at a time. Only the event that fired, and the
-events that depend on what it changed, are rescheduled.
+Gillespie algorithm
+([Gibson and Bruck, 2000](https://doi.org/10.1021/jp993732q)): a priority queue
+of upcoming events, each with a next-firing time, drives a global clock forward
+one event at a time. Only the event that fired, and the events that depend on
+what it changed, are rescheduled.
 
 ## Actions
 
@@ -19,8 +20,8 @@ enum Action {
 }
 ```
 
-Each action instance is its own priority-queue key: two instances of a variant
-pointing to the same entity are equal. Every action exposes two methods:
+Each action instance is its own priority-queue key: two instances of an action
+variant pointing to the same entity are equal. Every action exposes two methods:
 
 - `schedule(&World, ..., now, &mut Rng) -> Schedule`: **pure**. Given the
     current world state and clock, when would this action next fire? Returns
@@ -35,10 +36,10 @@ action left out keeps a schedule computed from a state that no longer holds.
 ## Dependencies
 
 After `fire`, the engine turns the touched entities into the actions to
-reschedule. The entity-to-action map is fixed: each leg has one `Step` and one
-`Evict` action, and each LEF one `Respawn` action. `Touched::dependent_actions`
-encodes that mapping, listing each action once, starting with the one that
-fired.
+reschedule. This is simple because entity-to-action map is fixed: each leg has
+exactly one `Step` and one `Evict` action, and each LEF one `Respawn` action.
+`Touched::dependent_actions` encodes that mapping, listing each dependent action
+once, starting with the one that fired.
 
 Rescheduling draws a fresh exponential wait. That's statistically exact, because
 exponential waits don't depend on how long you've already waited, but it means
@@ -49,7 +50,7 @@ the order and number of reschedules are part of a seeded trajectory.
 Rust's borrow checker has trouble with graph-shaped data where lots of things
 point at lots of other things. LEFs are exactly that: a LEF points at two legs,
 each leg points back at its LEF, and each lattice site's occupancy list points
-at legs. Instead of references, entities live in arenas (`SlotMap<K, V>`):
+at legs. Instead of references, entities live in "arenas" (`SlotMap<K, V>`):
 lookup tables addressed by small, cheap-to-copy keys handed out on insertion.
 
 - Legs: one leg key points to a leg (position, facing, mobility, its LEF).

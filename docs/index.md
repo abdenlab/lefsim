@@ -37,15 +37,12 @@ All three run the same core, so a seed gives the same run, bit for bit, in each.
 - **Measures what loops do**: the effective distance between any two sites when
     loops bring their anchors together.
 
-The concepts of backside eviction and effective distance draw heavily from
-[Foldes et al., 2026](https://www.biorxiv.org/content/10.64898/2026.05.07.723561v1)
-and the accompanying [lefs-cython](https://github.com/mirnylab/lefs-cython)
-implementation.
-
 ## Where to go next
 
-- [Getting started](getting-started.md): install, and a first run in each
-    language.
+- [The Explorer App](https://lefsim.abdenlab.org/): run the model in your
+    browser, and edit it as it runs.
+- [Getting started](getting-started.md): install the library, and a first run in
+    each language.
 - [The LEF model](concepts/model.md): what the legs and CTCFs do, and when LEFs
     unbind.
 - [The framework](concepts/framework.md): the event-driven engine underneath.
@@ -53,5 +50,3 @@ implementation.
     keyframes and files.
 - The guides for [Rust](guides/rust.md), [Python](guides/python.md) and
     [TypeScript](guides/typescript.md).
-- The [explorer app](https://lefsim.abdenlab.org/): run the model in your
-    browser, and edit it as it runs.
