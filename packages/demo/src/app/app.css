@@ -1,0 +1,168 @@
+/* The explorer app's tokens and base styles. The colors match style.css (the
+   legacy pages), and canvases read them through render.ts. */
+:root {
+  color-scheme: light;
+  --paper: #fbfbf9;
+  --shelf: #f3f4f1;
+  --ink: #1b1d22;
+  --ink-2: #55585f;
+  --muted: #8a8d93;
+  --rule: #e3e4e0;
+  --band: #eef1f5;
+  --extruding: #2a78d6;
+  --held: #eb6834;
+  --probe: #7d4fd1;
+  --focus: #2a78d6;
+  --warn: #9a5b00;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #17191c;
+    --shelf: #1d2024;
+    --ink: #eef0f2;
+    --ink-2: #b9bcc2;
+    --muted: #858990;
+    --rule: #2a2d31;
+    --band: #1e2126;
+    --extruding: #3987e5;
+    --held: #d95926;
+    --probe: #a07cf0;
+    --focus: #3987e5;
+    --warn: #e0a64f;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #17191c;
+  --shelf: #1d2024;
+  --ink: #eef0f2;
+  --ink-2: #b9bcc2;
+  --muted: #858990;
+  --rule: #2a2d31;
+  --band: #1e2126;
+  --extruding: #3987e5;
+  --held: #d95926;
+  --probe: #a07cf0;
+  --focus: #3987e5;
+  --warn: #e0a64f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 15px/1.45 "Atkinson Hyperlegible Next", system-ui, sans-serif;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.mono {
+  font-family: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn {
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn.primary {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
+/* A segmented control: buttons with aria-pressed. */
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--band);
+  border-radius: 7px;
+  gap: 2px;
+}
+
+.seg button {
+  border: 0;
+  background: transparent;
+  padding: 3px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.seg button[aria-pressed="true"] {
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+select,
+input[type="number"] {
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+input[type="range"] {
+  accent-color: var(--extruding);
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 3;
+}

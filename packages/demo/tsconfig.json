@@ -3,8 +3,16 @@
     "target": "ES2023",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2023", "DOM", "DOM.Iterable", "ESNext.Disposable"],
-    "types": ["vite/client"],
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable",
+      "ESNext.Disposable"
+    ],
+    "types": [
+      "vite/client",
+      "svelte"
+    ],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "isolatedModules": true,
@@ -13,5 +21,8 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["src", "vite.config.ts"]
+  "include": [
+    "src",
+    "vite.config.ts"
+  ]
 }
