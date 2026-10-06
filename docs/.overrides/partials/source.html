@@ -1,0 +1,14 @@
+{#-
+  The header's top-right corner: a link to the explorer app, then the
+  repository link (the theme's own partials/source.html, copied below).
+-#}
+<a href="https://lefsim.abdenlab.org/" class="lefsim-app" title="The lefsim explorer: run the model in your browser">App</a>
+<a href="{{ config.repo_url }}" title="{{ lang.t('source') }}" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    {% set icon = config.theme.icon.repo or "fontawesome/brands/git-alt" %}
+    {% include ".icons/" ~ icon ~ ".svg" %}
+  </div>
+  <div class="md-source__repository">
+    {{ config.repo_name }}
+  </div>
+</a>

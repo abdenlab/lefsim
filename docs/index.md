@@ -52,5 +52,6 @@ implementation.
 - [Recording and replay](concepts/recording.md): snapshots, event logs,
     keyframes and files.
 - The guides for [Rust](guides/rust.md), [Python](guides/python.md) and
-    [TypeScript](guides/typescript.md), and the
-    [browser demos](guides/demos.md).
+    [TypeScript](guides/typescript.md).
+- The [explorer app](https://lefsim.abdenlab.org/): run the model in your
+    browser, and edit it as it runs.

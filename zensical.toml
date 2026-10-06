@@ -20,9 +20,7 @@ nav = [
     { "Rust" = "guides/rust.md" },
     { "Python" = "guides/python.md" },
     { "TypeScript" = "guides/typescript.md" },
-    { "Browser demos" = "guides/demos.md" },
   ] },
-  { "Design notes" = "design/vision.md" },
   { "API reference" = [
     "reference/index.md",
     { "Python" = "reference/python.md" },
@@ -34,10 +32,13 @@ nav = [
       { "lefsim/parquet" = "reference/typescript/lefsim/parquet.md" },
     ] },
   ] },
+  { "Design notes" = "design/vision.md" },
 ]
 extra_css = ["stylesheets/extra.css"]
 
 [project.theme]
+# Template overrides: an App link next to the repository link in the header.
+custom_dir = "docs/.overrides"
 language = "en"
 logo = "assets/logo.svg"
 favicon = "assets/logo.svg"

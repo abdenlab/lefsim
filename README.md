@@ -13,7 +13,7 @@ Python and the browser. A seed gives the same run, bit for bit, in all three.
     with pyo3 and maturin). Results come back as Arrow data, for pyarrow,
     polars, pandas and duckdb.
 - **Browser**: the `lefsim` TypeScript package (`packages/lefsim`, wrapping the
-    WebAssembly build in `crates/lefsim-wasm`), with browser demos in
+    WebAssembly build in `crates/lefsim-wasm`), with the explorer app in
     `packages/demo`, live at <https://lefsim.abdenlab.org>.
 
 ## Documentation
@@ -86,7 +86,7 @@ python/                 the Python package built from them (maturin)
   notebooks/            a tour of the package (not shipped in the sdist)
 crates/lefsim-wasm/     WebAssembly bindings (wasm-bindgen)
 packages/lefsim/        TypeScript package wrapping them (wasm-pack builds into wasm/)
-packages/demo/          browser demos (Vite)
+packages/demo/          the explorer app (Svelte, Vite)
 docs/                   documentation (Zensical, configured in zensical.toml)
 scripts/                release helpers: bump and check the version
 .github/workflows/      CI, docs deployment, releases

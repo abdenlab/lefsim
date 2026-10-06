@@ -2,7 +2,7 @@
 
 lefsim: event-driven loop-extrusion simulation. A Rust core (`crates/lefsim`)
 with Python (`crates/lefsim-py` → `python/`) and WebAssembly/TypeScript
-(`crates/lefsim-wasm` → `packages/lefsim`) bindings, plus browser demos
+(`crates/lefsim-wasm` → `packages/lefsim`) bindings, plus the explorer app
 (`packages/demo`).
 
 Read as needed:

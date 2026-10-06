@@ -18,3 +18,35 @@
 .keyframe-rows tbody tr:nth-child(-n + 6) {
   background-color: rgb(140 100 220 / 0.14);
 }
+
+/* The header's App link (docs/.overrides/partials/source.html), beside the
+   repository link, as in the app's own header. */
+.md-header__source {
+  display: flex;
+  align-items: center;
+  width: auto;
+  gap: 1.2rem;
+}
+
+.md-header__source .md-source {
+  flex: none;
+  width: 9rem;
+}
+
+.lefsim-app {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.lefsim-app:hover {
+  text-decoration: underline;
+}
+
+/* In the phone menu, the same link as a row above the repository's. */
+.md-nav__source .lefsim-app {
+  display: block;
+  padding: 0.5rem 0.8rem 0.2rem;
+  font-size: 0.7rem;
+}
