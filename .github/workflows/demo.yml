@@ -1,0 +1,53 @@
+# Build the browser demos and deploy them to Cloudflare
+# (https://lefsim.abdenlab.org) whenever main changes them or what they use.
+# Needs the repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
+name: Demo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/demo/**"
+      - "packages/lefsim/**"
+      - "crates/**"
+      - "python/**"
+      - "Cargo.lock"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/demo.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:wasm
+      # The Parquet page's sample recording (public/sample.parquet, not
+      # committed); writing Parquet needs pyarrow, from the dev group.
+      - run: uv run --project python --no-default-groups --group dev python packages/demo/make_sample.py
+      - run: pnpm --filter demo build
+      - uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: packages/demo
+          wranglerVersion: "4"
+          command: deploy

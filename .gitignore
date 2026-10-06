@@ -18,6 +18,9 @@ packages/*/dist/
 # Copied in from the repo root when the npm package is packed
 packages/lefsim/LICENSE
 
+# Wrangler's local state (Cloudflare deploys of the demos)
+.wrangler/
+
 # Demo sample written by packages/demo/make_sample.py
 packages/demo/public/sample.parquet
 

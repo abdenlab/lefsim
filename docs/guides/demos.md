@@ -1,7 +1,8 @@
 # Browser demos
 
 `packages/demo` is a Vite app with seven pages, all running the simulator in the
-browser:
+browser. They're live at <https://lefsim.abdenlab.org>, deployed from `main` to
+Cloudflare by `.github/workflows/demo.yml`. To run them locally:
 
 ```
 pnpm install
