@@ -20,6 +20,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # The TypeScript API reference (TypeDoc) reads types from the wasm build.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:wasm
+      - run: pnpm docs:api
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uvx --with mkdocstrings-python zensical build --strict
       - uses: actions/upload-pages-artifact@v5

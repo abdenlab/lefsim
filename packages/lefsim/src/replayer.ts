@@ -34,7 +34,9 @@ interface KeyframeRef {
  * replayer can start partway into a stream (a late joiner).
  */
 export class Replayer {
+  /** The lattice of the recorded run. */
   readonly lattice: Lattice;
+  /** Number of LEFs in the recorded run. */
   readonly nLefs: number;
   #chunks: DeltaChunk[] = [];
   #keyframes: KeyframeRef[] = [];

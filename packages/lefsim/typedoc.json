@@ -1,0 +1,36 @@
+{
+  "$schema": "https://typedoc-plugin-markdown.org/schema.json",
+  "entryPoints": [
+    "src/index.ts",
+    "src/arrow.ts",
+    "src/parquet.ts"
+  ],
+  "tsconfig": "tsconfig.json",
+  "plugin": [
+    "typedoc-plugin-markdown"
+  ],
+  "out": "../../docs/reference/typescript",
+  "cleanOutputDir": true,
+  "readme": "none",
+  "entryFileName": "index.md",
+  "outputFileStrategy": "modules",
+  "hidePageHeader": true,
+  "hideBreadcrumbs": true,
+  "useCodeBlocks": true,
+  "useHTMLAnchors": true,
+  "parametersFormat": "table",
+  "interfacePropertiesFormat": "table",
+  "classPropertiesFormat": "table",
+  "typeDeclarationFormat": "table",
+  "enumMembersFormat": "table",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "gitRemote": "origin",
+  "excludeGroups": true,
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": true
+  },
+  "treatValidationWarningsAsErrors": true
+}

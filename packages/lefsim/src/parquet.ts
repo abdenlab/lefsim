@@ -8,6 +8,8 @@
  *
  * Reading is asynchronous here (it may be a network fetch), so the methods
  * that move return promises; reading the state stays synchronous for drawing.
+ *
+ * @module lefsim/parquet
  */
 
 import { decompress as zstdDecompress } from "fzstd";
@@ -150,10 +152,15 @@ function fromModelJson(json: string): { lattice: Lattice; nLefs: number } {
  * 64-bit integer to JavaScript); `recordEnd` is where the data actually ends.
  */
 export interface RunInfo {
+  /** The run's seed, as a decimal string. */
   seed: string;
+  /** The sim's start time. */
   startTime: number;
+  /** Where the recording starts. */
   recordStart: number;
+  /** Where the data ends, or `null` if the file doesn't say. */
   recordEnd: number | null;
+  /** The lefsim version that wrote the file. */
   lefsimVersion: string;
 }
 
@@ -191,7 +198,9 @@ interface RowGroups {
  * it has passed; `snapshots` walks row group by row group.
  */
 export class ParquetReplayer {
+  /** The lattice of the recorded run. */
   readonly lattice: Lattice;
+  /** Number of LEFs in the recorded run. */
   readonly nLefs: number;
   /** Where the recording came from (`lefsim.run`), or `null` if the file doesn't say. */
   readonly run: RunInfo | null;
@@ -202,7 +211,11 @@ export class ParquetReplayer {
   #loaded = false;
   #reads = 0;
 
-  /** Use {@link replayerFromParquet}. */
+  /**
+   * Use {@link replayerFromParquet}.
+   *
+   * @internal
+   */
   constructor(lattice: Lattice, nLefs: number, run: RunInfo | null, source: RowGroups | null, core?: Replayer) {
     this.lattice = lattice;
     this.nLefs = nLefs;

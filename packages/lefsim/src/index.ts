@@ -8,9 +8,10 @@
  * realization: a single forward-only clock, advanced in place by
  * {@link Sim.runUntil} (absolute time), {@link Sim.runEvents} or
  * {@link Sim.step}.
+ *
+ * @module lefsim
  */
 
-import type { InitInput } from "#wasm";
 import wasmInit, { names, WasmSim, initSync as wasmInitSync } from "#wasm";
 
 import { modelArgs, seedBigInt } from "./model.ts";
@@ -29,7 +30,7 @@ import type {
 import { ROW_KIND } from "./types.ts";
 
 export { effectiveDistance, effectiveDistances, effectiveDistancesOver, type PathLengths } from "./distance.ts";
-export type { CtcfColumns, CtcfSpec, LefColumns, LefSpec, Side } from "./model.ts";
+export type { CtcfColumns, CtcfSpec, LefColumns, LefSpec, MobilityInput, Side } from "./model.ts";
 export {
   createLattice,
   createModel,
@@ -62,6 +63,12 @@ export { DIRECTION, KEYFRAME, MOBILITY, ROW_KIND, SITE_KIND } from "./types.ts";
 let memory: WebAssembly.Memory | undefined;
 
 /**
+ * What {@link init} can load the WebAssembly module from: a URL or request, a
+ * `Response`, the module's bytes, or a compiled `WebAssembly.Module`.
+ */
+export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
+
+/**
  * Load and instantiate the WebAssembly module. Safe to call repeatedly.
  *
  * In a browser or bundler, call with no arguments to fetch the module next
@@ -88,13 +95,23 @@ function wasmMemory(): WebAssembly.Memory {
 // ------------------------------------------------------------------ names
 
 /** The code → name tables as the core defines them (requires {@link init}). */
-export function coreNames(): { mobility: string[]; direction: string[]; siteKind: string[]; rowKind: string[] } {
+export function coreNames(): {
+  /** Mobility names, as in {@link MOBILITY}. */
+  mobility: string[];
+  /** Direction names, as in {@link DIRECTION}. */
+  direction: string[];
+  /** Site-kind names, as in {@link SITE_KIND}. */
+  siteKind: string[];
+  /** Row-kind names, as in {@link ROW_KIND}. */
+  rowKind: string[];
+} {
   wasmMemory();
   return names() as ReturnType<typeof coreNames>;
 }
 
 // ------------------------------------------------------------------ types
 
+/** Options for a new {@link Sim}. */
 export interface SimOptions {
   /** Any integer in [0, 2^64). Default 0. */
   seed?: number | bigint;
@@ -104,8 +121,11 @@ export interface SimOptions {
 
 /** What a run did: events fired by this call, the time reached, and why it stopped. */
 export interface RunReport {
+  /** Events fired by this call. */
   nEvents: number;
+  /** The sim's time after the call. */
   time: number;
+  /** Why the call returned. */
   stopped: StopReason;
 }
 
@@ -135,10 +155,13 @@ export interface Recording extends RunReport {
   events: DeltaChunk | null;
 }
 
-/** One fired event: its time, action, and the `leg_id` (a step) or `lef_id` (a respawn). */
+/** One fired event, from {@link Sim.step}. */
 export interface FiredEvent {
+  /** When it fired. */
   time: number;
+  /** Which action fired. */
   action: "Step" | "Respawn" | "Evict";
+  /** The `leg_id` for a step or an eviction, the `lef_id` for a respawn. */
   id: number;
 }
 
@@ -197,9 +220,13 @@ export async function* iterate<T>(stream: ReadableStream<T>): AsyncGenerator<T, 
  */
 export class Sim implements Disposable {
   #inner: WasmSim | undefined;
+  /** The model's lattice. */
   readonly lattice: Lattice;
+  /** The model's spawn rule. */
   readonly spawnRule: SpawnRule;
+  /** Number of lattice sites. */
   readonly nSites: number;
+  /** Number of LEFs. */
   readonly nLefs: number;
 
   constructor(model: Model, options: SimOptions = {}) {
@@ -226,6 +253,7 @@ export class Sim implements Disposable {
     return this.#sim;
   }
 
+  /** Number of legs (two per LEF). */
   get nLegs(): number {
     return 2 * this.nLefs;
   }
@@ -245,6 +273,7 @@ export class Sim implements Disposable {
     return this.#sim.next_event_time() ?? null;
   }
 
+  /** The rates this run uses. */
   get rates(): Rates {
     return this.#sim.rates() as Rates;
   }
@@ -503,6 +532,7 @@ export class Sim implements Disposable {
     this.#inner = undefined;
   }
 
+  /** Frees the WebAssembly memory, as {@link Sim.free}; called by `using`. */
   [Symbol.dispose](): void {
     this.free();
   }

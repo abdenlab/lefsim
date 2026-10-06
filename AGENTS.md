@@ -39,6 +39,9 @@ Read as needed:
 - Python docstrings live in the Rust doc comments in `crates/lefsim-py`; after
     changing one, run `make stubs` to copy it into `_lefsim.pyi` (a test fails
     until you do). Write them in Markdown.
+- Every export of the TypeScript package needs a TSDoc comment: the API
+    reference build (`make docs-api`, TypeDoc) fails on undocumented items and
+    broken `{@link}`s.
 
 ## Commands
 

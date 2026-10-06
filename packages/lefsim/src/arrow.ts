@@ -8,6 +8,8 @@
  *
  * Schemas match the Python binding exactly (names, types, dictionary values
  * and schema metadata), so data can move between the two, e.g. as Arrow IPC.
+ *
+ * @module lefsim/arrow
  */
 
 import {
@@ -38,6 +40,7 @@ import {
   type SnapshotColumns,
 } from "./types.ts";
 
+/** Table layout: `"lef"`, one row per LEF with both legs side by side, or `"leg"`, one row per leg. */
 export type Layout = "lef" | "leg";
 
 // ------------------------------------------------------------------ columns

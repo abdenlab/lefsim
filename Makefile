@@ -1,7 +1,7 @@
 # Shortcuts for the commands in AGENTS.md and the README. `make` lists them.
 # Written for GNU Make 3.81 (the macOS default) and later.
 
-MDFORMAT := uvx --with mdformat-mkdocs --with mdformat-tables mdformat --wrap 80
+MDFORMAT := uvx --with mdformat-mkdocs --with mdformat-tables mdformat --wrap 80 --exclude 'docs/reference/typescript/**'
 MARKDOWN := docs/ README.md AGENTS.md CHANGELOG.md crates/lefsim/README.md python/README.md packages/lefsim/README.md
 # ruff from the Python dev group, with python/pyproject.toml's settings for all
 # the repo's Python (including the scripts in packages/ and docs/).
@@ -82,12 +82,16 @@ fmt: ## Format everything and apply safe lint fixes (e.g. import order)
 # ---------------------------------------------------------------- docs and demos
 
 .PHONY: docs
-docs: ## Build the docs site into site/ (strict, as CI does)
+docs: docs-api ## Build the docs site into site/ (strict, as CI does)
 	$(ZENSICAL) build --strict
 
 .PHONY: docs-serve
-docs-serve: ## Preview the docs with live reload
+docs-serve: docs-api ## Preview the docs with live reload
 	$(ZENSICAL) serve
+
+.PHONY: docs-api
+docs-api: wasm ## Generate the TypeScript API reference (TypeDoc) into docs/reference/typescript
+	pnpm docs:api
 
 .PHONY: demo
 demo: wasm ## Run the browser demos on a Vite dev server

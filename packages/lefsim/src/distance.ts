@@ -21,7 +21,9 @@ import type { Lattice, SnapshotColumns, World } from "./types.ts";
 
 /** The lengths of a lattice step and of a hop across a LEF. Both required. */
 export interface PathLengths {
+  /** The length of a step between neighboring sites: a positive integer. */
   stepLength: number;
+  /** The length of a hop across a LEF: a non-negative integer, best at least `stepLength`. */
   hopLength: number;
 }
 

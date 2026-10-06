@@ -27,11 +27,14 @@ import {
   type World,
 } from "./types.ts";
 
+/** A CTCF's capture side, by name. */
 export type Side = "left" | "right";
 
 /** One CTCF, as a row. `capturesFrom` is its capture side; the other side evicts. */
 export interface CtcfSpec {
+  /** The CTCF's site. */
   site: number;
+  /** Its capture side: a name or a {@link DIRECTION} code. */
   capturesFrom: Side | number;
   /** Probability, in [0, 1], that a landing leg interacts with it. Default 1. */
   strength?: number;
@@ -39,30 +42,46 @@ export interface CtcfSpec {
 
 /** CTCFs as columns; `capturesFrom` and `strength` may be one value for all. */
 export interface CtcfColumns {
+  /** Each CTCF's site. */
   site: ArrayLike<number>;
+  /** Each CTCF's capture side (names or {@link DIRECTION} codes), or one for all. */
   capturesFrom: ArrayLike<Side | number> | Side | number;
+  /** Each CTCF's strength, or one for all. Default 1. */
   strength?: ArrayLike<number> | number;
 }
 
-type MobilityInput = number | string;
+/**
+ * A leg's mobility as input: a code into {@link MOBILITY} (0 for moving, 1 for
+ * captured) or its name, in any case (`"moving"`, `"Captured"`).
+ */
+export type MobilityInput = number | string;
 
 /** One LEF, as a row. Mobility defaults to moving. */
 export interface LefSpec {
+  /** The left leg's position. */
   leftPos: number;
+  /** The right leg's position, at or right of the left leg's. */
   rightPos: number;
+  /** The left leg's mobility. Default moving. */
   leftMobility?: MobilityInput;
+  /** The right leg's mobility. Default moving. */
   rightMobility?: MobilityInput;
 }
 
 /** LEFs as columns (a {@link Lefs} or `LiveState` works too). Mobility defaults to moving. */
 export interface LefColumns {
+  /** Each LEF's left leg position. */
   leftPos: ArrayLike<number>;
+  /** Each LEF's right leg position. */
   rightPos: ArrayLike<number>;
+  /** Each LEF's left leg mobility. Default moving. */
   leftMobility?: ArrayLike<MobilityInput>;
+  /** Each LEF's right leg mobility. Default moving. */
   rightMobility?: ArrayLike<MobilityInput>;
 }
 
 const U32_MAX = 2 ** 32 - 1;
+/** The built-in spawn rules, by name. */
 export const SPAWN_RULES: readonly SpawnRule[] = ["uniform_non_ctcf"];
 
 // Typed arrays coerce silently (-1 → 4294967295, 1.5 → 1), so check first.
