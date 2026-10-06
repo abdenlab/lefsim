@@ -1,9 +1,9 @@
 <!--
   Contact map: every pair of lattice bins colored by its approximate contact
   probability, from the effective distance through the loops (see
-  `contacts.ts`). Aligned with the stage, the map hangs under the loops as a
-  triangle on the same x axis; square, the current map is above the diagonal
-  and the time average below.
+  `contacts.ts`). Square (the default), the current map is above the diagonal
+  and the time average below; aligned with the stage, the map hangs under the
+  loops as a triangle on the same x axis.
 -->
 <script lang="ts">
   import { onMount } from "svelte";
@@ -19,7 +19,7 @@
 
   const BINS = [5, 10, 20, 50];
 
-  let layout = $state<"aligned" | "square">("aligned");
+  let layout = $state<"square" | "aligned">("square");
   let show = $state<"now" | "average">("now");
   let bin = $state(10);
   let averaged = $state(0);
@@ -44,6 +44,7 @@
         square.setSize(maps.k);
       }
       square.pixels.set(maps.pixels);
+      square.axis = { ctcfs: run.ctcfs, extent: maps.k * maps.bin };
       square.draw();
       return;
     }
@@ -181,8 +182,8 @@
 
 <div class="head">
   <span class="seg" role="group" aria-label="Layout">
-    <button aria-pressed={layout === "aligned"} onclick={() => (layout = "aligned")}>Aligned with the loops</button>
     <button aria-pressed={layout === "square"} onclick={() => (layout = "square")}>Square</button>
+    <button aria-pressed={layout === "aligned"} onclick={() => (layout = "aligned")}>Aligned with the loops</button>
   </span>
   {#if layout === "aligned"}
     <span class="seg" role="group" aria-label="Show">
@@ -207,10 +208,10 @@
 </p>
 <canvas class="bar" bind:this={barCanvas}></canvas>
 <div class="map">
-  {#if layout === "aligned"}
-    <canvas class="aligned" bind:this={mapCanvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
-  {:else}
+  {#if layout === "square"}
     <canvas class="square" bind:this={mapCanvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
+  {:else}
+    <canvas class="aligned" bind:this={mapCanvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
   {/if}
   <div class="tooltip" bind:this={tooltip} hidden></div>
 </div>
@@ -245,10 +246,11 @@
     height: 34px;
   }
 
+  /* Half as tall as wide: the triangle at its true 45°, so its cells stay square. */
   canvas.aligned {
     display: block;
     width: 100%;
-    height: min(46vw, 460px);
+    aspect-ratio: 2;
   }
 
   canvas.square {

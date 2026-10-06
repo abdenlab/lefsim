@@ -103,12 +103,23 @@ export function drawColorbar(
   ctx.fillText(label, x0 - 8, y0 + 5);
 }
 
+/** A CTCF to mark along a map's axes; `left` means it captures from the left. */
+export interface AxisCtcf {
+  site: number;
+  left: boolean;
+}
+
+/** Width of the strip along a square map's top and left edges that shows the CTCFs. */
+const AXIS = 14;
+
 /**
- * A square `k × k` heatmap on a canvas, aligned with the loop panel's
- * lattice axis (same side margins). Paint `pixels` (row-major packed
- * pixels), then `draw`.
+ * A square `k × k` heatmap on a canvas. Paint `pixels` (row-major packed
+ * pixels), then `draw`. With `axis` set, a strip along the top and left edges
+ * marks the CTCFs, pointing toward the side each captures from (up for left
+ * on the vertical axis); `extent` is the number of sites the `k` bins cover.
  */
 export class SquareMap {
+  axis: { ctcfs: readonly AxisCtcf[]; extent: number } | undefined;
   #canvas: HTMLCanvasElement;
   #ctx: CanvasRenderingContext2D;
   #image: ImageData | undefined;
@@ -142,7 +153,8 @@ export class SquareMap {
   /** The map's square in CSS pixels. */
   box() {
     const { width } = this.#canvas.getBoundingClientRect();
-    return { left: MARGIN.left, top: 0, size: width - MARGIN.left - MARGIN.right };
+    const inset = this.axis ? AXIS + 4 : 0;
+    return { left: MARGIN.left + inset, top: inset, size: width - MARGIN.left - MARGIN.right - inset };
   }
 
   draw() {
@@ -157,6 +169,38 @@ export class SquareMap {
     ctx.strokeStyle = colors.rule;
     ctx.lineWidth = 1;
     ctx.strokeRect(left + 0.5, top + 0.5, size - 1, size - 1);
+    if (this.axis) this.#drawAxes(left, top, size);
+  }
+
+  #drawAxes(left: number, top: number, size: number) {
+    const ctx = this.#ctx;
+    const { ctcfs, extent } = this.axis!;
+    const at = (site: number) => ((site + 0.5) / extent) * size;
+    ctx.fillStyle = colors.band;
+    ctx.fillRect(left, 0, size, AXIS);
+    ctx.fillRect(MARGIN.left, top, AXIS, size);
+    ctx.fillStyle = colors.ink2;
+    const s = 9;
+    for (const c of ctcfs) {
+      const dir = c.left ? -1 : 1;
+      // Top strip: chevrons point left or right.
+      const px = left + at(c.site);
+      ctx.beginPath();
+      ctx.moveTo(px + dir * s * 0.6, AXIS / 2);
+      ctx.lineTo(px, AXIS / 2 - s / 2);
+      ctx.lineTo(px, AXIS / 2 + s / 2);
+      ctx.closePath();
+      ctx.fill();
+      // Left strip: the lattice runs downward, so "left" points up.
+      const py = top + at(c.site);
+      const cx = MARGIN.left + AXIS / 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, py + dir * s * 0.6);
+      ctx.lineTo(cx - s / 2, py);
+      ctx.lineTo(cx + s / 2, py);
+      ctx.closePath();
+      ctx.fill();
+    }
   }
 
   /** The cell under a pointer event, as `[row, col]`, or undefined outside the map. */

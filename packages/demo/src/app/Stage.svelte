@@ -54,20 +54,10 @@
     ctx.lineTo(x(N_SITES - 1), ARCS + 0.5);
     ctx.stroke();
 
-    // The lanes, labeled at the end where they point.
-    ctx.font = "11px 'Atkinson Hyperlegible Next', system-ui, sans-serif";
-    ctx.textBaseline = "middle";
+    // The lanes: the chevrons in each say which way it faces.
     for (const left of [true, false]) {
-      const top = laneTop(left);
       ctx.fillStyle = colors.band;
-      ctx.fillRect(x(0), top + 2, x(N_SITES - 1) - x(0), LANE - 4);
-      ctx.fillStyle = colors.muted;
-      ctx.textAlign = left ? "left" : "right";
-      ctx.fillText(
-        left ? "◂ captures from the left" : "captures from the right ▸",
-        left ? x(0) + 4 : x(N_SITES - 1) - 4,
-        top + LANE / 2,
-      );
+      ctx.fillRect(x(0), laneTop(left) + 2, x(N_SITES - 1) - x(0), LANE - 4);
     }
     run.ctcfs.forEach((c, i) => {
       const top = laneTop(c.left);

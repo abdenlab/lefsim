@@ -56,7 +56,7 @@
       </svg>
       lefsim
     </a>
-    <span class="tagline">Loop extrusion, simulated in your browser</span>
+    <span class="tagline">Loops. Extruding. In your browser.</span>
     <span class="spacer"></span>
     <nav>
       <a href="https://abdenlab.github.io/lefsim/" target="_blank" rel="noopener">Docs</a>

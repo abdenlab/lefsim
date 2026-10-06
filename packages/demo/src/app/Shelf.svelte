@@ -26,6 +26,20 @@
   <div class="buttons">
     <button class="btn primary play" onclick={() => run.setPlaying(!run.playing)}>{run.playing ? "Pause" : "Play"}</button>
     <button class="btn" onclick={() => run.restart()} title="Place the loop extruders afresh, with the seed">Restart</button>
+    <label class="seed" title="The seed for placing the loop extruders and running them. A new seed restarts the run.">
+      <span>Seed</span>
+      <input
+        class="mono"
+        type="number"
+        min="0"
+        step="1"
+        value={run.seed}
+        onchange={(e) => {
+          run.seed = Math.max(0, Math.floor(Number(e.currentTarget.value) || 0));
+          run.restart();
+        }}
+      />
+    </label>
   </div>
   <label class="row">
     <span>Speed</span>
@@ -59,11 +73,16 @@
     />
   </label>
   <div class="row">
-    <span>CTCF sites</span>
+    <span class="with-info">
+      CTCF sites
+      <button type="button" class="info" aria-label="How to edit CTCFs" aria-describedby="ctcf-help">i</button>
+      <span class="tip" id="ctcf-help" role="tooltip">
+        CTCFs sit in the two lanes under the loops, one per direction. Click a lane to add one facing that way, drag
+        one to move it, or drag it out of the lanes to remove it.
+      </span>
+    </span>
     <output class="mono">{run.ctcfs.length}</output>
   </div>
-  <button class="btn small" onclick={() => run.clearCtcfs()} disabled={run.ctcfs.length === 0}>Remove all CTCFs</button>
-  <p class="hint">Add and move CTCFs in the lanes under the loops.</p>
   <label class="row">
     <span>CTCF strength</span>
     <output class="mono">{run.strength.toFixed(2)}</output>
@@ -77,38 +96,23 @@
       aria-label="CTCF strength: the probability that a landing leg interacts"
     />
   </label>
-  <details>
-    <summary>Rates</summary>
-    <div class="rates">
-      {#each RATE_FIELDS as f (f.key)}
-        <label for="rate-{f.key}">{f.label}</label>
-        <input
-          id="rate-{f.key}"
-          class="mono"
-          type="number"
-          min="0"
-          step="any"
-          value={run.rates[f.key]}
-          onchange={(e) => setRate(f.key, e.currentTarget)}
-        />
-      {/each}
-    </div>
-  </details>
-  <label class="row">
-    <span>Seed</span>
-    <input
-      class="mono seed"
-      type="number"
-      min="0"
-      step="1"
-      value={run.seed}
-      onchange={(e) => {
-        run.seed = Math.max(0, Math.floor(Number(e.currentTarget.value) || 0));
-        run.restart();
-      }}
-    />
-  </label>
-  <p class="hint">Up to {MAX_LEFS} extruders on {fmt.format(3000)} sites. A new seed restarts the run.</p>
+  <button class="btn small" onclick={() => run.clearCtcfs()} disabled={run.ctcfs.length === 0}>Remove all CTCFs</button>
+  <h3>Rates</h3>
+  <div class="rates">
+    {#each RATE_FIELDS as f (f.key)}
+      <label for="rate-{f.key}">{f.label}</label>
+      <input
+        id="rate-{f.key}"
+        class="mono"
+        type="number"
+        min="0"
+        step="any"
+        value={run.rates[f.key]}
+        onchange={(e) => setRate(f.key, e.currentTarget)}
+      />
+    {/each}
+  </div>
+  <p class="hint">Up to {MAX_LEFS} extruders on {fmt.format(3000)} sites. Rates are events per time unit.</p>
 </section>
 
 <style>
@@ -129,11 +133,13 @@
 
   .buttons {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
   }
 
   .play {
-    min-width: 88px;
+    min-width: 76px;
   }
 
   .small {
@@ -162,8 +168,67 @@
   }
 
   .seed {
-    width: 90px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    font-size: 14px;
+    color: var(--ink-2);
+  }
+
+  .seed input {
+    width: 52px;
     text-align: right;
+  }
+
+  h3 {
+    margin: 4px 0 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+
+  .with-info {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .info {
+    padding: 0;
+    background: none;
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--muted);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: help;
+  }
+
+  .tip {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 6px);
+    z-index: 4;
+    width: min(250px, 70vw);
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 13px;
+    line-height: 1.4;
+    visibility: hidden;
+  }
+
+  .with-info:hover .tip,
+  .info:focus-visible + .tip,
+  .info:focus + .tip {
+    visibility: visible;
   }
 
   .readout {
@@ -191,18 +256,11 @@
     margin: 0;
   }
 
-  details summary {
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--ink-2);
-  }
-
   .rates {
     display: grid;
     grid-template-columns: 1fr auto;
     gap: 6px 10px;
     align-items: center;
-    margin-top: 8px;
     font-size: 14px;
     color: var(--ink-2);
   }
