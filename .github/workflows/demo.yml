@@ -10,7 +10,6 @@ on:
       - "packages/demo/**"
       - "packages/lefsim/**"
       - "crates/**"
-      - "python/**"
       - "Cargo.lock"
       - "pnpm-lock.yaml"
       - ".github/workflows/demo.yml"
@@ -37,13 +36,14 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - uses: astral-sh/setup-uv@v10.2.0
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:wasm
-      # The Parquet page's sample recording (public/sample.parquet, not
-      # committed); writing Parquet needs pyarrow, from the dev group.
-      - run: uv run --project python --no-default-groups --group dev python packages/demo/make_sample.py
+      # The Parquet page's sample recording is too big for a static asset
+      # (25 MiB at most), so it's hosted elsewhere: the DEMO_SAMPLE_URL
+      # repository variable. Without it, the page offers no sample.
       - run: pnpm --filter demo build
+        env:
+          VITE_SAMPLE_URL: ${{ vars.DEMO_SAMPLE_URL }}
       - uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

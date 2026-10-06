@@ -22,8 +22,11 @@ import {
   snapshotOf,
 } from "./render.ts";
 
-/** Where `make_sample.py` writes its file; the page offers it if it's there. */
-const SAMPLE = "/sample.parquet";
+/**
+ * The sample recording, offered if it's there: `VITE_SAMPLE_URL` at build time
+ * (the deployed demos host it elsewhere), else where `make_sample.py` writes it.
+ */
+const SAMPLE = import.meta.env.VITE_SAMPLE_URL || "/sample.parquet";
 
 // ------------------------------------------------------------------ DOM
 
