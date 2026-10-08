@@ -8,7 +8,7 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
 
-  import { drawColorbar, FALL, SquareMap } from "../../heatmap.ts";
+  import { drawColorbar, drawColorbarVertical, FALL, SquareMap } from "../../heatmap.ts";
   import { worldOf } from "../../model.ts";
   import { fmt, MARGIN, placeTooltip, xScale } from "../../render.ts";
   import { sizedCanvas } from "../canvas.ts";
@@ -24,6 +24,14 @@
   const binSize = (count: number) => Math.max(1, Math.ceil(N_SITES / count));
 
   let layout = $state<"square" | "aligned">("square");
+  let colorScale = $state<"log" | "linear">("log");
+
+  function setScale(scale: "log" | "linear") {
+    colorScale = scale;
+    maps.setScale(scale);
+    draw();
+    drawBar();
+  }
   let show = $state<"now" | "average">("now");
   let binCount = $state(300);
   let averaged = $state(0);
@@ -46,6 +54,21 @@
       if (!square || square.k !== maps.k) {
         square ??= new SquareMap(mapCanvas);
         square.setSize(maps.k);
+        // The colorbar stands upright in a lane on the right, balancing the CTCF strip on the left.
+        square.rightLane = 46;
+        square.decorate = (c, box) => {
+          const [lo, hi] = maps.range;
+          drawColorbarVertical(c, {
+            x0: box.left + box.size + 12,
+            y0: box.top + 14,
+            height: box.size - 14,
+            lut: FALL,
+            lo,
+            hi,
+            label: "P",
+            linear: maps.scale === "linear",
+          });
+        };
       }
       square.pixels.set(maps.pixels);
       square.axis = { ctcfs: run.ctcfs, extent: maps.k * maps.bin };
@@ -73,8 +96,17 @@
     const { width, height } = barCanvas.getBoundingClientRect();
     barCtx.clearRect(0, 0, width, height);
     const barW = Math.min(260, width - MARGIN.left - MARGIN.right);
-    const [lo, hi] = maps.logRange;
-    drawColorbar(barCtx, { x0: width - MARGIN.right - barW, y0: 8, width: barW, lut: FALL, lo, hi, label: "P" });
+    const [lo, hi] = maps.range;
+    drawColorbar(barCtx, {
+      x0: width - MARGIN.right - barW,
+      y0: 8,
+      width: barW,
+      lut: FALL,
+      lo,
+      hi,
+      label: "P",
+      linear: maps.scale === "linear",
+    });
   }
 
   function update() {
@@ -187,7 +219,7 @@
 <div class="head">
   <span class="seg" role="group" aria-label="Layout">
     <button aria-pressed={layout === "square"} onclick={() => (layout = "square")}>Square</button>
-    <button aria-pressed={layout === "aligned"} onclick={() => (layout = "aligned")}>Aligned with the loops</button>
+    <button aria-pressed={layout === "aligned"} onclick={() => (layout = "aligned")}>Aligned with stage</button>
   </span>
   {#if layout === "aligned"}
     <span class="seg" role="group" aria-label="Show">
@@ -195,6 +227,10 @@
       <button aria-pressed={show === "average"} onclick={() => (show = "average")}>Average</button>
     </span>
   {/if}
+  <span class="seg" role="group" aria-label="Color scale">
+    <button aria-pressed={colorScale === "log"} onclick={() => setScale("log")}>Log</button>
+    <button aria-pressed={colorScale === "linear"} onclick={() => setScale("linear")}>Linear</button>
+  </span>
   <label class="bin">
     Bins
     <select value={binCount} onchange={(e) => setBins(Number(e.currentTarget.value))}>
@@ -203,15 +239,15 @@
       {/each}
     </select>
   </label>
-  <button class="btn" onclick={reset}>Reset average</button>
+  <button class="btn reset" onclick={reset}>Reset average</button>
 </div>
 <p class="hint">
   {layout === "square" ? "Above the diagonal: now. Below: the average. " : ""}P ∝ d<sub>eff</sub><sup>−1.5</sup>,
   averaged over <span class="mono">{fmt.format(averaged)}</span> time units while this view is open
   ({fmt.format(nBins)} × {fmt.format(nBins)} bins, <span class="mono">{computeMs.toFixed(1)}</span> ms a frame).
 </p>
-<canvas class="bar" bind:this={barCanvas}></canvas>
-<div class="map">
+<canvas class="bar" hidden={layout === "square"} bind:this={barCanvas}></canvas>
+<div class="map" class:narrow={layout === "square"}>
   {#if layout === "square"}
     <canvas class="square" bind:this={mapCanvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
   {:else}
@@ -226,6 +262,10 @@
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
+  }
+
+  .reset {
+    margin-left: auto;
   }
 
   .bin {
@@ -257,9 +297,22 @@
     aspect-ratio: 2;
   }
 
+  /* A square map and its colorbar: centered, at most 560px wide. Centering
+     the container (not the canvas) keeps tooltips placed against it. */
+  .narrow {
+    width: min(100%, 600px);
+    margin-inline: auto;
+  }
+
+  .map.narrow {
+    container-type: inline-size;
+  }
+
+  /* Square map plus its colorbar lane: as tall as the map (the width less the
+     side margins, CTCF strip and colorbar lane, plus the top strip). */
   canvas.square {
     display: block;
-    width: min(100%, 560px);
-    aspect-ratio: 1;
+    width: 100%;
+    height: calc(100cqw - 44px);
   }
 </style>

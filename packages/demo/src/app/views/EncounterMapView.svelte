@@ -220,8 +220,8 @@
   ({fmt.format(nBins)} × {fmt.format(nBins)} bins, <span class="mono">{sampleMs.toFixed(1)}</span> ms a sample). Gray
   pairs are always within the threshold along the lattice.
 </p>
-<canvas class="bar" bind:this={barCanvas}></canvas>
-<div class="map">
+<canvas class="bar narrow" bind:this={barCanvas}></canvas>
+<div class="map narrow">
   <canvas class="square" bind:this={mapCanvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
   <div class="tooltip" bind:this={tooltip} hidden></div>
 </div>
@@ -260,9 +260,16 @@
     height: 70px;
   }
 
+  /* A square map and its colorbar: centered, at most 560px wide. Centering
+     the container (not the canvas) keeps tooltips placed against it. */
+  .narrow {
+    width: min(100%, 560px);
+    margin-inline: auto;
+  }
+
   canvas.square {
     display: block;
-    width: min(100%, 560px);
+    width: 100%;
     aspect-ratio: 1;
   }
 </style>

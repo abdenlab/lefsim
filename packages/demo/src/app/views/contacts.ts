@@ -45,9 +45,34 @@ export class ContactMaps {
     return this.centers.length;
   }
 
-  /** The color range in log10 P: from the farthest pair of sites to the nearest pair of distinct bins. */
+  /**
+   * The color scale. Log: log10 P from the farthest pair of sites to the
+   * nearest pair of distinct bins. Linear: P from 0 to that nearest pair's,
+   * saturating above it (the diagonal).
+   */
+  scale: "log" | "linear" = "log";
+
   get logRange(): [number, number] {
     return [-1.5 * Math.log10(this.nSites - 1), -1.5 * Math.log10(this.bin)];
+  }
+
+  /** The colorbar's range: log10 P for the log scale, P for the linear one. */
+  get range(): [number, number] {
+    return this.scale === "log" ? this.logRange : [0, this.bin ** -1.5];
+  }
+
+  setScale(scale: "log" | "linear") {
+    this.scale = scale;
+    this.#buildTables();
+    if (this.dist.length) this.#paint();
+  }
+
+  /** Colormap index (0 to 255) for a contact probability, on the current scale. */
+  #colorIndex(p: number): number {
+    if (!(p > 0) || !Number.isFinite(p)) return 0;
+    const [lo, hi] = this.range;
+    const c = this.scale === "log" ? ((Math.log10(p) - lo) / (hi - lo)) * 255 : (p / hi) * 255;
+    return c < 0 ? 0 : c > 255 ? 255 : Math.round(c);
   }
 
   setBin(bin: number) {
@@ -96,15 +121,12 @@ export class ContactMaps {
   }
 
   #buildTables() {
-    const [lo, hi] = this.logRange;
-    const scale = 255 / (hi - lo);
     this.#pixelOf = new Uint32Array(this.nSites);
     this.#pOf = new Float64Array(this.nSites);
     for (let d = 0; d < this.nSites; d++) {
-      // P = d^(-3/2) → log10 P = -1.5 log10 d; the diagonal (d = 0) takes the top.
-      const c = d === 0 ? 255 : Math.max(0, Math.min(255, Math.round((-1.5 * Math.log10(d) - lo) * scale)));
-      this.#pixelOf[d] = this.#colors[c]!;
+      // P = d^(-3/2); the diagonal (d = 0) takes the top.
       this.#pOf[d] = d === 0 ? 1 : d ** -1.5;
+      this.#pixelOf[d] = this.#colors[d === 0 ? 255 : this.#colorIndex(this.#pOf[d]!)]!;
     }
     // Each key's middle value stands for its range, so coloring an average is a lookup, not a logarithm.
     const value = new Float64Array(1);
@@ -112,9 +134,7 @@ export class ContactMaps {
     for (let key = 0; key < 1 << 20; key++) {
       words[HIGH_WORD] = (key << 12) | 0x800;
       words[1 - HIGH_WORD] = 0;
-      const p = value[0]!;
-      const c = p > 0 && Number.isFinite(p) ? Math.round((Math.log10(p) - lo) * scale) : 0;
-      this.#indexOfBits[key] = c < 0 ? 0 : c > 255 ? 255 : c;
+      this.#indexOfBits[key] = this.#colorIndex(value[0]!);
     }
   }
 

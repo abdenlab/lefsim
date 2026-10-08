@@ -15,11 +15,16 @@
 
   let { run }: { run: Run } = $props();
 
-  /** Layout, in CSS pixels: the arcs, then the lanes, then the markers row. */
+  /**
+   * Layout, in CSS pixels: the arcs down to the lattice line at ARCS, a thin
+   * strip for the view's markers (probes) just under it, then the two CTCF
+   * lanes. The strip is always there, so the stage keeps one height.
+   */
   const ARCS = 190;
+  const MARKERS = 16;
+  const MARKER_Y = ARCS + MARKERS / 2;
   const LANE = 22;
-  const LANES_TOP = ARCS + 10;
-  const MARKERS_TOP = LANES_TOP + 2 * LANE + 6;
+  const LANES_TOP = ARCS + MARKERS;
 
   let canvas: HTMLCanvasElement;
   let tooltip: HTMLDivElement;
@@ -40,7 +45,7 @@
   let hover = $state<{ ctcf: number } | { marker: number } | undefined>(undefined);
   let themeRevision = $state(0);
 
-  const height = $derived(run.markers ? MARKERS_TOP + 26 : MARKERS_TOP);
+  const height = LANES_TOP + 2 * LANE + 4;
 
   /** The lane a CTCF facing this way sits in: capturing from the left on top. */
   const laneTop = (left: boolean) => LANES_TOP + (left ? 0 : LANE);
@@ -108,12 +113,12 @@
         ctx!.setLineDash([2, 3]);
         ctx!.beginPath();
         ctx!.moveTo(px, MARGIN.top);
-        ctx!.lineTo(px, MARKERS_TOP + 6);
+        ctx!.lineTo(px, MARKER_Y);
         ctx!.stroke();
         ctx!.setLineDash([]);
         ctx!.fillStyle = colors.probe;
         ctx!.beginPath();
-        ctx!.arc(px, MARKERS_TOP + 13, active ? 7 : 5.5, 0, 2 * Math.PI);
+        ctx!.arc(px, MARKER_Y, active ? 6 : 4.5, 0, 2 * Math.PI);
         ctx!.fill();
       });
     }
@@ -161,7 +166,7 @@
   /** What's under the pointer: a CTCF (index) or a marker (index), or which lane is empty there. */
   function hit(mx: number, my: number): { ctcf: number } | { marker: number } | { lane: boolean } | undefined {
     const x = xScale(width);
-    if (run.markers && my >= MARKERS_TOP && my < MARKERS_TOP + 26) {
+    if (run.markers && my > ARCS - 4 && my < LANES_TOP) {
       let best = -1;
       let bestPx = 14;
       run.markers.sites.forEach((s, i) => {

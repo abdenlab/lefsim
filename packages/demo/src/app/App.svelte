@@ -12,6 +12,7 @@
   import Stage from "./Stage.svelte";
   import TourPanel from "./tour/TourPanel.svelte";
   import { STEPS } from "./tour/tour.ts";
+  import Welcome from "./Welcome.svelte";
   import ContactView from "./views/ContactView.svelte";
   import DistanceView from "./views/DistanceView.svelte";
   import EncounterMapView from "./views/EncounterMapView.svelte";
@@ -24,8 +25,9 @@
   const VIEWS: { key: string; label: string; view: Component<{ run: Run }> }[] = [
     { key: "kymograph", label: "Kymograph", view: KymographView },
     { key: "occupancy", label: "Occupancy", view: OccupancyView },
-    { key: "contacts", label: "Contact map", view: ContactView },
+    // Distance before the contact map, which is derived from it.
     { key: "distance", label: "Distance", view: DistanceView },
+    { key: "contacts", label: "Contact map", view: ContactView },
     { key: "encounters", label: "Encounters", view: EncounterView },
     { key: "encounter-map", label: "Encounter map", view: EncounterMapView },
   ];
@@ -40,6 +42,27 @@
   const current = $derived(VIEWS.find((v) => v.key === selected)!);
   let sheetOpen = $state(false);
   let mode = $state<"explore" | "tour">("explore");
+
+  /** The welcome card: shown until dismissed, which this browser remembers (if it can). */
+  const WELCOMED = "lefsim.welcomed";
+  let welcome = $state(!remembered());
+
+  function remembered(): boolean {
+    try {
+      return localStorage.getItem(WELCOMED) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function dismissWelcome() {
+    welcome = false;
+    try {
+      localStorage.setItem(WELCOMED, "1");
+    } catch {
+      // Private browsing or blocked storage: it just shows again next time.
+    }
+  }
   let step = $state(0);
 
   function select(key: string) {
@@ -59,6 +82,7 @@
   }
 
   function startTour() {
+    dismissWelcome();
     mode = "tour";
     history.replaceState(null, "", "#tour");
     sheetOpen = true;
@@ -99,6 +123,11 @@
       <button aria-pressed={mode === "tour"} onclick={() => mode === "explore" && startTour()}>Take the tour</button>
     </span>
     <nav>
+      {#if mode === "explore" && !welcome}
+        <button class="help" onclick={() => (welcome = true)} title="Show the introduction" aria-label="Show the introduction"
+          >?</button
+        >
+      {/if}
       <a href="https://abdenlab.github.io/lefsim/" target="_blank" rel="noopener">Docs</a>
       <a href="https://github.com/abdenlab/lefsim" target="_blank" rel="noopener">GitHub</a>
     </nav>
@@ -114,6 +143,9 @@
 
   <main>
     <Stage {run} />
+    {#if welcome && mode === "explore"}
+      <Welcome tour={startTour} close={dismissWelcome} />
+    {/if}
     <div class="tabs" role="tablist" aria-label="Views">
       {#each VIEWS as v (v.key)}
         <button role="tab" aria-selected={v.key === selected} onclick={() => select(v.key)}>{v.label}</button>
@@ -192,6 +224,29 @@
     color: var(--ink-2);
     font-size: 14px;
     text-decoration: none;
+  }
+
+  .help {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--rule);
+    border-radius: 50%;
+    background: var(--paper);
+    color: var(--ink-2);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .help:hover {
+    border-color: var(--muted);
+    color: var(--ink);
+  }
+
+  nav {
+    align-items: center;
   }
 
   nav a:hover {
