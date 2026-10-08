@@ -76,7 +76,7 @@
       {/each}
     </div>
     <div class="view" role="tabpanel" aria-label={current.label}>
-      {#key selected}
+      {#key `${selected}:${run.nSites}`}
         <current.view {run} />
       {/key}
     </div>

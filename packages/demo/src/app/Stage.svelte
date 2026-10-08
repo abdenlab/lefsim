@@ -3,13 +3,15 @@
   markers the visible view puts on the lattice (e.g. probes).
 
   CTCFs are edited here: click an empty spot in a lane to add one facing that
-  way, drag one to move it, or drag it out of the lanes to remove it.
+  way, drag one to move it, or drag it out of the lanes to remove it. Clicking
+  a CTCF opens a popover to set its strength, flip it or remove it. Each
+  chevron's opacity shows its strength.
 -->
 <script lang="ts">
   import { onMount } from "svelte";
 
   import { colors, drawTadBands, fit, fmt, MARGIN, onThemeChange, placeTooltip, xScale } from "../render.ts";
-  import { N_SITES, type Run } from "./run.svelte.ts";
+  import type { Run } from "./run.svelte.ts";
 
   let { run }: { run: Run } = $props();
 
@@ -23,8 +25,18 @@
   let tooltip: HTMLDivElement;
   let ctx: CanvasRenderingContext2D | undefined;
   let width = $state(0);
-  /** The CTCF being dragged (index into run.ctcfs), and whether it's out of the lanes (to be removed). */
-  let drag = $state<{ ctcf: number; out: boolean } | { marker: number } | undefined>(undefined);
+  /**
+   * The CTCF under a press (index into run.ctcfs): whether it has moved far
+   * enough to be a drag rather than a click, and whether it's out of the lanes
+   * (to be removed). Or a marker being dragged.
+   */
+  let drag = $state<{ ctcf: number; x0: number; y0: number; moved: boolean; out: boolean } | { marker: number } | undefined>(
+    undefined,
+  );
+  /** The CTCF whose popover is open. */
+  let selected = $state<number | undefined>(undefined);
+  /** A press that moves less than this (CSS px) is a click. */
+  const CLICK_SLOP = 4;
   let hover = $state<{ ctcf: number } | { marker: number } | undefined>(undefined);
   let themeRevision = $state(0);
 
@@ -35,8 +47,8 @@
 
   function siteAtX(mx: number): number {
     const inner = width - MARGIN.left - MARGIN.right;
-    const s = Math.round(((mx - MARGIN.left) / inner) * (N_SITES - 1));
-    return Math.max(1, Math.min(N_SITES - 2, s));
+    const s = Math.round(((mx - MARGIN.left) / inner) * (run.nSites - 1));
+    return Math.max(1, Math.min(run.nSites - 2, s));
   }
 
   function draw() {
@@ -51,26 +63,30 @@
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(x(0), ARCS + 0.5);
-    ctx.lineTo(x(N_SITES - 1), ARCS + 0.5);
+    ctx.lineTo(x(run.nSites - 1), ARCS + 0.5);
     ctx.stroke();
 
     // The lanes: the chevrons in each say which way it faces.
     for (const left of [true, false]) {
       ctx.fillStyle = colors.band;
-      ctx.fillRect(x(0), laneTop(left) + 2, x(N_SITES - 1) - x(0), LANE - 4);
+      ctx.fillRect(x(0), laneTop(left) + 2, x(run.nSites - 1) - x(0), LANE - 4);
     }
     run.ctcfs.forEach((c, i) => {
       const top = laneTop(c.left);
       const active =
-        (drag && "ctcf" in drag && drag.ctcf === i) || (hover && "ctcf" in hover && hover.ctcf === i);
+        selected === i ||
+        (drag && "ctcf" in drag && drag.ctcf === i) ||
+        (hover && "ctcf" in hover && hover.ctcf === i);
       const size = active ? 16 : 12;
       const dir = c.left ? -1 : 1;
       const px = x(c.site);
       const cy = top + LANE / 2;
-      ctx!.globalAlpha = drag && "ctcf" in drag && drag.ctcf === i && drag.out ? 0.25 : 1;
       // A faint stem up to the lattice, so the site reads against the arcs.
       ctx!.fillStyle = colors.rule;
       ctx!.fillRect(Math.round(px), ARCS + 1, 1, top - ARCS + 2);
+      // Opacity shows strength; a CTCF dragged out of the lanes fades further.
+      const removing = drag && "ctcf" in drag && drag.ctcf === i && drag.out;
+      ctx!.globalAlpha = (0.2 + 0.8 * c.strength) * (removing ? 0.3 : 1);
       ctx!.fillStyle = colors.ink;
       ctx!.beginPath();
       ctx!.moveTo(px + dir * size * 0.6, cy);
@@ -105,7 +121,7 @@
     if (!f) return;
     // Loops as half-ellipses whose height grows with span; held loops on top.
     const maxH = ARCS - MARGIN.top - 4;
-    const full = 900;
+    const full = 0.3 * run.nSites;
     ctx.lineWidth = 2;
     for (const pass of [0, 1]) {
       ctx.strokeStyle = pass ? colors.held : colors.extruding;
@@ -130,7 +146,7 @@
 
   // Redraw on any change the drawing reads.
   $effect(() => {
-    void [run.frame, run.revision, run.markers, run.ctcfs.length, drag, hover, width, height, themeRevision];
+    void [run.frame, run.revision, run.markers, run.ctcfs.length, drag, hover, selected, width, height, themeRevision];
     if (ctx && canvas.height !== Math.round(height * (devicePixelRatio || 1))) ctx = fit(canvas);
     draw();
   });
@@ -169,14 +185,19 @@
   function pointerdown(e: PointerEvent) {
     const { mx, my } = point(e);
     const h = hit(mx, my);
-    if (!h) return;
+    if (!h) {
+      selected = undefined;
+      return;
+    }
     if ("lane" in h) {
       // Add a CTCF here, facing the lane's way, and keep dragging it.
+      selected = undefined;
       if (!run.addCtcf(siteAtX(mx), h.lane)) return;
-      drag = { ctcf: run.ctcfs.length - 1, out: false };
+      drag = { ctcf: run.ctcfs.length - 1, x0: mx, y0: my, moved: true, out: false };
     } else if ("ctcf" in h) {
-      drag = { ctcf: h.ctcf, out: false };
+      drag = { ctcf: h.ctcf, x0: mx, y0: my, moved: false, out: false };
     } else {
+      selected = undefined;
       drag = { marker: h.marker };
     }
     canvas.setPointerCapture(e.pointerId);
@@ -190,6 +211,11 @@
       return;
     }
     if (drag) {
+      if (!drag.moved && Math.hypot(mx - drag.x0, my - drag.y0) < CLICK_SLOP) return;
+      if (!drag.moved) {
+        drag = { ...drag, moved: true };
+        selected = undefined;
+      }
       const out = my < LANES_TOP - 24 || my > LANES_TOP + 2 * LANE + 24;
       if (out !== drag.out) drag = { ...drag, out };
       if (!out) run.moveCtcf(drag.ctcf, siteAtX(mx));
@@ -197,13 +223,27 @@
     }
     const h = hit(mx, my);
     hover = h && !("lane" in h) ? h : undefined;
-    canvas.style.cursor = hover ? "grab" : h ? "copy" : "";
+    canvas.style.cursor = hover ? "pointer" : h ? "copy" : "";
     loopTooltip(e, mx, my);
   }
 
   function pointerup() {
-    if (drag && "ctcf" in drag && drag.out) run.removeCtcf(drag.ctcf);
+    if (drag && "ctcf" in drag) {
+      if (!drag.moved) selected = selected === drag.ctcf ? undefined : drag.ctcf;
+      else if (drag.out) run.removeCtcf(drag.ctcf);
+    }
     drag = undefined;
+  }
+
+  // The popover's CTCF: closed if it's gone (removed, or a new layout).
+  const sel = $derived(selected !== undefined ? run.ctcfs[selected] : undefined);
+  $effect(() => {
+    void run.nSites;
+    if (selected !== undefined && selected >= run.ctcfs.length) selected = undefined;
+  });
+
+  function onkeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") selected = undefined;
   }
 
   /** Hovering the arcs: the innermost loop around the pointer. */
@@ -263,7 +303,51 @@
     aria-label="Loops on the lattice, with CTCF lanes: click a lane to add a CTCF, drag one to move it, drag it out of the lanes to remove it"
   ></canvas>
   <div class="tooltip" bind:this={tooltip} hidden></div>
+  {#if sel && selected !== undefined}
+    {@const i = selected}
+    <div
+      class="popover"
+      role="dialog"
+      aria-label="CTCF at site {fmt.format(sel.site)}"
+      style:left="{Math.max(8, Math.min(width - 248, xScale(width)(sel.site) - 120))}px"
+      style:top="{laneTop(sel.left) + LANE + 4}px"
+    >
+      <div class="pop-head">
+        <strong>CTCF at site {fmt.format(sel.site)}</strong>
+        <button class="close" onclick={() => (selected = undefined)} aria-label="Close">×</button>
+      </div>
+      <span class="hint">Captures legs arriving from the {sel.left ? "left" : "right"}.</span>
+      {#if run.strengthLocked}
+        <span class="hint">Strength {sel.strength.toFixed(2)}, shared by all CTCFs. Unlock it on the shelf to set each one.</span>
+      {:else}
+        <label class="strength">
+          <span>Strength</span>
+          <output class="mono">{sel.strength.toFixed(2)}</output>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={sel.strength}
+            onchange={(e) => run.setCtcfStrength(i, Number(e.currentTarget.value))}
+          />
+        </label>
+      {/if}
+      <div class="pop-actions">
+        <button class="btn" onclick={() => run.flipCtcf(i)}>Flip direction</button>
+        <button
+          class="btn"
+          onclick={() => {
+            selected = undefined;
+            run.removeCtcf(i);
+          }}>Remove</button
+        >
+      </div>
+    </div>
+  {/if}
 </div>
+
+<svelte:window {onkeydown} />
 
 <style>
   .stage {
@@ -274,5 +358,57 @@
     display: block;
     width: 100%;
     touch-action: none;
+  }
+
+  .popover {
+    position: absolute;
+    z-index: 4;
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.14);
+    font-size: 14px;
+  }
+
+  .pop-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .close {
+    border: 0;
+    background: none;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--muted);
+  }
+
+  .strength {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 10px;
+    color: var(--ink-2);
+  }
+
+  .strength input {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .pop-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .pop-actions .btn {
+    font-size: 13px;
+    padding: 4px 10px;
   }
 </style>

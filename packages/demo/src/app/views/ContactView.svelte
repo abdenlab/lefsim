@@ -6,22 +6,26 @@
   loops as a triangle on the same x axis.
 -->
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
 
   import { drawColorbar, FALL, SquareMap } from "../../heatmap.ts";
   import { worldOf } from "../../model.ts";
   import { fmt, MARGIN, placeTooltip, xScale } from "../../render.ts";
   import { sizedCanvas } from "../canvas.ts";
-  import { N_SITES, type Run } from "../run.svelte.ts";
+  import type { Run } from "../run.svelte.ts";
   import { ContactMaps, drawTriangle, triangleCell } from "./contacts.ts";
 
   let { run }: { run: Run } = $props();
 
-  const BINS = [5, 10, 20, 50];
+  /** Bins per side of the map; the bin size follows the lattice size. */
+  const BIN_COUNTS = [100, 200, 300, 600];
+  // The view is remounted when the lattice size changes.
+  const N_SITES = untrack(() => run.nSites);
+  const binSize = (count: number) => Math.max(1, Math.ceil(N_SITES / count));
 
   let layout = $state<"square" | "aligned">("square");
   let show = $state<"now" | "average">("now");
-  let bin = $state(10);
+  let binCount = $state(300);
   let averaged = $state(0);
   let computeMs = $state(0);
   let nBins = $state(0);
@@ -83,9 +87,9 @@
     draw();
   }
 
-  function setBin(b: number) {
-    bin = b;
-    maps.setBin(b);
+  function setBins(count: number) {
+    binCount = count;
+    maps.setBin(binSize(count));
     nBins = maps.k;
     maps.resetAverage(run.sim?.time);
     square = undefined;
@@ -164,7 +168,7 @@
       barCtx = c;
       drawBar();
     });
-    maps.setBin(bin);
+    maps.setBin(binSize(binCount));
     nBins = maps.k;
     maps.resetAverage(run.sim?.time);
     run.setDriver({
@@ -192,10 +196,10 @@
     </span>
   {/if}
   <label class="bin">
-    Bin
-    <select value={bin} onchange={(e) => setBin(Number(e.currentTarget.value))}>
-      {#each BINS as b (b)}
-        <option value={b}>{b} sites</option>
+    Bins
+    <select value={binCount} onchange={(e) => setBins(Number(e.currentTarget.value))}>
+      {#each BIN_COUNTS as c (c)}
+        <option value={c}>{c} ({fmt.format(binSize(c))} sites each)</option>
       {/each}
     </select>
   </label>

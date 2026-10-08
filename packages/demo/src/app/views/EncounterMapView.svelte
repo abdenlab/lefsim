@@ -6,31 +6,39 @@
 -->
 <script lang="ts">
   import { effectiveDistances } from "lefsim";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
 
   import { BLUES, drawColorbar, FALL, packedColors, packPixel, SquareMap } from "../../heatmap.ts";
   import { worldOf } from "../../model.ts";
   import { fmt, MARGIN, placeTooltip } from "../../render.ts";
   import { sizedCanvas } from "../canvas.ts";
-  import { N_SITES, type Run } from "../run.svelte.ts";
+  import type { Run } from "../run.svelte.ts";
   import { MapEncounters } from "./encounters.ts";
 
   let { run }: { run: Run } = $props();
 
   const LENGTHS = { stepLength: 1, hopLength: 1 };
   const SAMPLE_DT = 1;
-  const BINS = [10, 20, 50];
+  /** Bins per side of the map; the bin size follows the lattice size. */
+  const BIN_COUNTS = [60, 150, 300];
+  // The view is remounted when the lattice size changes.
+  const N_SITES = untrack(() => run.nSites);
+  const binSize = (count: number) => Math.max(1, Math.ceil(N_SITES / count));
+  /** The threshold slider: up to a third of the lattice. */
+  const THRESHOLD_MAX = Math.max(10, Math.round(N_SITES / 3));
+  const THRESHOLD_STEP = Math.max(1, Math.round(THRESHOLD_MAX / 100));
   /** Pairs always within the threshold along the lattice. */
   const TRIVIAL = packPixel(208, 208, 204);
   const freqColors = packedColors(FALL);
   const durColors = packedColors(BLUES);
 
-  let bin = $state(20);
-  let threshold = $state(100);
+  let binCount = $state(150);
+  const bin = $derived(binSize(binCount));
+  let threshold = $state(Math.max(1, Math.round(N_SITES / 30)));
   let observed = $state(0);
   let sampleMs = $state(0);
   let nBins = $state(0);
-  const enc = new MapEncounters(SAMPLE_DT, 100);
+  const enc = new MapEncounters(SAMPLE_DT, untrack(() => threshold));
   let freqRange: [number, number] = [0, 1];
   let durRange: [number, number] = [0, 1];
 
@@ -47,10 +55,10 @@
     return c < 0 ? 0 : c > 255 ? 255 : c;
   }
 
-  function setBins(b: number) {
-    bin = b;
+  function setBins(count: number) {
+    binCount = count;
     enc.threshold = threshold;
-    enc.setBins(N_SITES, b);
+    enc.setBins(N_SITES, binSize(count));
     nBins = enc.k;
     map?.setSize(enc.k);
     draw();
@@ -163,7 +171,7 @@
       barCtx = c;
       drawBars();
     });
-    setBins(bin);
+    setBins(binCount);
     run.setDriver({
       sampleDt: SAMPLE_DT,
       sample: () => sample(),
@@ -186,8 +194,8 @@
     <input
       type="range"
       min="0"
-      max="1000"
-      step="10"
+      max={THRESHOLD_MAX}
+      step={THRESHOLD_STEP}
       value={threshold}
       oninput={(e) => {
         threshold = Number(e.currentTarget.value);
@@ -197,10 +205,10 @@
     <output class="mono">{fmt.format(threshold)}</output>
   </label>
   <label class="field">
-    Bin
-    <select value={bin} onchange={(e) => setBins(Number(e.currentTarget.value))}>
-      {#each BINS as b (b)}
-        <option value={b}>{b} sites</option>
+    Bins
+    <select value={binCount} onchange={(e) => setBins(Number(e.currentTarget.value))}>
+      {#each BIN_COUNTS as c (c)}
+        <option value={c}>{c} ({fmt.format(binSize(c))} sites each)</option>
       {/each}
     </select>
   </label>

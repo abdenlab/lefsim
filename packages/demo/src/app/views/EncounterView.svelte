@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
   import { effectiveDistance } from "lefsim";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
 
   import { worldOf } from "../../model.ts";
   import { colors, fit, fmt, Kymograph } from "../../render.ts";
@@ -19,9 +19,15 @@
   const LENGTHS = { stepLength: 1, hopLength: 1 };
   const SAMPLE_DT = 1;
 
-  let probes = $state<[number, number]>([900, 2100]);
-  let threshold = $state(100);
-  const stats = new PairEncounters(SAMPLE_DT, 100);
+  // The view is remounted when the lattice size changes.
+  const N_SITES = untrack(() => run.nSites);
+  /** The threshold slider: up to a third of the lattice. */
+  const THRESHOLD_MAX = Math.max(10, Math.round(N_SITES / 3));
+  const THRESHOLD_STEP = Math.max(1, Math.round(THRESHOLD_MAX / 100));
+
+  let probes = $state<[number, number]>([Math.round(0.3 * (N_SITES - 1)), Math.round(0.7 * (N_SITES - 1))]);
+  let threshold = $state(Math.max(1, Math.round(N_SITES / 30)));
+  const stats = new PairEncounters(SAMPLE_DT, untrack(() => threshold));
 
   // Readouts, refreshed each frame.
   let distance = $state(0);
@@ -234,8 +240,8 @@
     <input
       type="range"
       min="0"
-      max="1000"
-      step="10"
+      max={THRESHOLD_MAX}
+      step={THRESHOLD_STEP}
       value={threshold}
       oninput={(e) => {
         threshold = Number(e.currentTarget.value);

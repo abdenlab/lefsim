@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
   import { effectiveDistance } from "lefsim";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
 
   import { worldOf } from "../../model.ts";
   import { colors, fmt } from "../../render.ts";
@@ -17,7 +17,9 @@
   /** Simulation time the trace spans. */
   const WINDOW = 2_000;
 
-  let probes = $state<[number, number]>([1000, 2000]);
+  // The view is remounted when the lattice size changes.
+  const N_SITES = untrack(() => run.nSites);
+  let probes = $state<[number, number]>([Math.round((N_SITES - 1) / 3), Math.round((2 * (N_SITES - 1)) / 3)]);
   let distance = $state(0);
   const lattice = $derived(Math.abs(probes[1] - probes[0]));
 

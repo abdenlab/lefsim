@@ -4,11 +4,11 @@
   the time since the previous frame, so pausing adds nothing.
 -->
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
 
   import { colors, drawCtcfs, drawTadBands, fmt, placeTooltip, xScale } from "../../render.ts";
   import { sizedCanvas } from "../canvas.ts";
-  import { N_SITES, type Run } from "../run.svelte.ts";
+  import type { Run } from "../run.svelte.ts";
 
   let { run }: { run: Run } = $props();
 
@@ -17,6 +17,8 @@
   let canvas: HTMLCanvasElement;
   let tooltip: HTMLDivElement;
   let ctx: CanvasRenderingContext2D | undefined;
+  // The view is remounted when the lattice size changes.
+  const N_SITES = untrack(() => run.nSites);
   let counts = new Float64Array(N_SITES);
   let lastTime: number | undefined;
   let averaged = $state(0);
