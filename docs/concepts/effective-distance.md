@@ -1,8 +1,9 @@
 # Effective distance
 
 Loops bring their anchors together, so two sites far apart on the lattice can be
-close in space. The **effective distance** between two sites is the shortest
-path between them when a path walks the lattice and may also cross LEFs.
+close in space. We can approximate this by calculating the **effective
+distance**, which is the shortest linear path between between two sites that
+walks the lattice and may also cross LEFs.
 
 ## The rules
 

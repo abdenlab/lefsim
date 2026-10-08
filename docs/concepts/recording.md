@@ -60,7 +60,7 @@ right.
 
 ## Bounded recording and streaming
 
-A recorder can have a bounded capacity. When it fills, the run returns *before*
+A recorder can have a bounded capacity. When it fills, the run returns _before_
 firing another event, so nothing is lost: it can hand off the chunk to the
 caller and continue where it left off. In Python and TypeScript,
 `sim.stream(...)` wraps this as a lazy stream that runs only as it's read, so a
@@ -138,12 +138,26 @@ standalone versioned JSON document, described by a
 
 ```json
 {
-  "format": "lefsim.model", "version": 2,
-  "lattice": { "n_sites": 100,
-               "ctcfs": [{ "site": 30, "captures_from": "right", "strength": 0.8 }] },
-  "lefs": [{ "left_pos": 10, "right_pos": 12,
-             "left_mobility": "moving", "right_mobility": "moving" }],
-  "rates": { "step": 1.0, "respawn": 0.001, "respawn_blocked": 0.01, "respawn_captured": 0.001 },
+  "format": "lefsim.model",
+  "version": 2,
+  "lattice": {
+    "n_sites": 100,
+    "ctcfs": [{ "site": 30, "captures_from": "right", "strength": 0.8 }]
+  },
+  "lefs": [
+    {
+      "left_pos": 10,
+      "right_pos": 12,
+      "left_mobility": "moving",
+      "right_mobility": "moving"
+    }
+  ],
+  "rates": {
+    "step": 1.0,
+    "respawn": 0.001,
+    "respawn_blocked": 0.01,
+    "respawn_captured": 0.001
+  },
   "spawn": { "rule": "uniform_non_ctcf" }
 }
 ```

@@ -14,7 +14,11 @@ can't fetch `file:` URLs, so there you pass the bytes:
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-await init(await readFile(fileURLToPath(import.meta.resolve("lefsim/lefsim_wasm_bg.wasm"))));
+await init(
+  await readFile(
+    fileURLToPath(import.meta.resolve("lefsim/lefsim_wasm_bg.wasm")),
+  ),
+);
 ```
 
 ## A live run
@@ -31,7 +35,12 @@ const lattice = createLattice(3000, [
   { site: 600, capturesFrom: "left", strength: 0.8 },
   { site: 601, capturesFrom: "right", strength: 0.8 },
 ]);
-const model = createModel(populate(lattice, 20, { seed: 1 }), { step: 1, respawn: 2e-3, respawnBlocked: 2e-2, respawnCaptured: 2e-3 });
+const model = createModel(populate(lattice, 20, { seed: 1 }), {
+  step: 1,
+  respawn: 2e-3,
+  respawnBlocked: 2e-2,
+  respawnCaptured: 2e-3,
+});
 using sim = new Sim(model, { seed: 1 });
 
 function frame() {
@@ -69,7 +78,10 @@ for (let c = sim.recordEventChunk(1000); ; c = sim.recordEventChunk(1000)) {
 }
 replayer.seek(250);
 const { leftPos, rightPos } = replayer.state();
-const branch = new Sim(createModel(replayer.world(), model.rates), { seed: 2, startTime: 250 });
+const branch = new Sim(createModel(replayer.world(), model.rates), {
+  seed: 2,
+  startTime: 250,
+});
 ```
 
 For history rather than live state, `recordUntil(t, { dt, events, keyframes })`
@@ -89,7 +101,9 @@ any Arrow source.
 import { iterate } from "lefsim";
 import { toRecordBatches } from "lefsim/arrow";
 
-for await (const batch of iterate(sim.stream(1e6, { dt: 1 }).pipeThrough(toRecordBatches()))) {
+for await (const batch of iterate(
+  sim.stream(1e6, { dt: 1 }).pipeThrough(toRecordBatches()),
+)) {
   // batch is an Arrow RecordBatch: time, lef_id, left_pos, right_pos, ...
 }
 ```

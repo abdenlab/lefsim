@@ -39,19 +39,19 @@ impl TrafficLight {
 
 fn main() {
     let mut light = TrafficLight::Red;
-    
+
     println!("Starting state: {:?}", light);
-    
+
     // Cycle through the states
     for _ in 0..6 {
         light = light.next();
-        println!("State: {:?}, Can go: {}, Can stop: {}", 
+        println!("State: {:?}, Can go: {}, Can stop: {}",
                  light, light.can_go(), light.can_stop());
     }
 }
 ```
 
-A Gillespie simulation considers a system of chemical *reactions* acting on
+A Gillespie simulation considers a system of chemical _reactions_ acting on
 pools of distinct reactant species, with species counts defining the system
 state. The sequence of reaction events is stochastic. In a simulation
 realization, for each reaction, its intrinsic rate constant and the system state
@@ -60,7 +60,7 @@ reaction firing times from a probability distribution, thereby "scheduling" the
 next event. Hence, a scheduler (e.g., priority queue) keeping track of the
 forecasted next firing times for each reaction determines the next state change.
 Once the next reaction fires and the system changes state, only it and any
-*dependent* reactions (those for whom the reactant species pools were influenced
+_dependent_ reactions (those for whom the reactant species pools were influenced
 by the reaction itself) require rescheduling -- other forecasted reaction firing
 times are independent and do not need to be resampled. This is essentially an
 optimization.
@@ -218,16 +218,16 @@ A CTCF has an intrinsic _polarity_, expressed by which side is its capture
 What happens:
 
 - A leg stepping onto a CTCF from its capture side is captured with probability
-    *p*, else it passes through (moving). The dice roll crudely models whether
+    _p_, else it passes through (moving). The dice roll crudely models whether
     the CTCF is occupied or able to capture.
 - A moving leg sitting on the CTCF is ordinary traffic: the leg behind it is
     blocked.
 - A protected leg ignores a CTCF's evict (rear) side: it passes a bare site at
     the full step rate, and a site holding a leg blocks it.
 - An unprotected leg facing a bare CTCF from its evict side races two events: a
-    regular step at *(1 − p) × step rate* passing onto the CTCF and moving on,
-    and an eviction at *p × step rate*. These are exactly one step at the full
-    rate followed by a coin flip with probability *p*. If a captured leg is
+    regular step at _(1 − p) × step rate_ passing onto the CTCF and moving on,
+    and an eviction at _p × step rate_. These are exactly one step at the full
+    rate followed by a coin flip with probability _p_. If a captured leg is
     already held by that CTCF site, then eviction is certain at the full step
     rate.
 - If a respawn rule allows spawning at a CTCF site, it may capture but not

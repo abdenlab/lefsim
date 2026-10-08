@@ -13,8 +13,8 @@ nav = [
   { "Concepts" = [
     { "The framework" = "concepts/framework.md" },
     { "The LEF model" = "concepts/model.md" },
-    { "Recording and replay" = "concepts/recording.md" },
     { "Effective distance" = "concepts/effective-distance.md" },
+    { "Recording and replay" = "concepts/recording.md" },
   ] },
   { "Guides" = [
     { "Rust" = "guides/rust.md" },

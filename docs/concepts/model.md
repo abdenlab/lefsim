@@ -1,9 +1,10 @@
 # The LEF model
 
 A loop-extrusion factor (LEF) is a protein complex that binds a chromatin
-polymer and extrudes a loop by walking two legs outward from a shared binding
-site. CTCF sites act as extrusion barriers, depending on which side a leg meets
-them from.
+polymer and extrudes a loop by walking two legs outward from a binding site.
+CTCF sites act as extrusion barriers, with different behavior depending on which
+side a leg meets them from. Upon unbinding, a LEF loads again elsewhere,
+simulating a steady state LEF density.
 
 The concepts of backside eviction and effective distance draw heavily from
 [Foldes et al., 2026](https://www.biorxiv.org/content/10.64898/2026.05.07.723561v1)
@@ -19,26 +20,26 @@ implementation.
     steps left, the right leg steps right, and neither steps backward.
 - A leg's **mobility** is `Moving` or `Captured` (held by a CTCF).
 - A moving leg is **blocked** while another leg sits on the next site ahead, or
-    the lattice ends there. Blocking is derived from positions, never stored, so
+    the lattice ends there. Blocking is derived from positions, not stored, so
     it lifts as soon as the obstruction moves.
-- A leg is **protected** while its partner is captured: it's immune to eviction.
+- A leg is **protected** while its partner is captured: it immune to eviction
+    (see below).
 
 ## Actions and their rates
 
 Three kinds of action compete. Each fires after an exponential wait at its
 current rate; `k` below is the step rate, `rates.step`.
 
-**Step** (per leg): the leg moves one site in the direction it faces.
+**Step** (per leg): the leg moves one site in the direction it faces. It is
+scheduled at rate `k` for a moving, unblocked leg.
 
-- Scheduled at rate `k` for a moving, unblocked leg.
-- Facing a CTCF's evict side, the leg still advances, but an advance can end in
-    eviction instead of a step (see [Eviction](#ctcfs)).
-
-**Evict** (per leg): a leg advancing onto a CTCF from its evict side is ejected,
+**Evict** (per leg): when facing a CTCF's evict side, a leg may advance, but
+that advance can end in eviction instead of a translocation: the leg is ejected,
 and its LEF unbinds at once.
 
 **Respawn** (per LEF): the LEF unbinds and rebinds at a site chosen by the spawn
-rule, both legs on that one site. It fires at the first rate that applies:
+rule. Both legs rejoin the lattice on that one site. Respawn schedules at the
+first rate that applies:
 
 1. `rates.respawn_captured` if either leg is captured: capture protects the LEF;
 1. `rates.respawn_blocked` if either leg is blocked;
@@ -67,9 +68,9 @@ it's ejected (an Evict). The two independent outcomes split `k`:
 
 Two competing events at rates `(1 − p)·k` and `p·k` are exactly a step at `k`
 followed by a coin flip with probability `p`, so `strength` crudely models how
-often the site is occupied by CTCF, or more generally, is functional. Eviction
-unbinds (respawns) the LEF in the same event, so no transient state is ever
-stored.
+often the site is occupied by CTCF, or more generally, is functional. Since
+eviction unbinds (respawns) the LEF in the same event, no transient state is
+ever stored.
 
 **Protection.** A leg whose partner is captured ignores a CTCF's evict side: it
 steps onto an empty one at the full rate `k`, and a held one blocks it, as
