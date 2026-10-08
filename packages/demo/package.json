@@ -10,7 +10,8 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
   },
   "dependencies": {
-    "lefsim": "workspace:*"
+    "lefsim": "workspace:*",
+    "marked": "^18.1.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

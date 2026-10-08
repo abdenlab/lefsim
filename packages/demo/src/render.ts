@@ -111,12 +111,17 @@ export function siteAt(canvas: HTMLCanvasElement, clientX: number): number {
   return ((clientX - rect.left - MARGIN.left) / inner) * (geometry.nSites - 1);
 }
 
-/** TADs as alternating bands between `top` and `bottom`. */
+/**
+ * Domains as bands between `top` and `bottom`: each stretch from a CTCF that
+ * captures from the right (`>`, legs arriving from inside the domain) to the
+ * next one, if it captures from the left (`<`). A convergent pair.
+ */
 export function drawTadBands(ctx: CanvasRenderingContext2D, x: (site: number) => number, top: number, bottom: number) {
-  const edges = [0, ...geometry.boundaries, geometry.nSites - 1];
+  const c = geometry.ctcfs;
   ctx.fillStyle = colors.band;
-  for (let i = 0; i < edges.length - 1; i += 2) {
-    ctx.fillRect(x(edges[i]!), top, x(edges[i + 1]!) - x(edges[i]!), bottom - top);
+  for (let i = 0; i + 1 < c.length; i++) {
+    if (!c[i]!.left && c[i + 1]!.left)
+      ctx.fillRect(x(c[i]!.site), top, x(c[i + 1]!.site) - x(c[i]!.site), bottom - top);
   }
 }
 

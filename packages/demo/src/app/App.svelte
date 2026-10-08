@@ -1,7 +1,8 @@
 <!--
   The explorer: the shelf (running the simulation and the model it runs), the
   stage (loops on the lattice, CTCFs edited in place), and a tab per view of
-  the run. On narrow screens the shelf becomes a bottom sheet.
+  the run. On narrow screens the shelf becomes a bottom sheet. The tour takes
+  the shelf's place, one step at a time (see tour/).
 -->
 <script lang="ts">
   import { type Component, onMount } from "svelte";
@@ -9,6 +10,8 @@
   import { Run } from "./run.svelte.ts";
   import Shelf from "./Shelf.svelte";
   import Stage from "./Stage.svelte";
+  import TourPanel from "./tour/TourPanel.svelte";
+  import { STEPS } from "./tour/tour.ts";
   import ContactView from "./views/ContactView.svelte";
   import DistanceView from "./views/DistanceView.svelte";
   import EncounterMapView from "./views/EncounterMapView.svelte";
@@ -27,26 +30,59 @@
     { key: "encounter-map", label: "Encounter map", view: EncounterMapView },
   ];
 
-  /** The selected view, remembered in the URL hash so a reload or link keeps it. */
+  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /**
+   * The selected view, remembered in the URL hash so a reload or link keeps it
+   * (in the tour, the hash is "#tour").
+   */
   let selected = $state(VIEWS.some((v) => v.key === location.hash.slice(1)) ? location.hash.slice(1) : VIEWS[0]!.key);
   const current = $derived(VIEWS.find((v) => v.key === selected)!);
   let sheetOpen = $state(false);
+  let mode = $state<"explore" | "tour">("explore");
+  let step = $state(0);
 
   function select(key: string) {
+    if (!VIEWS.some((v) => v.key === key)) return;
     selected = key;
     run.markers = undefined;
-    history.replaceState(null, "", `#${key}`);
+    if (mode === "explore") history.replaceState(null, "", `#${key}`);
+  }
+
+  /** Show tour step `i`: set up its scene and its view, and play. */
+  function go(i: number) {
+    step = Math.max(0, Math.min(STEPS.length - 1, i));
+    const s = STEPS[step]!;
+    run.applyPreset(s.preset);
+    select(s.view);
+    if (!reducedMotion) run.setPlaying(true);
+  }
+
+  function startTour() {
+    mode = "tour";
+    history.replaceState(null, "", "#tour");
+    sheetOpen = true;
+    go(0);
+  }
+
+  /** Leave the tour for the full app, keeping the current setup. */
+  function explore() {
+    mode = "explore";
+    history.replaceState(null, "", `#${selected}`);
   }
 
   onMount(() => {
-    run.restart();
-    // Respect reduced motion: start paused, let the viewer press Play.
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) run.setPlaying(true);
+    if (location.hash === "#tour") startTour();
+    else {
+      run.restart();
+      // Respect reduced motion: start paused, let the viewer press Play.
+      if (!reducedMotion) run.setPlaying(true);
+    }
     return () => run.setPlaying(false);
   });
 </script>
 
-<div class="app" class:sheet-open={sheetOpen}>
+<div class="app" class:sheet-open={sheetOpen} class:touring={mode === "tour"}>
   <header>
     <a class="brand" href="/">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -58,14 +94,22 @@
     </a>
     <span class="tagline">Loops. Extruding. In your browser.</span>
     <span class="spacer"></span>
+    <span class="seg modes" role="group" aria-label="Mode">
+      <button aria-pressed={mode === "explore"} onclick={() => mode === "tour" && explore()}>Explore</button>
+      <button aria-pressed={mode === "tour"} onclick={() => mode === "explore" && startTour()}>Take the tour</button>
+    </span>
     <nav>
       <a href="https://abdenlab.github.io/lefsim/" target="_blank" rel="noopener">Docs</a>
       <a href="https://github.com/abdenlab/lefsim" target="_blank" rel="noopener">GitHub</a>
     </nav>
   </header>
 
-  <aside class="shelf" id="shelf" aria-label="Simulation and model">
-    <Shelf {run} />
+  <aside class="shelf" id="shelf" aria-label={mode === "tour" ? "Tour" : "Simulation and model"}>
+    {#if mode === "tour"}
+      <TourPanel {step} {go} reset={() => go(step)} {explore} />
+    {:else}
+      <Shelf {run} />
+    {/if}
   </aside>
 
   <main>
@@ -84,7 +128,7 @@
 
   <div class="sheet-toggle">
     <button class="btn" aria-controls="shelf" aria-expanded={sheetOpen} onclick={() => (sheetOpen = !sheetOpen)}>
-      {sheetOpen ? "Close" : "Simulation and model"}
+      {sheetOpen ? "Close" : mode === "tour" ? "Tour" : "Simulation and model"}
     </button>
   </div>
 </div>
@@ -128,6 +172,11 @@
     font-size: 14px;
   }
 
+  .modes button {
+    font-size: 14px;
+    padding: 4px 12px;
+  }
+
   .spacer {
     flex: 1;
   }
@@ -135,6 +184,8 @@
   nav {
     display: flex;
     gap: 14px;
+    /* Stay on the right when the header wraps on narrow screens. */
+    margin-left: auto;
   }
 
   nav a {
@@ -242,6 +293,12 @@
 
     .sheet-open .shelf {
       transform: none;
+    }
+
+    /* In the tour, keep the scene in view above the text, which scrolls inside the panel. */
+    .touring .shelf {
+      max-height: 52vh;
+      overflow: hidden;
     }
 
     .sheet-toggle {

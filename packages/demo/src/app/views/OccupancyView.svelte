@@ -7,7 +7,7 @@
   import { onMount, untrack } from "svelte";
 
   import { colors, drawCtcfs, drawTadBands, fmt, placeTooltip, xScale } from "../../render.ts";
-  import { sizedCanvas } from "../canvas.ts";
+  import { niceStep, sizedCanvas } from "../canvas.ts";
   import type { Run } from "../run.svelte.ts";
 
   let { run }: { run: Run } = $props();
@@ -22,6 +22,8 @@
   let counts = new Float64Array(N_SITES);
   let lastTime: number | undefined;
   let averaged = $state(0);
+  /** The y axis: linear (the peaks in proportion; the default) or log (the floor between them legible too). */
+  let scale = $state<"linear" | "log">("linear");
 
   function reset() {
     counts = new Float64Array(N_SITES);
@@ -49,35 +51,55 @@
     const base = height - 18;
     ctx.clearRect(0, 0, width, height);
     drawTadBands(ctx, x, top, base);
-    const y = (v: number) =>
-      base - ((Math.log10(Math.max(v, LOG_MIN)) - Math.log10(LOG_MIN)) / -Math.log10(LOG_MIN)) * (base - top);
-    ctx.font = "11px 'Atkinson Hyperlegible Next', system-ui, sans-serif";
-    for (let e = -4; e <= 0; e++) {
-      const gy = Math.round(y(10 ** e)) + 0.5;
-      ctx.strokeStyle = colors.rule;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x(0), gy);
-      ctx.lineTo(x(N_SITES - 1), gy);
-      ctx.stroke();
-    }
-    drawCtcfs(ctx, x, base + 5, 8);
+
+    // One value per pixel column: the mean over the sites it covers.
+    const x0 = x(0);
+    const x1 = x(N_SITES - 1);
+    const columns: { px: number; v: number }[] = [];
     if (averaged > 0) {
-      // One point per pixel column: the mean over the sites it covers.
-      ctx.strokeStyle = colors.extruding;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      const x0 = x(0);
-      const x1 = x(N_SITES - 1);
       for (let px = Math.floor(x0); px <= Math.ceil(x1); px++) {
         const lo = Math.max(0, Math.floor(((px - x0) / (x1 - x0)) * (N_SITES - 1)));
         const hi = Math.min(N_SITES - 1, Math.floor(((px + 1 - x0) / (x1 - x0)) * (N_SITES - 1)));
         let sum = 0;
         for (let s = lo; s <= hi; s++) sum += counts[s]!;
-        const py = y(sum / (hi - lo + 1) / averaged);
-        if (px === Math.floor(x0)) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+        columns.push({ px, v: sum / (hi - lo + 1) / averaged });
       }
+    }
+
+    // The scale and its gridlines: decades for log; round steps up to the highest column for linear.
+    let y: (v: number) => number;
+    let ticks: { v: number; label: string }[];
+    if (scale === "log") {
+      y = (v) => base - ((Math.log10(Math.max(v, LOG_MIN)) - Math.log10(LOG_MIN)) / -Math.log10(LOG_MIN)) * (base - top);
+      ticks = [-4, -3, -2, -1, 0].map((e) => ({ v: 10 ** e, label: e === 0 ? "1" : `10⁻${"⁰¹²³⁴"[-e]}` }));
+    } else {
+      const peak = Math.max(1e-3, ...columns.map((c) => c.v));
+      const step = niceStep(peak / 4);
+      const max = Math.ceil(peak / step) * step;
+      y = (v) => base - (Math.min(v, max) / max) * (base - top);
+      const digits = Math.max(0, -Math.floor(Math.log10(step)));
+      ticks = Array.from({ length: Math.round(max / step) + 1 }, (_, k) => ({
+        v: k * step,
+        label: (k * step).toFixed(digits),
+      }));
+    }
+
+    ctx.font = "11px 'Atkinson Hyperlegible Next', system-ui, sans-serif";
+    ctx.strokeStyle = colors.rule;
+    ctx.lineWidth = 1;
+    for (const t of ticks) {
+      const gy = Math.round(y(t.v)) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x0, gy);
+      ctx.lineTo(x1, gy);
+      ctx.stroke();
+    }
+    drawCtcfs(ctx, x, base + 5, 8);
+    if (columns.length) {
+      ctx.strokeStyle = colors.extruding;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      columns.forEach((c, i) => (i ? ctx!.lineTo(c.px, y(c.v)) : ctx!.moveTo(c.px, y(c.v))));
       ctx.stroke();
     }
     // Labels last, with a paper-colored halo so the curve can't hide them.
@@ -85,11 +107,10 @@
     ctx.lineJoin = "round";
     ctx.strokeStyle = colors.paper;
     ctx.fillStyle = colors.muted;
-    for (let e = -4; e <= 0; e++) {
-      const label = e === 0 ? "1" : `10⁻${"⁰¹²³⁴"[-e]}`;
-      const gy = Math.round(y(10 ** e)) - 3;
-      ctx.strokeText(label, x(0) + 3, gy);
-      ctx.fillText(label, x(0) + 3, gy);
+    for (const t of ticks) {
+      const gy = Math.round(y(t.v)) - 3;
+      ctx.strokeText(t.label, x0 + 3, gy);
+      ctx.fillText(t.label, x0 + 3, gy);
     }
   }
 
@@ -130,8 +151,24 @@
 </script>
 
 <div class="head">
+  <span class="seg" role="group" aria-label="Scale">
+    <button
+      aria-pressed={scale === "linear"}
+      onclick={() => {
+        scale = "linear";
+        draw();
+      }}>Linear</button
+    >
+    <button
+      aria-pressed={scale === "log"}
+      onclick={() => {
+        scale = "log";
+        draw();
+      }}>Log</button
+    >
+  </span>
   <p class="hint">
-    Mean legs per site, log scale, averaged over
+    Mean legs per site, averaged over
     <span class="mono">{averaged > 0 ? fmt.format(averaged) : "0"}</span> time units while this view is open.
   </p>
   <button class="btn" onclick={reset}>Reset average</button>
@@ -152,6 +189,7 @@
 
   p {
     margin: 0;
+    flex: 1 1 260px;
   }
 
   .plot {

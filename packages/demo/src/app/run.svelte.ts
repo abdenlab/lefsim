@@ -57,6 +57,19 @@ const DEFAULT_LAYOUT: readonly { at: number; left: boolean }[] = [
 export const DEFAULT_STRENGTH = 0.8;
 export const DEFAULT_RATES: Readonly<Rates> = { step: 1, respawn: 0.002, respawnBlocked: 0.02, respawnCaptured: 0.002 };
 
+/** A complete setup for a run: what a tour step loads (see tour/tour.ts). */
+export interface Preset {
+  nSites: number;
+  nLefs: number;
+  ctcfs: { site: number; left: boolean }[];
+  /** One strength for every CTCF. */
+  strength: number;
+  rates: Rates;
+  seed: number;
+  /** Playback speed, in simulation time units per second. */
+  speed: number;
+}
+
 /** What the visible view asks of the run each frame. */
 export interface ViewDriver {
   /** Sample every `sampleDt` of simulation time, by calling `sample` once the sim has reached each sample time. */
@@ -346,6 +359,20 @@ export class Run {
     this.strengthLocked = true;
     for (const c of this.ctcfs) c.strength = this.strength;
     this.nLefs = Math.max(1, Math.round(n * LEFS_PER_SITE));
+    this.loaded = undefined;
+    this.restart();
+  }
+
+  /** Set up `preset` and run it afresh: its lattice, CTCFs (with one shared strength), LEFs, rates, seed and speed. */
+  applyPreset(preset: Preset) {
+    this.nSites = Math.max(MIN_SITES, Math.min(MAX_SITES, Math.round(preset.nSites)));
+    this.strength = preset.strength;
+    this.strengthLocked = true;
+    this.ctcfs = preset.ctcfs.map((c) => ({ ...c, strength: preset.strength }));
+    this.nLefs = preset.nLefs;
+    this.rates = { ...preset.rates };
+    this.seed = preset.seed;
+    this.speedLog = Math.log10(Math.max(1, preset.speed));
     this.loaded = undefined;
     this.restart();
   }
