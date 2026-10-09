@@ -12,9 +12,29 @@ export const $ = <T extends HTMLElement>(id: string) => document.getElementById(
 
 // ------------------------------------------------------------------ theme
 
-// `?theme=light` or `?theme=dark` overrides the OS setting.
+/** A color theme: light, dark, or whatever the OS uses. */
+export type Theme = "light" | "dark" | "system";
+
+const THEME_KEY = "lefsim.theme";
+
+function storedTheme(): Theme {
+  try {
+    const t = localStorage.getItem(THEME_KEY);
+    return t === "light" || t === "dark" ? t : "system";
+  } catch {
+    return "system";
+  }
+}
+
+function applyTheme(t: Theme) {
+  if (t === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+}
+
+// `?theme=light` or `?theme=dark` overrides the saved choice and the OS setting.
 const themeParam = new URLSearchParams(location.search).get("theme");
-if (themeParam === "light" || themeParam === "dark") document.documentElement.dataset.theme = themeParam;
+let currentTheme: Theme = themeParam === "light" || themeParam === "dark" ? themeParam : storedTheme();
+applyTheme(currentTheme);
 
 /** Colors come from CSS custom properties, so they follow the theme. */
 function palette() {
@@ -35,12 +55,39 @@ function palette() {
 
 export let colors = palette();
 
-/** Refresh colors when the OS theme changes, then call `redraw`. */
-export function onThemeChange(redraw: () => void) {
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    colors = palette();
-    redraw();
-  });
+const themeListeners = new Set<() => void>();
+
+function themeChanged() {
+  colors = palette();
+  for (const redraw of themeListeners) redraw();
+}
+
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (currentTheme === "system") themeChanged();
+});
+
+/** The theme in use. */
+export function theme(): Theme {
+  return currentTheme;
+}
+
+/** Switch the theme, remember it, and redraw. */
+export function setTheme(t: Theme) {
+  currentTheme = t;
+  applyTheme(t);
+  try {
+    if (t === "system") localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, t);
+  } catch {
+    // Storage unavailable: the choice lasts for this page only.
+  }
+  themeChanged();
+}
+
+/** Refresh colors when the theme changes, then call `redraw`. Returns an unsubscribe. */
+export function onThemeChange(redraw: () => void): () => void {
+  themeListeners.add(redraw);
+  return () => themeListeners.delete(redraw);
 }
 
 // ------------------------------------------------------------------ lattice

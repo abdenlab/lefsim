@@ -13,12 +13,9 @@ export function sizedCanvas(canvas: HTMLCanvasElement, redraw: (ctx: CanvasRende
     redraw(ctx);
   });
   ro.observe(canvas);
-  let live = true;
-  onThemeChange(() => {
-    if (live) redraw(ctx);
-  });
+  const unsubscribe = onThemeChange(() => redraw(ctx));
   return () => {
-    live = false;
+    unsubscribe();
     ro.disconnect();
   };
 }

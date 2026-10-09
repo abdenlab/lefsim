@@ -10,6 +10,7 @@
   import { Run } from "./run.svelte.ts";
   import Shelf from "./Shelf.svelte";
   import Stage from "./Stage.svelte";
+  import ThemeToggle from "./ThemeToggle.svelte";
   import TourPanel from "./tour/TourPanel.svelte";
   import { STEPS } from "./tour/tour.ts";
   import Welcome from "./Welcome.svelte";
@@ -130,6 +131,7 @@
       {/if}
       <a href="https://abdenlab.github.io/lefsim/" target="_blank" rel="noopener">Docs</a>
       <a href="https://github.com/abdenlab/lefsim" target="_blank" rel="noopener">GitHub</a>
+      <ThemeToggle />
     </nav>
   </header>
 
@@ -215,6 +217,7 @@
 
   nav {
     display: flex;
+    align-items: center;
     gap: 14px;
     /* Stay on the right when the header wraps on narrow screens. */
     margin-left: auto;

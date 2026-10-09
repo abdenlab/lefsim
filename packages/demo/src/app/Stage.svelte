@@ -286,8 +286,11 @@
       draw();
     });
     ro.observe(canvas);
-    onThemeChange(() => themeRevision++);
-    return () => ro.disconnect();
+    const unsubscribe = onThemeChange(() => themeRevision++);
+    return () => {
+      unsubscribe();
+      ro.disconnect();
+    };
   });
 </script>
 
