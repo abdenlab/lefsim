@@ -251,18 +251,11 @@
     />
     <output class="mono">{fmt.format(threshold)}</output>
   </label>
-  <button class="btn" onclick={definitionChanged}>Reset statistics</button>
+  <button class="btn reset" onclick={definitionChanged}>Reset statistics</button>
 </div>
-<dl class="readout">
-  <div><dt>distance now</dt><dd class="mono">{fmt.format(distance)}{inEncounter ? ", in an encounter" : ""}</dd></div>
-  <div><dt>encounters</dt><dd class="mono">{fmt.format(nEncounters)}</dd></div>
-  <div><dt>mean duration</dt><dd class="mono">{nEncounters ? `${fmt.format(meanDuration)} time units` : "–"}</dd></div>
-  <div><dt>time in encounters</dt><dd class="mono">{Math.round(100 * fraction)}%</dd></div>
-</dl>
-<p class="hint">Drag the two probes on the stage. Distances are sampled every time unit, so durations don't depend on the speed.</p>
 <div class="rows">
   <figure>
-    <figcaption>Kymograph, newest at the top</figcaption>
+    <figcaption>Kymograph</figcaption>
     <canvas class="kymo" bind:this={kymoCanvas}></canvas>
   </figure>
   <figure>
@@ -274,6 +267,13 @@
   <figcaption>Encounter durations</figcaption>
   <canvas class="hist" bind:this={histCanvas}></canvas>
 </figure>
+<p class="hint">Drag the two probes on the stage. Distances are sampled every time unit, so durations don't depend on the simulation speed.</p>
+<dl class="readout">
+  <div><dt>distance now</dt><dd class="mono" class:meeting={inEncounter} title={inEncounter ? "In an encounter" : undefined}>{fmt.format(distance)}</dd></div>
+  <div><dt>encounters</dt><dd class="mono">{fmt.format(nEncounters)}</dd></div>
+  <div><dt>mean duration</dt><dd class="mono">{nEncounters ? `${fmt.format(meanDuration)} time units` : "–"}</dd></div>
+  <div><dt>time in encounters</dt><dd class="mono">{Math.round(100 * fraction)}%</dd></div>
+</dl>
 
 <style>
   .head {
@@ -281,6 +281,10 @@
     align-items: center;
     gap: 16px;
     flex-wrap: wrap;
+  }
+
+  .reset {
+    margin-left: auto;
   }
 
   .threshold {
@@ -315,6 +319,12 @@
   .readout dd {
     margin: 0;
     font-size: 15px;
+  }
+
+  /* The distance while the probes are in an encounter. */
+  .readout dd.meeting {
+    color: var(--probe);
+    font-weight: 600;
   }
 
   p {

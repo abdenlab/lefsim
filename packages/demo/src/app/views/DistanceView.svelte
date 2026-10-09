@@ -103,15 +103,14 @@
   });
 </script>
 
-<div class="stats">
-  <div><b class="mono">{fmt.format(distance)}</b><span>effective distance</span></div>
-  <div><b class="mono">{fmt.format(lattice)}</b><span>along the lattice</span></div>
-  <p class="hint">
-    Drag the two probes on the stage. The effective distance is the shortest path between them when a path may hop
-    across loops: each step and each hop has length 1.
-  </p>
-</div>
 <canvas bind:this={canvas}></canvas>
+<p class="hint">
+  Drag the two purple probes on the stage. The effective distance between them is the shortest path that may hop across loops.
+</p>
+<div class="stats">
+  <div><b class="mono">{fmt.format(lattice)}</b><span>apart along the lattice</span></div>
+  <div><b class="mono">{fmt.format(distance)}</b><span>effective distance</span></div>
+</div>
 
 <style>
   .stats {
@@ -136,10 +135,6 @@
     color: var(--muted);
   }
 
-  .stats p {
-    margin: 0;
-    flex: 1 1 280px;
-  }
 
   canvas {
     display: block;

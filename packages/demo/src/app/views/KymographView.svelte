@@ -26,8 +26,8 @@
   });
 </script>
 
-<p class="hint">Each leg's position over time, newest at the top: one row per animation frame, so the time scale follows the speed.</p>
 <canvas bind:this={canvas}></canvas>
+<p class="hint">The kymograph shows each leg's position over time, one row per animation frame, newest at the top.</p>
 
 <style>
   p {

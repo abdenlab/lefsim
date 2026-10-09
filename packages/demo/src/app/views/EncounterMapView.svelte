@@ -188,6 +188,17 @@
   });
 </script>
 
+<canvas class="bar narrow" bind:this={barCanvas}></canvas>
+<div class="map narrow">
+  <canvas class="square" bind:this={mapCanvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
+  <div class="tooltip" bind:this={tooltip} hidden></div>
+</div>
+<p class="hint">
+  Sampled every time unit over
+  <span class="mono">{fmt.format(observed)}</span> time units
+  ({fmt.format(nBins)} × {fmt.format(nBins)} bins, <span class="mono">{sampleMs.toFixed(1)}</span> ms a sample).<br>Gray
+  regions are always within the encounter threshold along the lattice.
+</p>
 <div class="head">
   <label class="field">
     Threshold
@@ -212,18 +223,7 @@
       {/each}
     </select>
   </label>
-  <button class="btn" onclick={reset}>Reset statistics</button>
-</div>
-<p class="hint">
-  Two bins meet while their effective distance is at most the threshold. Sampled every time unit over
-  <span class="mono">{fmt.format(observed)}</span> time units while this view is open
-  ({fmt.format(nBins)} × {fmt.format(nBins)} bins, <span class="mono">{sampleMs.toFixed(1)}</span> ms a sample). Gray
-  pairs are always within the threshold along the lattice.
-</p>
-<canvas class="bar narrow" bind:this={barCanvas}></canvas>
-<div class="map narrow">
-  <canvas class="square" bind:this={mapCanvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
-  <div class="tooltip" bind:this={tooltip} hidden></div>
+  <button class="btn reset" onclick={reset}>Reset statistics</button>
 </div>
 
 <style>
@@ -232,6 +232,10 @@
     align-items: center;
     gap: 16px;
     flex-wrap: wrap;
+  }
+
+  .reset {
+    margin-left: auto;
   }
 
   .field {

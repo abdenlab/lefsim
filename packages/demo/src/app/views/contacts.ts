@@ -56,13 +56,54 @@ export class ContactMaps {
     return [-1.5 * Math.log10(this.nSites - 1), -1.5 * Math.log10(this.bin)];
   }
 
+  /** Manual ends of the color range, as contact probabilities (undefined: automatic). */
+  clipMin: number | undefined;
+  clipMax: number | undefined;
+
+  /** The automatic color range, in P, for the current scale. */
+  get autoRange(): [number, number] {
+    const top = this.bin ** -1.5;
+    return this.scale === "log" ? [(this.nSites - 1) ** -1.5, top] : [0, top];
+  }
+
+  /** The color range in P: the manual ends where set, else the automatic ones. */
+  get rangeP(): [number, number] {
+    const [lo, hi] = this.autoRange;
+    return [this.clipMin ?? lo, this.clipMax ?? hi];
+  }
+
   /** The colorbar's range: log10 P for the log scale, P for the linear one. */
   get range(): [number, number] {
-    return this.scale === "log" ? this.logRange : [0, this.bin ** -1.5];
+    const [lo, hi] = this.rangeP;
+    return this.scale === "log" ? [Math.log10(lo), Math.log10(hi)] : [lo, hi];
   }
 
   setScale(scale: "log" | "linear") {
     this.scale = scale;
+    this.#recolor();
+  }
+
+  /**
+   * Set the manual ends of the color range (undefined for automatic). False,
+   * changing nothing, if the range would be empty, or start at or below 0 on
+   * the log scale.
+   */
+  setClip(min: number | undefined, max: number | undefined): boolean {
+    const [autoLo, autoHi] = this.autoRange;
+    const lo = min ?? autoLo;
+    const hi = max ?? autoHi;
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || !(lo < hi) || lo < 0 || (this.scale === "log" && lo <= 0)) {
+      return false;
+    }
+    this.clipMin = min;
+    this.clipMax = max;
+    this.#recolor();
+    return true;
+  }
+
+  #recolor() {
+    // A manual minimum of 0 has no log: fall back to the automatic one there.
+    if (this.scale === "log" && this.clipMin !== undefined && this.clipMin <= 0) this.clipMin = undefined;
     this.#buildTables();
     if (this.dist.length) this.#paint();
   }

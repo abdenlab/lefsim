@@ -150,6 +150,14 @@
   });
 </script>
 
+<div class="plot">
+  <canvas bind:this={canvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
+  <div class="tooltip" bind:this={tooltip} hidden></div>
+</div>
+<p class="hint">
+  Mean legs per site, accumulated over
+  <span class="mono">{averaged > 0 ? fmt.format(averaged) : "0"}</span> time units.
+</p>
 <div class="head">
   <span class="seg" role="group" aria-label="Scale">
     <button
@@ -167,15 +175,7 @@
       }}>Log</button
     >
   </span>
-  <p class="hint">
-    Mean legs per site, averaged over
-    <span class="mono">{averaged > 0 ? fmt.format(averaged) : "0"}</span> time units while this view is open.
-  </p>
   <button class="btn" onclick={reset}>Reset average</button>
-</div>
-<div class="plot">
-  <canvas bind:this={canvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
-  <div class="tooltip" bind:this={tooltip} hidden></div>
 </div>
 
 <style>
@@ -189,7 +189,6 @@
 
   p {
     margin: 0;
-    flex: 1 1 260px;
   }
 
   .plot {

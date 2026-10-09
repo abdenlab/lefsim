@@ -29,8 +29,38 @@
   function setScale(scale: "log" | "linear") {
     colorScale = scale;
     maps.setScale(scale);
+    recolored();
+  }
+
+  // The color range's ends, as shown in the fields, and whether each was set by hand.
+  let rangeLo = $state(0);
+  let rangeHi = $state(1);
+  let manual = $state(false);
+
+  function recolored() {
+    [rangeLo, rangeHi] = maps.rangeP;
+    manual = maps.clipMin !== undefined || maps.clipMax !== undefined;
     draw();
     drawBar();
+  }
+
+  /** A contact probability, short: 0.03, 0.0012, 3.7e-5. */
+  const fmtP = (v: number) => (v === 0 ? "0" : v < 1e-3 ? v.toExponential(1) : String(Number(v.toPrecision(2))));
+
+  /** Set one end of the color range from its field; an invalid value puts the field back. */
+  function setEnd(which: "min" | "max", input: HTMLInputElement) {
+    const v = Number(input.value);
+    const ok =
+      input.value.trim() !== "" &&
+      Number.isFinite(v) &&
+      maps.setClip(which === "min" ? v : maps.clipMin, which === "max" ? v : maps.clipMax);
+    if (!ok) input.value = fmtP(which === "min" ? rangeLo : rangeHi);
+    recolored();
+  }
+
+  function autoRange() {
+    maps.setClip(undefined, undefined);
+    recolored();
   }
   let show = $state<"now" | "average">("now");
   let binCount = $state(300);
@@ -122,6 +152,7 @@
   function setBins(count: number) {
     binCount = count;
     maps.setBin(binSize(count));
+    [rangeLo, rangeHi] = maps.rangeP;
     nBins = maps.k;
     maps.resetAverage(run.sim?.time);
     square = undefined;
@@ -201,6 +232,7 @@
       drawBar();
     });
     maps.setBin(binSize(binCount));
+    [rangeLo, rangeHi] = maps.rangeP;
     nBins = maps.k;
     maps.resetAverage(run.sim?.time);
     run.setDriver({
@@ -216,6 +248,20 @@
   });
 </script>
 
+<canvas class="bar" hidden={layout === "square"} bind:this={barCanvas}></canvas>
+<div class="map" class:narrow={layout === "square"}>
+  {#if layout === "square"}
+    <canvas class="square" bind:this={mapCanvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
+  {:else}
+    <canvas class="aligned" bind:this={mapCanvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
+  {/if}
+  <div class="tooltip" bind:this={tooltip} hidden></div>
+</div>
+<p class="hint">
+  Contact probability modeled as P ∝ d<sub>eff</sub><sup>−1.5</sup> (phantom, bead-spring model).<br>{layout === "square" ? "Above: instantaneous. Below: average " : ""}
+  accumulated over <span class="mono">{fmt.format(averaged)}</span> time units
+  ({fmt.format(nBins)} × {fmt.format(nBins)} bins, <span class="mono">{computeMs.toFixed(1)}</span> ms a frame).
+</p>
 <div class="head">
   <span class="seg" role="group" aria-label="Layout">
     <button aria-pressed={layout === "square"} onclick={() => (layout = "square")}>Square</button>
@@ -241,19 +287,26 @@
   </label>
   <button class="btn reset" onclick={reset}>Reset average</button>
 </div>
-<p class="hint">
-  {layout === "square" ? "Above the diagonal: now. Below: the average. " : ""}P ∝ d<sub>eff</sub><sup>−1.5</sup>,
-  averaged over <span class="mono">{fmt.format(averaged)}</span> time units while this view is open
-  ({fmt.format(nBins)} × {fmt.format(nBins)} bins, <span class="mono">{computeMs.toFixed(1)}</span> ms a frame).
-</p>
-<canvas class="bar" hidden={layout === "square"} bind:this={barCanvas}></canvas>
-<div class="map" class:narrow={layout === "square"}>
-  {#if layout === "square"}
-    <canvas class="square" bind:this={mapCanvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
-  {:else}
-    <canvas class="aligned" bind:this={mapCanvas} onpointermove={pointermove} onpointerleave={() => (tooltip.hidden = true)}></canvas>
-  {/if}
-  <div class="tooltip" bind:this={tooltip} hidden></div>
+<div class="range" role="group" aria-label="Color range">
+  <span>Color range</span>
+  <input
+    class="mono"
+    type="text"
+    inputmode="decimal"
+    aria-label="Lowest contact probability of the color scale"
+    value={fmtP(rangeLo)}
+    onchange={(e) => setEnd("min", e.currentTarget)}
+  />
+  <span>to</span>
+  <input
+    class="mono"
+    type="text"
+    inputmode="decimal"
+    aria-label="Highest contact probability of the color scale; higher values saturate"
+    value={fmtP(rangeHi)}
+    onchange={(e) => setEnd("max", e.currentTarget)}
+  />
+  <button class="btn small" onclick={autoRange} disabled={!manual} title="Go back to the automatic range">Auto</button>
 </div>
 
 <style>
@@ -266,6 +319,29 @@
 
   .reset {
     margin-left: auto;
+  }
+
+  .range {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 14px;
+    color: var(--ink-2);
+  }
+
+  .range input {
+    width: 80px;
+    text-align: right;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    border-radius: 6px;
+    padding: 4px 8px;
+  }
+
+  .small {
+    font-size: 13px;
+    padding: 4px 10px;
   }
 
   .bin {
