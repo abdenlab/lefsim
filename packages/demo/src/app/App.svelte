@@ -129,9 +129,9 @@
           >?</button
         >
       {/if}
+      <ThemeToggle />
       <a href="https://abdenlab.github.io/lefsim/" target="_blank" rel="noopener">Docs</a>
       <a href="https://github.com/abdenlab/lefsim" target="_blank" rel="noopener">GitHub</a>
-      <ThemeToggle />
     </nav>
   </header>
 
