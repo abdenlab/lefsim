@@ -343,8 +343,9 @@
         <button
           class="btn"
           onclick={() => {
-            selected = undefined;
+            // `i` reads `selected`, so remove before clearing it.
             run.removeCtcf(i);
+            selected = undefined;
           }}>Remove</button
         >
       </div>
