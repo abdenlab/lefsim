@@ -57,7 +57,7 @@ const DEFAULT_LAYOUT: readonly { at: number; left: boolean }[] = [
 export const DEFAULT_STRENGTH = 0.8;
 export const DEFAULT_RATES: Readonly<Rates> = { step: 1, respawn: 0.002, respawnBlocked: 0.02, respawnCaptured: 0.002 };
 
-/** A complete setup for a run: what a tour step loads (see tour/tour.ts). */
+/** A complete setup for a run: what a tour scene loads (see tour/tour.ts). */
 export interface Preset {
   nSites: number;
   nLefs: number;

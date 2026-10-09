@@ -33,13 +33,13 @@
       Use this live simulator to explore and learn about how the process of <b>loop extrusion</b> organizes the genome.
     </p>
     <p>
-      A long stretch of DNA (a chromatin fiber) is modeled as a lattice. Each arc on the stage above represents a loop
+      A long stretch of DNA (a chromatin fiber) is modeled as a 1D lattice. Each arc on the stage above represents a loop
       on that fiber held together by a loop-extruding factor (LEF) called <i>cohesin</i>. It appears
       <span class="key extruding">blue</span> while the loop grows, and <span class="key held">orange</span> when 
-      an oriented extrusion barrier called <i>CTCF</i> (depicted by triangles) holds one of the LEF's two "legs".
+      an oriented extrusion barrier called <i>CTCF</i> (depicted by triangles) holds one or both of the LEF's two "legs".
     </p>
     <p>
-      Learn more by browsing the view tabs below the stage, tuning the model parameters on the left, or by taking the tour.
+      Learn more by browsing the view tabs below the stage and tuning the model parameters on the left, or by taking the tour.
     </p>
     <div class="actions">
       <button class="btn primary" onclick={tour}>Take the tour</button>

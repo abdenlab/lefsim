@@ -1,7 +1,7 @@
-// The tour: steps written as Markdown files in ./steps, each opening with a
-// settings block that sets up its scene. The files are bundled at build time.
+// The tour: scenes written as Markdown files in ./scenes, each opening with a
+// settings block that sets up its simulation. The files are bundled at build time.
 //
-// A step file looks like this:
+// A scene file looks like this:
 //
 //   ---
 //   title: Barriers
@@ -26,7 +26,7 @@ import { marked } from "marked";
 
 import { DEFAULT_N_SITES, DEFAULT_RATES, DEFAULT_STRENGTH, type Preset } from "../run.svelte.ts";
 
-export interface TourStep {
+export interface TourScene {
   /** The file name, without its extension (e.g. "01-loop-extruder"). */
   id: string;
   title: string;
@@ -37,20 +37,20 @@ export interface TourStep {
   html: string;
 }
 
-const files = import.meta.glob("./steps/*.md", { query: "?raw", import: "default", eager: true }) as Record<
+const files = import.meta.glob("./scenes/*.md", { query: "?raw", import: "default", eager: true }) as Record<
   string,
   string
 >;
 
-/** Parse a step file; throws with the file name and the problem if it's malformed. */
-export function parseStep(id: string, text: string): TourStep {
+/** Parse a scene file; throws with the file name and the problem if it's malformed. */
+export function parseScene(id: string, text: string): TourScene {
   const match = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) throw new Error(`tour step ${id}: expected a settings block between --- lines at the top`);
+  if (!match) throw new Error(`tour scene ${id}: expected a settings block between --- lines at the top`);
   const settings = new Map<string, string>();
   for (const line of match[1]!.split("\n")) {
     if (!line.trim() || line.trim().startsWith("#")) continue;
     const colon = line.indexOf(":");
-    if (colon < 0) throw new Error(`tour step ${id}: expected "key: value", got ${JSON.stringify(line)}`);
+    if (colon < 0) throw new Error(`tour scene ${id}: expected "key: value", got ${JSON.stringify(line)}`);
     // A value may be quoted, e.g. to contain a colon.
     settings.set(
       line.slice(0, colon).trim(),
@@ -62,14 +62,14 @@ export function parseStep(id: string, text: string): TourStep {
   }
   const need = (key: string) => {
     const v = settings.get(key);
-    if (!v) throw new Error(`tour step ${id}: missing ${key}`);
+    if (!v) throw new Error(`tour scene ${id}: missing ${key}`);
     return v;
   };
   const num = (key: string, fallback: number) => {
     const v = settings.get(key);
     if (v === undefined) return fallback;
     const n = Number(v);
-    if (!Number.isFinite(n)) throw new Error(`tour step ${id}: ${key} must be a number, got ${JSON.stringify(v)}`);
+    if (!Number.isFinite(n)) throw new Error(`tour scene ${id}: ${key} must be a number, got ${JSON.stringify(v)}`);
     return n;
   };
   const ctcfText = settings.get("ctcfs") ?? "none";
@@ -80,7 +80,7 @@ export function parseStep(id: string, text: string): TourStep {
           const m = part.trim().match(/^(\d+)\s*([<>])$/);
           if (!m)
             throw new Error(
-              `tour step ${id}: a CTCF is a site and > or <, like "750 >"; got ${JSON.stringify(part.trim())}`,
+              `tour scene ${id}: a CTCF is a site and > or <, like "750 >"; got ${JSON.stringify(part.trim())}`,
             );
           return { site: Number(m[1]), left: m[2] === "<" };
         });
@@ -106,7 +106,7 @@ export function parseStep(id: string, text: string): TourStep {
   };
 }
 
-/** The tour's steps, in file-name order. */
-export const STEPS: TourStep[] = Object.entries(files)
+/** The tour's scenes, in file-name order. */
+export const SCENES: TourScene[] = Object.entries(files)
   .sort(([a], [b]) => a.localeCompare(b))
-  .map(([path, text]) => parseStep(path.replace(/^.*\/|\.md$/g, ""), text));
+  .map(([path, text]) => parseScene(path.replace(/^.*\/|\.md$/g, ""), text));

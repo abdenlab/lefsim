@@ -1,41 +1,41 @@
 <!--
-  The tour: one step at a time, in place of the shelf. Each step sets up its
+  The tour: one scene at a time, in place of the shelf. Each scene sets up its
   scene (see tour.ts); the stage and views stay live, so you can play with it,
-  and "Reset this step" sets it up again.
+  and "Reset this scene" sets it up again.
 -->
 <script lang="ts">
-  import { STEPS } from "./tour.ts";
+  import { SCENES } from "./tour.ts";
 
   let {
-    step,
+    scene,
     go,
     reset,
     explore,
   }: {
-    /** The current step's index. */
-    step: number;
-    /** Show step `i`. */
+    /** The current scene's index. */
+    scene: number;
+    /** Show scene `i`. */
     go: (i: number) => void;
-    /** Set the current step up again. */
+    /** Set the current scene up again. */
     reset: () => void;
     /** Leave the tour, keeping the current setup. */
     explore: () => void;
   } = $props();
 
-  const current = $derived(STEPS[step]!);
-  const last = $derived(step === STEPS.length - 1);
+  const current = $derived(SCENES[scene]!);
+  const last = $derived(scene === SCENES.length - 1);
 </script>
 
 <div class="tour">
   <div class="progress">
-    <span class="count">Step {step + 1} of {STEPS.length}</span>
+    <span class="count">Scene {scene + 1} of {SCENES.length}</span>
     <span class="dots">
-      {#each STEPS as s, i (s.id)}
+      {#each SCENES as s, i (s.id)}
         <button
           class="dot"
-          class:on={i === step}
-          aria-label="Step {i + 1}: {s.title}"
-          aria-current={i === step ? "step" : undefined}
+          class:on={i === scene}
+          aria-label="Scene {i + 1}: {s.title}"
+          aria-current={i === scene ? "step" : undefined}
           onclick={() => go(i)}
         ></button>
       {/each}
@@ -43,15 +43,15 @@
   </div>
 
   <h2>{current.title}</h2>
-  <!-- The steps' Markdown is ours, bundled at build time. -->
+  <!-- The scenes' Markdown is ours, bundled at build time. -->
   <div class="text">{@html current.html}</div>
 
   <div class="nav">
-    <button class="btn" onclick={() => go(step - 1)} disabled={step === 0}>Back</button>
-    <button class="btn primary" onclick={() => (last ? explore() : go(step + 1))}>{last ? "Finish" : "Next"}</button>
+    <button class="btn" onclick={() => go(scene - 1)} disabled={scene === 0}>Back</button>
+    <button class="btn primary" onclick={() => (last ? explore() : go(scene + 1))}>{last ? "Finish" : "Next"}</button>
   </div>
   <div class="more">
-    <button class="link" onclick={reset}>Reset this step</button>
+    <button class="link" onclick={reset}>Reset this scene</button>
     <button class="link" onclick={explore}>Explore this setup</button>
   </div>
 </div>

@@ -258,7 +258,7 @@
   <div class="tooltip" bind:this={tooltip} hidden></div>
 </div>
 <p class="hint">
-  Contact probability modeled as P ∝ d<sub>eff</sub><sup>−1.5</sup> (phantom, bead-spring model).<br>{layout === "square" ? "Above: instantaneous. Below: average " : ""}
+  Contact probability modeled as P ∝ d<sub>eff</sub><sup>−1.5</sup> (phantom, bead-spring network at equilibrium).<br>{layout === "square" ? "Above: instantaneous. Below: average " : ""}
   accumulated over <span class="mono">{fmt.format(averaged)}</span> time units
   ({fmt.format(nBins)} × {fmt.format(nBins)} bins, <span class="mono">{computeMs.toFixed(1)}</span> ms a frame).
 </p>

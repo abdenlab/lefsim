@@ -2,7 +2,7 @@
   The explorer: the shelf (running the simulation and the model it runs), the
   stage (loops on the lattice, CTCFs edited in place), and a tab per view of
   the run. On narrow screens the shelf becomes a bottom sheet. The tour takes
-  the shelf's place, one step at a time (see tour/).
+  the shelf's place, one scene at a time (see tour/).
 -->
 <script lang="ts">
   import { type Component, onMount } from "svelte";
@@ -12,7 +12,7 @@
   import Stage from "./Stage.svelte";
   import ThemeToggle from "./ThemeToggle.svelte";
   import TourPanel from "./tour/TourPanel.svelte";
-  import { STEPS } from "./tour/tour.ts";
+  import { SCENES } from "./tour/tour.ts";
   import Welcome from "./Welcome.svelte";
   import ContactView from "./views/ContactView.svelte";
   import DistanceView from "./views/DistanceView.svelte";
@@ -64,7 +64,7 @@
       // Private browsing or blocked storage: it just shows again next time.
     }
   }
-  let step = $state(0);
+  let scene = $state(0);
 
   function select(key: string) {
     if (!VIEWS.some((v) => v.key === key)) return;
@@ -73,10 +73,10 @@
     if (mode === "explore") history.replaceState(null, "", `#${key}`);
   }
 
-  /** Show tour step `i`: set up its scene and its view, and play. */
+  /** Show tour scene `i`: set up its simulation and its view, and play. */
   function go(i: number) {
-    step = Math.max(0, Math.min(STEPS.length - 1, i));
-    const s = STEPS[step]!;
+    scene = Math.max(0, Math.min(SCENES.length - 1, i));
+    const s = SCENES[scene]!;
     run.applyPreset(s.preset);
     select(s.view);
     if (!reducedMotion) run.setPlaying(true);
@@ -137,7 +137,7 @@
 
   <aside class="shelf" id="shelf" aria-label={mode === "tour" ? "Tour" : "Simulation and model"}>
     {#if mode === "tour"}
-      <TourPanel {step} {go} reset={() => go(step)} {explore} />
+      <TourPanel {scene} {go} reset={() => go(scene)} {explore} />
     {:else}
       <Shelf {run} />
     {/if}
