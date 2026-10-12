@@ -14,7 +14,7 @@
     "@biomejs/biome": "2",
     "typedoc": "^0.28.20",
     "typedoc-plugin-markdown": "^4.13.1",
-    "typescript": "~6.0",
+    "typescript": "~7.0",
     "wasm-pack": "^0.15.0"
   }
 }
