@@ -7,5 +7,7 @@ Model JSON files carry their own format version.
 
 ## Unreleased
 
+## 0.1.0 - 2026-10-16
+
 First release: the Rust core, Python bindings (Arrow output, Parquet event logs,
 replay) and the WebAssembly/TypeScript package.
