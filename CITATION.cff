@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use lefsim in your work, please cite it as below."
+type: software
+title: "lefsim: event-driven simulation of loop-extruding factors"
+abstract: >-
+  An action-based stochastic simulator of loop-extruding factors (LEFs) on a 1D
+  chromatin lattice with CTCF barriers, with a Rust core and bindings for Python
+  and the browser (WebAssembly).
+authors:
+  - given-names: Nezar
+    family-names: Abdennur
+    orcid: "https://orcid.org/0000-0001-5814-0864"
+    affiliation: "UMass Chan Medical School"
+repository-code: "https://github.com/abdenlab/lefsim"
+url: "https://abdenlab.github.io/lefsim/"
+license: MIT
+keywords:
+  - loop extrusion
+  - chromatin
+  - cohesin
+  - CTCF
+  - stochastic simulation
+  - 3D genome
