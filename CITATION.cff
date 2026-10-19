@@ -11,6 +11,7 @@ authors:
     family-names: Abdennur
     orcid: "https://orcid.org/0000-0001-5814-0864"
     affiliation: "UMass Chan Medical School"
+doi: 10.5281/zenodo.23481501
 repository-code: "https://github.com/abdenlab/lefsim"
 url: "https://abdenlab.github.io/lefsim/"
 license: MIT
