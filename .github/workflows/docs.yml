@@ -33,7 +33,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:wasm
       - run: pnpm docs:api
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
       - run: uvx --with mkdocstrings-python zensical build --strict
       - uses: actions/upload-pages-artifact@v5
         with:
