@@ -9,10 +9,14 @@ speed: 300
 seed: 5
 ---
 
-A molecular technique called Hi-C measures how often pairs of sites in the genome touch, averaged over
-millions of cells, producing a contact frequency map.
+A molecular technique called Hi-C measures how often pairs of sites in the genome touch, averaged over millions of cells, producing a contact frequency map.
+
+---
 
 We can give a crude estimate of 3D contact probabilities for every pair of sites from our 1D model, shown in this heatmap. 
 
-Loops bring sites that are far apart along the fiber close
-together, so they touch more often. Above the diagonal shows the current moment, and below we average over time.
+Loops bring sites that are far apart along the fiber close together, so they touch more often. Above the diagonal shows the current moment, and below we average over time.
+
+---
+
+Caution: The predicted contact probabilities technically assume an equilibrated polymer chain of beads with no volume exclusion, connected by a fixed network harmonic springs (consecutive bonds and LEF bridges) that always pass through each other. A helpful visual aid, but don't take the instantaneous maps too seriously!

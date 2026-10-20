@@ -1,37 +1,51 @@
 <!--
-  The tour: one scene at a time, in place of the shelf. Each scene sets up its
-  scene (see tour.ts); the stage and views stay live, so you can play with it,
-  and "Reset this scene" sets it up again.
+  The tour: one scene at a time, in place of the shelf. Each scene sets up the
+  simulation (see tour.ts); the stage and views stay live, so you can play with it,
+  and "Explore this setup" leaves the tour with it.
 -->
 <script lang="ts">
-  import { SCENES } from "./tour.ts";
+  import { OUTRO, SCENES } from "./tour.ts";
 
   let {
     scene,
+    page,
+    outro,
+    progress,
+    atStart,
+    atEnd,
     go,
-    reset,
+    next,
+    back,
     explore,
-    finish,
   }: {
     /** The current scene's index. */
     scene: number;
-    /** Show scene `i`. */
+    /** The current page of its text. */
+    page: number;
+    /** Showing the farewell after the last scene, which has no title. */
+    outro: boolean;
+    /** Where the tour is, e.g. "Scene 3 of 7 · 2/3". */
+    progress: string;
+    /** At the tour's first page (nothing to go back to). */
+    atStart: boolean;
+    /** At the tour's last page (Next finishes). */
+    atEnd: boolean;
+    /** Show scene `i`, from its first page. */
     go: (i: number) => void;
-    /** Set the current scene up again. */
-    reset: () => void;
+    /** The next page or scene, or finish the tour. */
+    next: () => void;
+    /** The previous page or scene. */
+    back: () => void;
     /** Leave the tour, keeping the current setup. */
     explore: () => void;
-    /** Leave the tour for the app's default setup. */
-    finish: () => void;
   } = $props();
 
   const current = $derived(SCENES[scene]!);
-  const last = $derived(scene === SCENES.length - 1);
 </script>
 
 <div class="tour">
   <div class="progress">
-    <span class="count">Scene {scene + 1} of {SCENES.length}</span>
+    <span class="count">{progress}</span>
     <span class="dots">
       {#each SCENES as s, i (s.id)}
         <button
@@ -45,16 +59,21 @@
     </span>
   </div>
 
-  <h2>{current.title}</h2>
-  <!-- The scenes' Markdown is ours, bundled at build time. -->
-  <div class="text">{@html current.html}</div>
-
+  <!-- Above the text, so Back and Next stay put from scene to scene. -->
   <div class="nav">
-    <button class="btn" onclick={() => go(scene - 1)} disabled={scene === 0}>Back</button>
-    <button class="btn primary" onclick={() => (last ? finish() : go(scene + 1))}>{last ? "Finish" : "Next"}</button>
+    <button class="btn" onclick={back} disabled={atStart}>Back</button>
+    <button class="btn primary" onclick={next}>{atEnd ? "Finish" : "Next"}</button>
   </div>
+
+  <!-- The scenes' Markdown is ours, bundled at build time. -->
+  {#if outro}
+    <div class="text">{@html OUTRO}</div>
+  {:else}
+    <h2>{current.title}</h2>
+    <div class="text">{@html current.pages[page]}</div>
+  {/if}
+
   <div class="more">
-    <button class="link" onclick={reset}>Reset this scene</button>
     <button class="link" onclick={explore}>Explore this setup</button>
   </div>
 </div>
@@ -137,9 +156,7 @@
 
   .more {
     display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    flex-wrap: wrap;
+    justify-content: center;
   }
 
   .link {
@@ -155,12 +172,23 @@
     text-decoration: underline;
   }
 
-  /* On phones the tour sits in a bottom sheet: the text scrolls on its own,
-     so the title, Back and Next, and the links stay in view. */
+  /* On phones the tour sits in a bottom sheet whose handle shows the scene
+     count, Back and Next; the text scrolls on its own, so the title and the
+     links stay in view. */
   @media (max-width: 760px) {
     .tour {
       flex: 1;
       min-height: 0;
+      gap: 10px;
+    }
+
+    .count,
+    .nav {
+      display: none;
+    }
+
+    h2 {
+      font-size: 19px;
     }
 
     .text {

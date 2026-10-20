@@ -15,16 +15,24 @@
 //   ---
 //   The text, in Markdown.
 //
+//   ---
+//
+//   More text, on a page of its own.
+//
 // `ctcfs` lists sites with the way each CTCF faces: `>` captures legs arriving
 // from the right, `<` from the left (the chevrons on the stage point the same
 // way). Leave it out, or write `none`, for no CTCFs. The rates are `step`,
 // `unload`, `unload_blocked` and `unload_held`. `title` and `view` are
 // required; anything else left out takes the app's default. Lines starting
 // with # are comments.
+//
+// A line of just `---` after the settings starts a new page. The pages share
+// the scene's setup: Next turns the page without touching the simulation, and
+// only the next scene sets up a new one.
 
 import { marked } from "marked";
-
 import { DEFAULT_N_SITES, DEFAULT_RATES, DEFAULT_STRENGTH, type Preset } from "../run.svelte.ts";
+import outroText from "./outro.md?raw";
 
 export interface TourScene {
   /** The file name, without its extension (e.g. "01-loop-extruder"). */
@@ -33,8 +41,8 @@ export interface TourScene {
   /** The view tab to show (its key, e.g. "kymograph"). */
   view: string;
   preset: Preset;
-  /** The text, as HTML. */
-  html: string;
+  /** The text, one HTML string per page (at least one). */
+  pages: string[];
 }
 
 const files = import.meta.glob("./scenes/*.md", { query: "?raw", import: "default", eager: true }) as Record<
@@ -102,9 +110,22 @@ export function parseScene(id: string, text: string): TourScene {
       seed: num("seed", 1),
       speed: num("speed", 100),
     },
-    html: marked.parse(match[2]!.trim(), { async: false }),
+    pages: pagesOf(id, match[2]!),
   };
 }
+
+/** Split a scene's text into pages at lines of just `---`, before parsing the Markdown (where `---` means a rule, or a heading's underline). */
+function pagesOf(id: string, text: string): string[] {
+  const pages = text
+    .split(/^---[ \t]*$/m)
+    .map((page) => page.trim())
+    .filter((page) => page !== "");
+  if (pages.length === 0) throw new Error(`tour scene ${id}: no text after the settings`);
+  return pages.map((page) => marked.parse(page, { async: false }));
+}
+
+/** The farewell after the last scene (./outro.md): untitled, over the last scene's simulation. */
+export const OUTRO: string = marked.parse(outroText.trim(), { async: false });
 
 /** The tour's scenes, in file-name order. */
 export const SCENES: TourScene[] = Object.entries(files)

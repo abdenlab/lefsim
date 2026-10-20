@@ -60,7 +60,7 @@
 <div
   class="body"
   role="region"
-  aria-label="Simulation and model"
+  aria-label="Control panel"
   ondragover={(e) => {
     if (!e.dataTransfer?.types.includes("Files")) return;
     e.preventDefault();
