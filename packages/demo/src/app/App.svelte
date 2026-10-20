@@ -7,7 +7,7 @@
 <script lang="ts">
   import { type Component, onMount } from "svelte";
 
-  import { Run } from "./run.svelte.ts";
+  import { DEFAULT_PRESET, Run } from "./run.svelte.ts";
   import Shelf from "./Shelf.svelte";
   import Stage from "./Stage.svelte";
   import ThemeToggle from "./ThemeToggle.svelte";
@@ -96,6 +96,15 @@
     history.replaceState(null, "", `#${selected}`);
   }
 
+  /** Finish the tour: back to the app's default setup and first view, with the shelf hidden. */
+  function finish() {
+    run.applyPreset(DEFAULT_PRESET);
+    select(VIEWS[0]!.key);
+    sheetOpen = false;
+    explore();
+    if (!reducedMotion) run.setPlaying(true);
+  }
+
   onMount(() => {
     if (location.hash === "#tour") startTour();
     else {
@@ -137,7 +146,7 @@
 
   <aside class="shelf" id="shelf" aria-label={mode === "tour" ? "Tour" : "Simulation and model"}>
     {#if mode === "tour"}
-      <TourPanel {scene} {go} reset={() => go(scene)} {explore} />
+      <TourPanel {scene} {go} reset={() => go(scene)} {explore} {finish} />
     {:else}
       <Shelf {run} />
     {/if}

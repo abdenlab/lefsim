@@ -96,11 +96,22 @@ function defaultCtcfs(nSites: number, strength: number): Ctcf[] {
   return DEFAULT_LAYOUT.map((c) => ({ site: Math.round(c.at * (nSites - 1)), left: c.left, strength }));
 }
 
+/** The setup the app opens with, and returns to when the tour finishes. */
+export const DEFAULT_PRESET: Readonly<Preset> = {
+  nSites: DEFAULT_N_SITES,
+  nLefs: 20,
+  ctcfs: defaultCtcfs(DEFAULT_N_SITES, DEFAULT_STRENGTH).map(({ site, left }) => ({ site, left })),
+  strength: DEFAULT_STRENGTH,
+  rates: DEFAULT_RATES,
+  seed: 1,
+  speed: 100,
+};
+
 export class Run {
   // Model inputs.
   nSites = $state(DEFAULT_N_SITES);
-  nLefs = $state(20);
-  seed = $state(1);
+  nLefs = $state(DEFAULT_PRESET.nLefs);
+  seed = $state(DEFAULT_PRESET.seed);
   rates = $state<Rates>({ ...DEFAULT_RATES });
   ctcfs = $state<Ctcf[]>(defaultCtcfs(DEFAULT_N_SITES, DEFAULT_STRENGTH));
   /** One strength for every CTCF (`strength`), or each its own. */
@@ -113,7 +124,7 @@ export class Run {
   // Playback.
   playing = $state(false);
   /** Playback speed as log10 of simulation time units per second. */
-  speedLog = $state(2);
+  speedLog = $state(Math.log10(DEFAULT_PRESET.speed));
 
   // Readouts.
   frame = $state.raw<Frame | undefined>(undefined);

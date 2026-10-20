@@ -11,6 +11,7 @@
     go,
     reset,
     explore,
+    finish,
   }: {
     /** The current scene's index. */
     scene: number;
@@ -20,6 +21,8 @@
     reset: () => void;
     /** Leave the tour, keeping the current setup. */
     explore: () => void;
+    /** Leave the tour for the app's default setup. */
+    finish: () => void;
   } = $props();
 
   const current = $derived(SCENES[scene]!);
@@ -48,7 +51,7 @@
 
   <div class="nav">
     <button class="btn" onclick={() => go(scene - 1)} disabled={scene === 0}>Back</button>
-    <button class="btn primary" onclick={() => (last ? explore() : go(scene + 1))}>{last ? "Finish" : "Next"}</button>
+    <button class="btn primary" onclick={() => (last ? finish() : go(scene + 1))}>{last ? "Finish" : "Next"}</button>
   </div>
   <div class="more">
     <button class="link" onclick={reset}>Reset this scene</button>
