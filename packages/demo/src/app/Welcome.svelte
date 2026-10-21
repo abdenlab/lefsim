@@ -36,7 +36,7 @@
       A long stretch of DNA (a chromatin fiber) is modeled as a 1D lattice. Each arc on the stage above represents a loop
       on that fiber held together by a loop-extruding factor (LEF) called <i>cohesin</i>. It appears
       <span class="key extruding">blue</span> while the loop grows, and <span class="key held">orange</span> when 
-      an oriented extrusion barrier called <i>CTCF</i> (depicted by triangles) holds one or both of the LEF's two "legs".
+      a direction-specific extrusion barrier called <i>CTCF</i> (depicted by arrow heads) holds one or both of the LEF's two "legs".
     </p>
     <p>
       Learn more by browsing the view tabs below the stage and tuning the model parameters on the left, or by taking the tour.
