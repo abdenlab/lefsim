@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.2
       # The dev group only: the notebook stack isn't needed here.
       - run: uv sync --locked --python 3.13 --no-default-groups --group dev
       - run: uv run --no-sync pytest tests
@@ -123,7 +123,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:wasm
       - run: pnpm docs:api
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.2
       - run: uvx --with mkdocstrings-python zensical build --strict
       - run: >-
           uvx --python 3.13 --with mdformat-mkdocs --with mdformat-tables mdformat --wrap 80 --exclude 'docs/reference/typescript/**' --check
